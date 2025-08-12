@@ -69,8 +69,11 @@ def fetch_node_name(cursor, identifier):
     if is_ip(identifier):
         cursor.execute(sql_query, (identifier,))
     else:
-        identifier = identifier.split('ansible_host=')[1]
-        cursor.execute(sql_query, (identifier,))
+        if 'ansible_host=' in identifier:
+            identifier = identifier.split('ansible_host=')[1]
+            cursor.execute(sql_query, (identifier,))
+        else:
+            return None
 
     node_row = cursor.fetchone()
 
