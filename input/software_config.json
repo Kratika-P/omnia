@@ -1,7 +1,7 @@
 {
     "cluster_os_type": "rhel",
     "cluster_os_version": "9.6",
-    "x86_64_iso_file_path": "",
+    "x86_64_iso_file_path": "/opt/omnia/RHEL-9.6.0-20250408.20-x86_64-dvd1.iso",
     "aarch64_iso_file_path": "",
     "repo_config": "always",
     "softwares": [

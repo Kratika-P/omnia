@@ -64,7 +64,7 @@ def check_and_validate_ha_role_in_roles_config(errors, roles_config_json, ha_rol
 
     # Get groups and roles
     groups_configured = roles_config_json.get("Groups", {})
-    roles_configured = roles_config_json.get("Roles", [])
+    roles_configured = roles_config_json.get("Functional_Groups", [])
 
     # Search for HA role and validate its groups
     ha_role_entry = next((role for role in roles_configured if role.get("name") == ha_role), None)

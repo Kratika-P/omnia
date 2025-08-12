@@ -60,7 +60,7 @@ NO_ROLES_MSG = "Outer Role object was probably not defined."
 INVALID_SWITCH_PORTS_MSG = "Please provide any port ranges as start-end (example: 0-15,4:4,51-53)."
 DUPLICATE_GROUP_NAME_MSG = "Duplicate group names are not allowed."
 EMPTY_OR_SYNTAX_ERROR_ROLES_CONFIG_MSG = ("File is either empty or contains syntax errors. "
-                                         "File must contain valid YAML with 'Roles' and 'Groups' "
+                                         "File must contain valid YAML with 'Functional_Groups' and 'Groups' "
                                          "sections along with valid syntax. Check the file content "
                                          "and ensure proper YAML formatting.")
 DUPLICATE_GROUP_NAME_IN_LAYERS_MSG = ("The following groups are mapped to both frontend and "

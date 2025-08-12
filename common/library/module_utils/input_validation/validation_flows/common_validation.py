@@ -1119,7 +1119,7 @@ def check_is_service_cluster_roles_defined(
     roles_config_file_path = create_file_path(input_file_path, file_names["roles_config"])
     roles_config_json = validation_utils.load_yaml_as_json(
         roles_config_file_path, omnia_base_dir, project_name, logger, module)
-    roles_details = roles_config_json.get("Roles", [])
+    roles_details = roles_config_json.get("Functional_Groups", [])
     # Extract the 'name' values from List1
     roles_configured = [item['name'] for item in roles_details]
     service_cluster_roles = ["service_kube_control_plane","service_etcd","service_kube_node"]
@@ -1248,10 +1248,10 @@ def validate_additional_software(
     roles_config_json = validation_utils.load_yaml_as_json(
         roles_config_file_path, omnia_base_dir, project_name, logger, module
     )
-    valid_roles = roles_config_json["Roles"]
+    valid_roles = roles_config_json["Functional_Groups"]
 
     # Set of unique role names
-    available_roles_and_groups = set(role["name"] for role in roles_config_json["Roles"])
+    available_roles_and_groups = set(role["name"] for role in roles_config_json["Functional_Groups"])
     available_roles_and_groups.add("additional_software")
 
     # Add the set of all unique group names

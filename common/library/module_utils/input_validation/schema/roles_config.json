@@ -70,7 +70,7 @@
       },
       "additionalProperties": false
     },
-    "Roles": {
+    "Functional_Groups": {
       "type": "array",
       "items": {
         "type": "object",
@@ -117,6 +117,6 @@
   },
   "required": [
     "Groups",
-    "Roles"
+    "Functional_Groups"
   ]
 }

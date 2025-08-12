@@ -21,19 +21,19 @@
 #*************************************************************************************************************************
 # Groups
 #*************************************************************************************************************************
-# roles_config.yml file takes input parameters for the composable roles and groups.
-# This file contains Roles and Groups used by the omnia for cluster formation.
+# roles_config.yml file takes input parameters for the composable Functional_Groups and groups.
+# This file contains Functional_Groups and Groups used by the omnia for cluster formation.
 # Groups: - Groups will contain the list of groups defined by the user. User must define atleast one group.
 #   grpN:                 - <Mandatory> "grpN" -  User defined name of the group. Range for N is 0-99
-#     cluster_name:       - <Conditional Mandatory> Name of the cluster to which the group belongs. This input is case-sensitive. This will remain empty for groups which are not associated with any kubernetes roles.
+#     cluster_name:       - <Conditional Mandatory> Name of the cluster to which the group belongs. This input is case-sensitive. This will remain empty for groups which are not associated with any kubernetes Functional_Groupss.
 #     location_id:        - <Mandatory> SU-<n>.RACK-<n> Scalable unit and rack number range is 0-99. This input is case-sensitive. Please use uppercase letters only.
 #     resource_mgr_id:    - <Conditional Mandatory> list of service tag of active head node(s).
-#                         - Set the value only for group of nodes belonging to kube_node and slurm_node roles,
-#                         - And empty for other roles.
+#                         - Set the value only for group of nodes belonging to kube_node and slurm_node Functional_Groupss,
+#                         - And empty for other Functional_Groupss.
 #     parent:             - <Conditional Mandatory> list of service tag of associated active service node(s).
 #                         - This field will be empty for group of nodes which is associated with ‘login_node’, ‘compiler_node’,
 #                         - ‘auth_server’, ‘service_kube_control_plane’, 'service_etcd', ‘kube_control_plane’, ‘etcd’, 'slurm_control_node’.
-#                         - If ‘service’ role is not defined, then value will be empty for worker and default role.
+#                         - If ‘service’ Functional_Groups is not defined, then value will be empty for worker and default Functional_Groups.
 #     bmc_details:        - <Conditional Mandatory> BMC IP static range in the format 10.5.0.1-10.5.0.200
 #        static_range:    - <Mandatory> This field mandatory in case of BMC discovery of subset of nodes
 #     switch_details      - <Conditional Mandatory> Switch details of the Rack
@@ -68,217 +68,217 @@ Groups:
   #   architecture: "aarch64"
 
 #************************************************************************************************************************
-#  Roles
+#  Functional_Groups
 #************************************************************************************************************************
-# Atleast one role is mandatory, and User is not allowed to change the name of the roles.
-# Maximum number of roles supported are 100.
-# Note: Nested roles and groups are not supported.
-# The roles are case sensitive
-#   - name:                           - <Mandatory> Name of the role, can be any of the following Omnia defined roles.
+# Atleast one Functional_Groups is mandatory, and User is not allowed to change the name of the Functional_Groups.
+# Maximum number of Functional_Groups supported are 100.
+# Note: Nested Functional_Groups and groups are not supported.
+# The Functional_Groups are case sensitive
+#   - name:                           - <Mandatory> Name of the Functional_Groups, can be any of the following Omnia defined Functional_Groups.
 #     groups:                         - <Mandatory> list of groups defined by the user
 #
 
-# This table lists the roles and the layers they belong to in the cluster.
+# This table lists the Functional_Groups and the layers they belong to in the cluster.
 
-# +---------------------------+------------------+     +-------------------+----------------+
-# | Role Name                  | Layer           |     | Role Name         | Layer          |
-# +---------------------------+------------------+     +-------------------+----------------+
-# | oim_ha_node                | management      |     | default           | compute        |
-# | service_kube_control_plane | management      |     | kube_node         | compute        |
-# | service_etcd               | management      |     | slurm_node        | compute        |
-# | service_kube_node          | management      |     |                   |                |
-# | login_node                 | management      |     |                   |                |
-# | auth_server                | management      |     |                   |                |
-# | compiler_node              | management      |     |                   |                |
-# | kube_control_plane         | management      |     |                   |                |
-# | etcd                       | management      |     |                   |                |
-# | slurm_control_node         | management      |     |                   |                |
-# +---------------------------+------------------+     +-------------------+----------------+
+# +----------------------------+-----------------+     +------------------------+----------------+
+# | Functional_Groups Name     | Layer           |     | Functional_Groups Name | Layer          |
+# +----------------------------+-----------------+     +------------------------+----------------+
+# | oim_ha_node                | management      |     | default                | compute        |
+# | service_kube_control_plane | management      |     | kube_node              | compute        |
+# | service_etcd               | management      |     | slurm_node             | compute        |
+# | service_kube_node          | management      |     |                        |                |
+# | login_node                 | management      |     |                        |                |
+# | auth_server                | management      |     |                        |                |
+# | compiler_node              | management      |     |                        |                |
+# | kube_control_plane         | management      |     |                        |                |
+# | etcd                       | management      |     |                        |                |
+# | slurm_control_node         | management      |     |                        |                |
+# +----------------------------+-----------------+     +------------------------+----------------+
 
-# Default Role:
+# Default Functional_Groups:
 # -------------
 #
-# This role is provided to cover the default role of the cluster.
+# This Functional_Groups is provided to cover the default Functional_Groups of the cluster.
 #
-# The default role is assigned to nodes which do not fit into any specific roles.
-# If user wants to just provision the group of nodes without associating with any role,
-# then the default role can be used.
+# The default Functional_Groups is assigned to nodes which do not fit into any specific Functional_Groups.
+# If user wants to just provision the group of nodes without associating with any Functional_Groups,
+# then the default Functional_Groups can be used.
 #
-# This role belongs to the compute layer.
+# This Functional_Groups belongs to the compute layer.
 #
-Roles:
+Functional_Groups:
   - name: "default"
     groups:
       - grp0
 
 
-# OIM HA Node Role:
+# OIM HA Node Functional_Groups:
 # -------------
 #
-# This role is used to configure passive OIM nodes.
+# This Functional_Groups is used to configure passive OIM nodes.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations needed to be passive OIM nodes.
 #
-# The nodes in this role can be used in case of OIM failure.
+# The nodes in this Functional_Groups can be used in case of OIM failure.
 #
   # - name: "oim_ha_node"
   #   groups:
   #     - grp0
 
 #
-# Service k8s head Role: Service Cluster Kubernetes master node for groups to add into service_kube_control_plane role can be provided in this role
+# Service k8s head Functional_Groups: Service Cluster Kubernetes master node for groups to add into service_kube_control_plane Functional_Groups can be provided in this Functional_Groups
 # ----------------------------------------------------------------------------------------------------
 #
-# This role is used to configure kubernetes master on service cluster.
+# This Functional_Groups is used to configure kubernetes master on service cluster.
 #
-# This role should not have same group as of K8s head Role.
+# This Functional_Groups should not have same group as of K8s head Functional_Groups.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to configure kubernetes master on service cluster.
 #
-# The nodes in this role can be used to run kubernetes master on service cluster.
+# The nodes in this Functional_Groups can be used to run kubernetes master on service cluster.
 #
-# Service k8s head Role: Service Cluster Kubernetes master node for groups to add into service_kube_control_plane role can be provided in this role
+# Service k8s head Functional_Groups: Service Cluster Kubernetes master node for groups to add into service_kube_control_plane Functional_Groups can be provided in this Functional_Groups
   # - name: "service_kube_control_plane"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# Service etcd Role: Service Cluster Kubernetes etcd node groups to add into service cluster k8s role can be provided in this role
+# Service etcd Functional_Groups: Service Cluster Kubernetes etcd node groups to add into service cluster k8s Functional_Groups can be provided in this Functional_Groups
 # ------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Kubernetes etcd on service cluster.
+# This Functional_Groups is used to configure the nodes for Kubernetes etcd on service cluster.
 #
-# This role should not have same group as of K8s etcd Role.
+# This Functional_Groups should not have same group as of K8s etcd Functional_Groups.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to configure Kubernetes etcd on service cluster.
 #
-# The nodes in this role can be used to run Kubernetes etcd on service cluster.
+# The nodes in this Functional_Groups can be used to run Kubernetes etcd on service cluster.
 #
-# Service etcd Role: Service Cluster Kubernetes etcd node groups to add into service cluster k8s role can be provided in this role
+# Service etcd Functional_Groups: Service Cluster Kubernetes etcd node groups to add into service cluster k8s Functional_Groups can be provided in this Functional_Groups
   # - name: "service_etcd"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# Service k8s Worker Role: Service Cluster Kubernetes worker node groups to add into service cluster k8s role can be provided in this role
+# Service k8s Worker Functional_Groups: Service Cluster Kubernetes worker node groups to add into service cluster k8s Functional_Groups can be provided in this Functional_Groups
 # ------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Kubernetes worker on service cluster.
+# This Functional_Groups is used to configure the nodes for Kubernetes worker on service cluster.
 #
-# This role should not have same group as of K8s Worker node.
+# This Functional_Groups should not have same group as of K8s Worker node.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to configure Kubernetes worker on service cluster.
 #
-# The nodes in this role can be used to run Kubernetes worker on service cluster.
+# The nodes in this Functional_Groups can be used to run Kubernetes worker on service cluster.
 #
-# Service k8s Worker Role: Service Cluster Kubernetes worker node groups to add into service cluster k8s role can be provided in this role
+# Service k8s Worker Functional_Groups: Service Cluster Kubernetes worker node groups to add into service cluster k8s Functional_Groups can be provided in this Functional_Groups
   # - name: "service_kube_node"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# K8s head Role: Kubernetes master node groups to add into kube_control_plane role can be provided in this role
+# K8s head Functional_Groups: Kubernetes master node groups to add into kube_control_plane Functional_Groups can be provided in this Functional_Groups
 # ---------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Kubernetes master. It belongs to the management layer.
+# This Functional_Groups is used to configure the nodes for Kubernetes master. It belongs to the management layer.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to run Kubernetes master.
 #
-# The nodes in this role can be used to run Kubernetes master.
+# The nodes in this Functional_Groups can be used to run Kubernetes master.
 #
-# K8s head Role: Kubernetes master groups to add into etcd role can be provided in this role
+# K8s head Functional_Groups: Kubernetes master groups to add into etcd Functional_Groups can be provided in this Functional_Groups
   # - name: "kube_control_plane"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# K8s etcd Role: Kubernetes etcd node groups to add into k8s role can be provided in this role
+# K8s etcd Functional_Groups: Kubernetes etcd node groups to add into k8s Functional_Groups can be provided in this Functional_Groups
 # ---------------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Kubernetes etcd. It belongs to the management layer.
+# This Functional_Groups is used to configure the nodes for Kubernetes etcd. It belongs to the management layer.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to run Kubernetes etcd.
 #
-# The nodes in this role can be used to run Kubernetes etcd.
+# The nodes in this Functional_Groups can be used to run Kubernetes etcd.
 #
-# K8s etcd Role: Kubernetes etcd groups to add into k8s etcd role can be provided in this role
+# K8s etcd Functional_Groups: Kubernetes etcd groups to add into k8s etcd Functional_Groups can be provided in this Functional_Groups
   # - name: "etcd"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# K8s Worker Role: Kubernetes worker node groups to add into k8s role can be provided in this role
+# K8s Worker Functional_Groups: Kubernetes worker node groups to add into k8s Functional_Groups can be provided in this Functional_Groups
 # -----------------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Kubernetes worker. It belongs to the compute layer.
+# This Functional_Groups is used to configure the nodes for Kubernetes worker. It belongs to the compute layer.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to run Kubernetes worker.
 #
-# The nodes in this role can be used to run Kubernetes worker.
+# The nodes in this Functional_Groups can be used to run Kubernetes worker.
 #
-# K8s Worker Role: Kubernetes worker groups to add into k8s worker role can be provided in this role
+# K8s Worker Functional_Groups: Kubernetes worker groups to add into k8s worker Functional_Groups can be provided in this Functional_Groups
   # - name: "kube_node"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# Slurm Head Role: Slurm head node groups to add into Slurm role can be provided in this role
+# Slurm Head Functional_Groups: Slurm head node groups to add into Slurm Functional_Groups can be provided in this Functional_Groups
 # ------------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Slurm head. It belongs to the management layer.
+# This Functional_Groups is used to configure the nodes for Slurm head. It belongs to the management layer.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to run Slurm head.
 #
-# The nodes in this role can be used to run Slurm head.
-# This role belongs to the compute layer.
+# The nodes in this Functional_Groups can be used to run Slurm head.
+# This Functional_Groups belongs to the compute layer.
 #
-# Slurm Head Role: Slurm head groups to add into slurm_control_node role can be provided in this role
+# Slurm Head Functional_Groups: Slurm head groups to add into slurm_control_node Functional_Groups can be provided in this Functional_Groups
   # - name: "slurm_control_node"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# Slurm Worker Role: Slurm worker node groups to add into Slurm role can be provided in this role
+# Slurm Worker Functional_Groups: Slurm worker node groups to add into Slurm Functional_Groups can be provided in this Functional_Groups
 # ------------------------------------------------------------------------------------------------
 #
-# This role is used to configure the nodes for Slurm worker. It belongs to the compute layer.
+# This Functional_Groups is used to configure the nodes for Slurm worker. It belongs to the compute layer.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to run Slurm worker.
 #
-# The nodes in this role can be used to run Slurm worker.
+# The nodes in this Functional_Groups can be used to run Slurm worker.
 #
-# Slurm Worker Role: Slurm worker groups to add into Slurm role can be provided in this role
+# Slurm Worker Functional_Groups: Slurm worker groups to add into Slurm Functional_Groups can be provided in this Functional_Groups
   # - name: "slurm_node"
   #   groups:
   #     - grp0
   #     - grp1
 
 #
-# Login Node Role:
+# Login Node Functional_Groups:
 # -----------
 #
-# This role is used to configure the nodes for user logins. It belongs to the management layer.
+# This Functional_Groups is used to configure the nodes for user logins. It belongs to the management layer.
 #
-# The nodes included in this role will have the necessary tools and configurations
+# The nodes included in this Functional_Groups will have the necessary tools and configurations
 # to support user login activities.
 #
-# The user is not allowed to change the name of this role.
+# The user is not allowed to change the name of this Functional_Groups.
 #
   # - name: "login_node"
   #   groups:
@@ -286,15 +286,15 @@ Roles:
   #     - grp1
 
 #
-# Auth Server Role:
+# Auth Server Functional_Groups:
 # -----------------
 #
-# This role is used to configure the nodes for authentication. It belongs to the management layer.
+# This Functional_Groups is used to configure the nodes for authentication. It belongs to the management layer.
 #
-# The nodes included in this role will have the necessary tools and configurations
+# The nodes included in this Functional_Groups will have the necessary tools and configurations
 # to support authentication activities.
 #
-# The user is not allowed to change the name of this role.
+# The user is not allowed to change the name of this Functional_Groups.
 #
   # - name: "auth_server"
   #   groups:
@@ -302,17 +302,17 @@ Roles:
   #     - grp1
 
 #
-# Compiler Node Role:
+# Compiler Node Functional_Groups:
 # --------------
 #
-# This role is used to configure the nodes for compilation. It belongs to the management layer.
+# This Functional_Groups is used to configure the nodes for compilation. It belongs to the management layer.
 #
-# The nodes included in this role will have the necessary tools and
+# The nodes included in this Functional_Groups will have the necessary tools and
 # configurations to perform compilation.
 #
-# The nodes in this role can be used to compile the code.
+# The nodes in this Functional_Groups can be used to compile the code.
 #
-# Compiler Node Role: Compiler groups to add into compiler_node role can be provided in this role
+# Compiler Node Functional_Groups: Compiler groups to add into compiler_node Functional_Groups can be provided in this Functional_Groups
   # - name: "compiler_node"
   #   groups:
   #     - grp0

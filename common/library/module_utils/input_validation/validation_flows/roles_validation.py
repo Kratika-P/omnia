@@ -53,10 +53,10 @@ def validate_basic_structure(data, roles, groups):
     errors = []
 
     if roles is None:
-        errors.append(create_error_msg("Roles", None, en_us_validation_msg.NO_ROLES_MSG))
+        errors.append(create_error_msg("Functional_Groups", None, en_us_validation_msg.NO_ROLES_MSG))
     elif not isinstance(roles, list):
         errors.append(
-            create_error_msg("Roles", None, en_us_validation_msg.INVALID_ATTRIBUTES_ROLE_MSG)
+            create_error_msg("Functional_Groups", None, en_us_validation_msg.INVALID_ATTRIBUTES_ROLE_MSG)
         )
 
     if groups is None:
@@ -151,7 +151,7 @@ def validate_layer_group_separation(logger, roles):
             compute_layer = ", ".join(sorted(layers["compute"]))
             errors.append(
                 create_error_msg(
-                    "Roles",
+                    "Functional_Groups",
                      group,
                     en_us_validation_msg.DUPLICATE_GROUP_NAME_IN_LAYERS_MSG.format(
                         group, frontend_layer, compute_layer
@@ -184,8 +184,8 @@ def validate_group_role_separation(logger, roles):
                 shared = role_groups[service_role] & role_groups[k8s_role]
                 if shared:
                     group_str = ', '.join(shared)
-                    msg = f"Group is shared between {service_role} and {k8s_role} roles."
-                    errors.append(create_error_msg("Roles", group_str, msg))
+                    msg = f"Group is shared between {service_role} and {k8s_role} Functional_Groups."
+                    errors.append(create_error_msg("Functional_Groups", group_str, msg))
 
     return errors
 
@@ -337,7 +337,7 @@ def validate_login_node_group_separation(logger, roles):
         
         control_plane_roles_str = ', '.join(control_plane_roles_with_shared_groups)
         msg = f"Group(s) {shared_group_str} shared between {login_node_roles_str} role and {control_plane_roles_str} roles. Make sure grops associated with {login_node_roles_str} and {control_plane_roles_str} do not overlap."
-        errors.append(create_error_msg("Roles", shared_group_str, msg))
+        errors.append(create_error_msg("Functional_Groups", shared_group_str, msg))
 
     return errors
 def validate_roles_config(
@@ -351,7 +351,7 @@ def validate_roles_config(
     """
 
     name = "name"
-    roles = "Roles"
+    roles = "Functional_Groups"
     groups = "Groups"
     role_groups = "groups"
     slurmworker = "slurm_node"
@@ -496,7 +496,7 @@ def validate_roles_config(
         if 0 < len(defined_roles) < len(expected_roles):
             errors.append(
                 create_error_msg(
-                    "Roles",
+                    "Functional_Groups",
                     ', '.join(sorted(defined_roles)) or "None",
                     f"{role_type} incomplete. Expected all roles: {', '.join(sorted(expected_roles))}. "
                     f"Missing roles: {', '.join(sorted(missing_roles))}."
