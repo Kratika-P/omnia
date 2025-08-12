@@ -18,30 +18,31 @@ This module contains validation messages in English (US) for input validation.
 These messages are used to provide user-friendly error messages during configuration validation.
 """
 
-MISSING_CLUSTER_NAME_MSG = "Cluster name is mandatory for all kubernetes roles."
-CLUSTER_NAME_OVERLAP_MSG = "The cluster name '{0}' cannot be shared between service and compute Kubernetes roles."
+# roles_config.yml
+MISSING_CLUSTER_NAME_MSG = "Cluster name is mandatory for all kubernetes Functional_Groups."
+CLUSTER_NAME_OVERLAP_MSG = "The cluster name '{0}' cannot be shared between service and compute Kubernetes Functional_Groups."
 CLUSTER_NAME_INCONSISTENT_MSG = (
-    "Inconsistent 'cluster_name' values found across Service or Compute Kubernetes roles. "
-    "Each of the following role sets must use the same 'cluster_name': "
+    "Inconsistent 'cluster_name' values found across Service or Compute Kubernetes Functional_Groups. "
+    "Each of the following Functional_Groups sets must use the same 'cluster_name': "
     "[service_kube_control_plane, service_kube_node, service_etcd] and "
     "[kube_control_plane, kube_node, etcd].")
 CLUSTER_ROLE_MISSING_MSG = (
-    "Cluster '{0}' is missing the following required Kubernetes roles: {1}.")
-MAX_NUMBER_OF_ROLES_MSG = "A max of 100 roles can be supported."
+    "Cluster '{0}' is missing the following required Kubernetes Functional_Groups: {1}.")
+MAX_NUMBER_OF_ROLES_MSG = "A max of 100 Functional_Groups can be supported."
 MIN_NUMBER_OF_GROUPS_MSG = "At least 1 group is required."
-MIN_NUMBER_OF_ROLES_MSG = "At least 1 role is required."
-MAX_NUMBER_OF_ROLES_PER_GROUP_MSG = "Groups can support a maximum of 5 roles."
+MIN_NUMBER_OF_ROLES_MSG = "At least 1 Functional_Group is required."
+MAX_NUMBER_OF_ROLES_PER_GROUP_MSG = "Groups can support a maximum of 5 Functional_Groups."
 RESOURCE_MGR_ID_MSG = ("The resource_mgr_id is mandatory if the group is mapped to "
-                       "kube_node, slurm_node roles, service_kube_node, etcd, service_etcd roles.")
+                       "kube_node, slurm_node, service_kube_node Functional_Groups.")
 GRP_EXIST_MSG = "A valid group must be provided."
 INVALID_SWITCH_IP_MSG = "Please provide a valid switch IPv4 address (example: 10.5.0.1)."
-GRP_ROLE_MSG = "Please associate this group with a role."
+GRP_ROLE_MSG = "Please associate this group with a Functional_Group."
 PARENT_SERVICE_ROLE_MSG = ("Group is associated with login_node, compiler_node,"
-                          "kube_control_plane, slurm_control_plane, service_kube_control_plane, service_kube_node role(s).")
-PARENT_SERVICE_ROLE_DNE_MSG = ("Parent field is only supported when 'service_kube_control_plane, service_kube_node' role is defined,"
-    " Please remove the 'parent' field from this role's group definition.")
-PARENT_SERVICE_ROLE_MSG = (" A 'service_kube_control_plane, service_kube_node' role is not defined, so the 'parent' field should"
-    " be empty for groups associated with 'worker' or 'default' roles.")
+                          "kube_control_plane, slurm_control_plane, service_kube_control_plane, service_kube_node Functional_Groups.")
+PARENT_SERVICE_ROLE_DNE_MSG = ("Parent field is only supported when 'service_kube_control_plane, service_kube_node' Functional_Groups is defined,"
+    " Please remove the 'parent' field from this Functional_Group's group definition.")
+PARENT_SERVICE_ROLE_MSG = (" A 'service_kube_control_plane, service_kube_node' Functional_Group is not defined, so the 'parent' field should"
+    " be empty for groups associated with 'worker' or 'default' Functional_Groups.")
 BMC_STATIC_RANGE_INVALID_MSG = ("Static range should be in the following format: "
                                "IPv4Start-IPv4End (example: 10.5.0.1-10.5.0.200).")
 OVERLAPPING_STATIC_RANGE = "bmc_detail's static_range is overlapping with other static ranges."
@@ -53,10 +54,10 @@ SWITCH_DETAILS_NO_BMC_DETAILS_MSG = ("If switch details are provided then bmc_de
 INVALID_GROUP_NAME_MSG = "Groups must be defined in the form of grp<n> where n is 0-99."
 INVALID_LOCATION_ID_MSG = ("location_id must follow the format SU-<n>.RACK-<n> where n is 0-99. "
                           "This input is case-sensitive. Please use uppercase letters only.")
-INVALID_ATTRIBUTES_ROLE_MSG = ("Please provide valid attributes for the role, "
+INVALID_ATTRIBUTES_ROLE_MSG = ("Please provide valid attributes for the Functional_Groups, "
                               "both 'name' and 'groups' are mandatory.")
 NO_GROUPS_MSG = "Outer Group object was probably not defined."
-NO_ROLES_MSG = "Outer Role object was probably not defined."
+NO_ROLES_MSG = "Outer Functional_Group object was probably not defined."
 INVALID_SWITCH_PORTS_MSG = "Please provide any port ranges as start-end (example: 0-15,4:4,51-53)."
 DUPLICATE_GROUP_NAME_MSG = "Duplicate group names are not allowed."
 EMPTY_OR_SYNTAX_ERROR_ROLES_CONFIG_MSG = ("File is either empty or contains syntax errors. "
@@ -66,7 +67,7 @@ EMPTY_OR_SYNTAX_ERROR_ROLES_CONFIG_MSG = ("File is either empty or contains synt
 DUPLICATE_GROUP_NAME_IN_LAYERS_MSG = ("The following groups are mapped to both frontend and "
                                      "compute layers, which is not allowed for group: [{0}] in "
                                      "frontend layer: [{1}] and compute layer: [{2}]")
-SERVICE_K8S_ENTRY_MISSING_SOFTWARE_CONFIG_MSG = ("The role service_kube_control_plane is defined in roles_config.yml, "
+SERVICE_K8S_ENTRY_MISSING_SOFTWARE_CONFIG_MSG = ("The Functional_Group service_kube_control_plane is defined in roles_config.yml, "
     "but the service_k8s package entry is missing in software_config.json. "
     "To deploy Kubernetes in the service_k8s cluster, the package must be added to software_config.json.")
 AARCH64_SWITCH_IP_MSG = "Switch and BMC discovery supports only x86_64 architecture"
@@ -156,9 +157,9 @@ KAFKA_ENABLE_FEDERATED_IDRAC_TELEMETRY_COLLECTION= ("requires federated_idrac_te
                                              "to be enabled. Please rerun the playbook "
                                              "with federated_idrac_telemetry_collection true"
                                              "in telemetry_config.yml.")
-TELEMETRY_SERVICE_CLUSTER_ENTRY_MISSING_ROLES_CONFIG_MSG= ("requires service k8s roles to be "
+TELEMETRY_SERVICE_CLUSTER_ENTRY_MISSING_ROLES_CONFIG_MSG= ("requires service k8s Functional_Groups to be "
                                              "defined in roles_config.yml. Please either configure "
-                                             "service k8s roles in roles_config.yml "
+                                             "service k8s Functional_Groups in roles_config.yml "
                                              "or disable federated_idrac_telemetry_collection "
                                              "in telemetry_config.yml and rerun the playbook.")
 ENABLE_FEDERATED_IDRAC_TELEMETRY_COLLECTION=("it is recommended to set "
@@ -285,7 +286,7 @@ FEILD_MUST_BE_EMPTY = "feild must be empty."
 DUPLICATE_VIRTUAL_IP = "is already used. Please give unique virtual ip address"
 INVALID_PASSIVE_NODE_SERVICE_TAG = "active node and passive node service tag cannot be same."
 GROUP_NOT_FOUND = "is not defined in the roles_config.yml. Please define the group in roles_config.yml"
-ROLE_NODE_FOUND = "is not defined in roles_config.yml. Please define the role in roles_config.yml"
+ROLE_NODE_FOUND = "is not defined in roles_config.yml. Please define the Functional_Group in roles_config.yml"
 DUPLICATE_ACTIVE_NODE_SERVICE_TAG = ("the service tag configured for a active node is already "
                                     "present elsewhere in the config file. ")
 DUPLICATE_PASSIVE_NODE_SERVICE_TAG = ("the service tag configured for a passive node is already "
@@ -298,9 +299,9 @@ def user_name_duplicate(duplicate_usernames):
 
 # addtional_software
 ADDITIONAL_SOFTWARE_FAIL_MSG = "The additional_software is mandatory in additional_software.json"
-ADDITIONAL_SOFTWARE_SUBGROUP_FAIL_MSG = ("The role or group name, [{0}] is present in subgroup "
+ADDITIONAL_SOFTWARE_SUBGROUP_FAIL_MSG = ("The Functional_Group or group name, [{0}] is present in subgroup "
                                          "but not present in roles_config.yml")
-MISSING_IN_ADDITIONAL_SOFTWARE_MSG = ("The role or group name is present in software_config.json, "
+MISSING_IN_ADDITIONAL_SOFTWARE_MSG = ("The Functional_Group or group name is present in software_config.json, "
                                      "but [{0}] is not present in additional_software.json")
 
 # login_node_security
