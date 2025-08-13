@@ -25,7 +25,7 @@
 
 - name: Fail if service k8s cluster role is defined but external NFS is not configured
   when: >
-    (roles_config_data.ansible_facts.Roles | selectattr('name', 'equalto', 'service_kube_control_plane') | list | length > 0) and
+    (roles_config_data.ansible_facts.Functional_Groups | selectattr('name', 'equalto', 'service_kube_control_plane') | list | length > 0) and
     (not nfs_used or (nfs_type | default('') != 'external'))
   ansible.builtin.fail:
     msg: >-
