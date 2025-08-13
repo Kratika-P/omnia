@@ -30,7 +30,7 @@
 
 - name: Fetch composable roles data
   fetch_roles_config:
-    roles_data: "{{ Roles }}"
+    roles_data: "{{ Functional_Groups }}"
     groups_data: "{{ Groups }}"
     layer: "{{ layer }}"
   register: composable_roles_output
