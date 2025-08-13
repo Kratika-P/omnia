@@ -25,11 +25,11 @@
 # This file contains Functional_Groups and Groups used by the omnia for cluster formation.
 # Groups: - Groups will contain the list of groups defined by the user. User must define atleast one group.
 #   grpN:                 - <Mandatory> "grpN" -  User defined name of the group. Range for N is 0-99
-#     cluster_name:       - <Conditional Mandatory> Name of the cluster to which the group belongs. This input is case-sensitive. This will remain empty for groups which are not associated with any kubernetes Functional_Groupss.
+#     cluster_name:       - <Conditional Mandatory> Name of the cluster to which the group belongs. This input is case-sensitive. This will remain empty for groups which are not associated with any kubernetes Functional_Groups.
 #     location_id:        - <Mandatory> SU-<n>.RACK-<n> Scalable unit and rack number range is 0-99. This input is case-sensitive. Please use uppercase letters only.
 #     resource_mgr_id:    - <Conditional Mandatory> list of service tag of active head node(s).
-#                         - Set the value only for group of nodes belonging to kube_node and slurm_node Functional_Groupss,
-#                         - And empty for other Functional_Groupss.
+#                         - Set the value only for group of nodes belonging to kube_node and slurm_node Functional_Groups,
+#                         - And empty for other Functional_Groups.
 #     parent:             - <Conditional Mandatory> list of service tag of associated active service node(s).
 #                         - This field will be empty for group of nodes which is associated with ‘login_node’, ‘compiler_node’,
 #                         - ‘auth_server’, ‘service_kube_control_plane’, 'service_etcd', ‘kube_control_plane’, ‘etcd’, 'slurm_control_node’.
