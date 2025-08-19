@@ -47,7 +47,7 @@ def nodeinfo_db_update(node_details, domain_name, discovery_mechanism):
         node = node_data.get("hostname")
         fqdn_hostname = f"{node}.{domain_name}"
         group_name = node_data.get("group_name")
-        role = node_data.get("roles")
+        functional_group = node_data.get("roles")
         cluster_name = node_data.get("cluster_name")
         parent = node_data.get("parent")
         location_id = node_data.get("location_id")
@@ -62,7 +62,7 @@ def nodeinfo_db_update(node_details, domain_name, discovery_mechanism):
             # Insert new node record
             omniadb_connection.insert_node_info(
                 temp_service_tag, node, fqdn_hostname, temp_mac, temp_admin_ip, temp_bmc_ip,
-                group_name, role, cluster_name, parent, location_id, architecture, discovery_mechanism, None, None, None, None
+                group_name, functional_group, cluster_name, parent, location_id, architecture, discovery_mechanism, None, None, None, None
             )
             new_nodes.append({'node': node, 'service_tag': temp_service_tag, 'mac': temp_mac})
         else:

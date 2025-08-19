@@ -67,7 +67,7 @@ def read_roles_config(file_path, module):
             data = yaml.safe_load(file)
     except yaml.YAMLError as exc:
         module.exit_json(failed=True, msg=f"Error loading YAML {file_path}: {exc}")
-    role_cfg = {item['name']: item['groups'] for item in data.get('Roles', [])}
+    role_cfg = {item['name']: item['groups'] for item in data.get('Functional_Groups', [])}
     all_groups = list(data.get('Groups', {}).keys())
     return role_cfg, all_groups
 

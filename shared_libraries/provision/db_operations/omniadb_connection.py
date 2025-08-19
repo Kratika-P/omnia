@@ -79,7 +79,7 @@ def create_connection_xcatdb():
 
 
 def insert_node_info(service_tag, node, hostname, admin_mac, admin_ip, bmc_ip, group_name,
-                     role, cluster_name, parent, location_id, architecture, discovery_mechanism, bmc_mode,
+                     functional_group, cluster_name, parent, location_id, architecture, discovery_mechanism, bmc_mode,
                      switch_ip, switch_name, switch_port):
     """
     Inserts node information into the cluster.nodeinfo table.
@@ -92,7 +92,7 @@ def insert_node_info(service_tag, node, hostname, admin_mac, admin_ip, bmc_ip, g
         admin_ip (Union[str, None]): The IP address of the admin interface.
         bmc_ip (Union[str, None]): The IP address of the BMC.
         group_name (str): The group the node belongs to.
-        role (str): The role of the node.
+        functional_group (str): The functional_group of the node.
         cluster_name (str): The name of the cluster.
         location_id (str): The location ID of the node.
         architecture (str): The architecture of the node.
@@ -109,13 +109,13 @@ def insert_node_info(service_tag, node, hostname, admin_mac, admin_ip, bmc_ip, g
     cursor = conn.cursor()
 
     sql = '''INSERT INTO cluster.nodeinfo(
-                service_tag, node, hostname, admin_mac, admin_ip, bmc_ip, group_name, role, cluster_name, parent, location_id, architecture,
+                service_tag, node, hostname, admin_mac, admin_ip, bmc_ip, group_name, functional_group, cluster_name, parent, location_id, architecture,
                 discovery_mechanism, bmc_mode, switch_ip, switch_name, switch_port)
              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
 
     params = (
         service_tag, node, hostname, admin_mac, str(admin_ip) if admin_ip else None,
-        str(bmc_ip) if bmc_ip else None, group_name, role, cluster_name, parent, location_id, architecture,
+        str(bmc_ip) if bmc_ip else None, group_name, functional_group, cluster_name, parent, location_id, architecture,
         discovery_mechanism, bmc_mode, str(switch_ip) if switch_ip else None, switch_name,
         switch_port
     )
