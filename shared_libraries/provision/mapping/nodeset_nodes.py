@@ -74,7 +74,7 @@ def nodeset_mapping_nodes():
     cursor_x = conn_x.cursor()
     new_mapping_nodes = []
     for node in node_name:
-        sql = "SELECT node, role FROM cluster.nodeinfo WHERE node = %s AND status = ''"
+        sql = "SELECT node, functional_group FROM cluster.nodeinfo WHERE node = %s AND status = ''"
         cursor_x.execute(sql, (node[0],))
         output = cursor_x.fetchone()
         if output:

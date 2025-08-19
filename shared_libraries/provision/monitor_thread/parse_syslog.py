@@ -71,7 +71,7 @@ def get_node_info_db(cursor: cursor, node: str) -> tuple:
             status,
             admin_mac,
             hostname,
-            role,
+            functional_group,
             cluster_name
         FROM
             cluster.nodeinfo

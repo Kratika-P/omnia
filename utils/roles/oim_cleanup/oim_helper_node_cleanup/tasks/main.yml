@@ -45,7 +45,7 @@
         query: |
           SELECT node, hostname, bmc_ip
           FROM cluster.nodeinfo
-          WHERE role = 'oim_ha_node' AND status = 'booted';
+          WHERE functional_group = 'oim_ha_node' AND status = 'booted';
         login_password: "{{ postgresdb_password }}"
       become: true
       become_user: postgres

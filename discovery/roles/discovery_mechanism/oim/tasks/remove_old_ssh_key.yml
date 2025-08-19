@@ -18,7 +18,7 @@
     db: omniadb
     login_user: postgres
     query: |
-      SELECT admin_ip,bmc_ip,hostname,node,group_name,role,parent,service_tag
+      SELECT admin_ip,bmc_ip,hostname,node,group_name,functional_group,parent,service_tag
       FROM cluster.nodeinfo
       WHERE node != 'oim' AND (status IS NULL OR status != 'booted');
     login_password: "{{ postgresdb_password }}"

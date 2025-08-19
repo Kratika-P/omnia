@@ -17,7 +17,7 @@
   community.postgresql.postgresql_query:
     db: omniadb
     login_user: postgres
-    query: "SELECT admin_ip, node FROM cluster.nodeinfo WHERE role LIKE '%oim_ha_node%';"
+    query: "SELECT admin_ip, node FROM cluster.nodeinfo WHERE functional_group LIKE '%oim_ha_node%';"
     login_password: "{{ postgresdb_password }}"
   become: true
   become_user: postgres

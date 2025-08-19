@@ -38,10 +38,10 @@ def nodeset_mapping_nodes(install_osimage_x86_64, install_osimage_aarch64, disco
     # Establish connection with cluster.nodeinfo
     conn = omniadb_connection.create_connection()
     cursor = conn.cursor()
-    sql = "SELECT node, role FROM cluster.nodeinfo WHERE discovery_mechanism = %s and architecture = %s"
+    sql = "SELECT node, functional_group FROM cluster.nodeinfo WHERE discovery_mechanism = %s and architecture = %s"
     cursor.execute(sql, (discovery_mechanism,"x86_64",))
     node_name_x86_64 = cursor.fetchall()
-    sql = "SELECT node, role FROM cluster.nodeinfo WHERE discovery_mechanism = %s and architecture = %s"
+    sql = "SELECT node, functional_group FROM cluster.nodeinfo WHERE discovery_mechanism = %s and architecture = %s"
     cursor.execute(sql, (discovery_mechanism,"aarch64",))
     node_name_aarch64 = cursor.fetchall()
     cursor.close()

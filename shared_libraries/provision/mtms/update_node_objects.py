@@ -84,7 +84,7 @@ def update_node_obj_nm():
         if serial_output[i][0] is not None:
             serial_output[i] = serial_output[i].upper()
             params = (serial_output[i],)
-            sql = """SELECT node, admin_ip, bmc_ip, bmc_mode, role, cluster_name, group_name, architecture
+            sql = """SELECT node, admin_ip, bmc_ip, bmc_mode, functional_group, cluster_name, group_name, architecture
                      FROM cluster.nodeinfo
                      WHERE service_tag = %s"""
             cursor.execute(sql, params)
