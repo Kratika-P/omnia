@@ -124,7 +124,7 @@ class InventoryManager:
                         admin_ip,
                         cpu,
                         gpu,
-                        role,
+                        functional_group,
                         cluster_name
                     FROM
                         cluster.nodeinfo
