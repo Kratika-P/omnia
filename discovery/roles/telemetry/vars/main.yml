@@ -241,6 +241,10 @@ kafka_templates:
     dest: 'test/kafka.tls_test_job.yaml'
 
 common_templates:
+  - src: 'telemetry/common/telemetry_cleaner_rbac.yaml.j2'
+    dest: 'telemetry_cleaner_rbac.yaml'
+  - src: 'telemetry/common/telemetry_pod_cleanup.yaml.j2'
+    dest: 'telemetry_pod_cleanup.yaml'
   - src: 'telemetry/common/telemetry_namespace_creation.yaml.j2'
     dest: 'telemetry_namespace_creation.yaml'
   - src: 'telemetry/common/telemetry_secret_creation.yaml.j2'

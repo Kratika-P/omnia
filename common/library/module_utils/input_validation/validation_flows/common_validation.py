@@ -25,7 +25,7 @@ from ast import literal_eval
 import ansible.module_utils.input_validation.common_utils.data_fetch as fetch
 from ansible.module_utils.input_validation.validation_flows import csi_driver_validation
 import ansible.module_utils.input_validation.common_utils.data_validation as validate
-
+from ansible.module_utils.input_validation.common_utils import config
 from ansible.module_utils.input_validation.common_utils import (
     validation_utils,
     config,
@@ -70,6 +70,20 @@ def validate_software_config(
         list: A list of errors encountered during validation.
     """
     errors = []
+    software_config_file_path = create_file_path(
+        input_file_path, file_names["software_config"])
+    with open(software_config_file_path, "r", encoding="utf-8") as f:
+        software_config_json = json.load(f)
+
+    results=validate_versions(software_config_json)
+    if results:   # means there are version mismatches
+       errors.append(
+          create_error_msg(
+              software_config_file_path,
+              "software version validation",
+              f"Version mismatches found: {', '.join(results)}"
+          )
+       )
     cluster_os_type = data["cluster_os_type"]
     cluster_os_version = data["cluster_os_version"]
     os_version_ranges = config.os_version_ranges
@@ -243,13 +257,13 @@ def is_version_valid(actual_version, expected):
         return actual_version in expected
     return actual_version == expected
 
-def validate_versions(data, expected):
+def validate_versions(data):
     mismatches = []
     # Validate top-level 'softwares'
     for sw in data.get("softwares", []):
         name = sw.get("name")
         version = sw.get("version")
-        expected_version = expected.get(name)
+        expected_version = config.expected_versions.get(name)
 
         if expected_version:
             if not version:
@@ -265,7 +279,7 @@ def validate_versions(data, expected):
         for sub_sw in children:
             name = sub_sw.get("name")
             version = sub_sw.get("version")
-            expected_version = expected.get(name)
+            expected_version = config.expected_versions.get(name)
 
             # Skip if version is not provided
             if expected_version and version:
@@ -981,6 +995,15 @@ def validate_omnia_config(
         input_file_path, file_names["software_config"])
     with open(software_config_file_path, "r", encoding="utf-8") as f:
         software_config_json = json.load(f)
+    results=validate_versions(software_config_json)
+    if results:   # means there are version mismatches
+       errors.append(
+          create_error_msg(
+              software_config_file_path,
+              "software version validation",
+              f"Version mismatches found: {', '.join(results)}"
+          )
+       )
     softwares = software_config_json["softwares"]
     sw_list = [k['name'] for k in softwares]
 

@@ -40,7 +40,7 @@
     - name: Create and update service node metadata file
       ansible.builtin.copy:
         dest: "{{ service_cluster_metadata_path }}"
-        content: "{{ {'kube_vip': kube_vip, 'service_cluster_metadata': service_cluster_node_details} | to_nice_yaml }}"
+        content: "{{ {'kube_client_share_path': service_cluster_idrac_telemetry_dir_path, 'kube_vip': kube_vip, 'service_cluster_metadata': service_cluster_node_details} | to_nice_yaml }}" # noqa: yaml[line-length]
         mode: "{{ metadata_perm }}"
         force: true
       delegate_to: localhost

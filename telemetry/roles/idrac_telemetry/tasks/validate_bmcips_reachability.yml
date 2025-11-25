@@ -92,10 +92,10 @@
   block:
     - name: Enable telemetry collection on iDRACs
       ansible.builtin.command: >-
-        python3 ./ConfigurationScripts/EnableOrDisableAllTelemetryReports.py -ip "{{ item }}"
+        python3 {{ idrac_telemetry_scripting_folder }}/ConfigurationScripts/EnableOrDisableAllTelemetryReports.py -ip "{{ item }}"
         -u "{{ hostvars['localhost']['bmc_username'] }}" -p "{{ hostvars['localhost']['bmc_password'] }}" -s Enabled
       args:
-        chdir: "{{ idrac_telemetry_scripting_git_clone_path }}"
+        chdir: "{{ idrac_telemetry_scripting_folder }}"
       with_items: "{{ telemetry_idrac }}"
       changed_when: false
       no_log: true

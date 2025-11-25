@@ -35,6 +35,7 @@ metadata:
   name: {{ idrac_telemetry_k8s_name }}
   namespace: {{ telemetry_namespace }}
 spec:
+  podManagementPolicy: Parallel
   serviceName: {{ idrac_telemetry_service_name }}
   replicas: 1
   selector:
@@ -75,7 +76,7 @@ spec:
         - ip: "127.0.0.1"
           hostnames:
             - "mysqldb"
-      terminationGracePeriodSeconds: 3
+      terminationGracePeriodSeconds: 10
       tolerations:
       - effect: NoExecute
         key: node.kubernetes.io/not-ready

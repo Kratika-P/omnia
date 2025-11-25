@@ -16,8 +16,7 @@
 # Usage: initiate_telemetry.yml
 python_version: "{{ ansible_python_interpreter }}"
 mysqldb_name: "idrac_telemetrydb"
-idrac_telemetry_scripting_folder: "idrac_telemetry/iDRAC-Telemetry-Scripting"
-telemetry_dir_path: "/opt/omnia/telemetry/"
+idrac_telemetry_scripting_folder: "{{ kube_client_share_path }}/iDRAC-Telemetry-Scripting"
 mysqldb_insert_fail_msg: |
   Failed to add/get iDRAC credential details in the mysql database.
   This could be due to the tables in the mysqldb not being accessible at the moment. Please try running the playbook again after some time.

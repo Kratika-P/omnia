@@ -27,6 +27,19 @@ ha_config_file: "{{ input_project_dir }}/high_availability_config.yml"
 pulp_webserver_cert_path: "/opt/omnia/pulp/settings/certs/pulp_webserver.crt"
 anchors_path: "/etc/pki/ca-trust/source/anchors/pulp_webserver.crt"
 
+# Usage: create_node_dir.yml
+nodes_yaml: "{{ hostvars['localhost']['oim_shared_path'] }}/omnia/openchami/workdir/nodes/nodes.yaml"
+worker_components:
+  - 'kubernetes'
+  - 'kubelet'
+worker_ips: "{{ worker_ip_list | unique }}"
+cp_components:
+  - 'etcd'
+  - 'kubernetes'
+  - 'kubelet'
+k8s_pip_packages: []
+cp_ips: "{{ (cp_first_ip_list + cp_ip_list) | unique }}"
+folder_mode: "0755"
 
 # csi variables
 csi_powerscale_git: "csi-powerscale.tar.gz"

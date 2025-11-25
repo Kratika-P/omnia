@@ -35,6 +35,7 @@ metadata:
   name: victoria-metric
   namespace: telemetry
 spec:
+  podManagementPolicy: Parallel
   replicas: 1
   selector:
     matchLabels:
@@ -56,7 +57,7 @@ spec:
                       values:
                         - {{ victoria.app_name }}
                 topologyKey: "kubernetes.io/hostname"
-      terminationGracePeriodSeconds: 3
+      terminationGracePeriodSeconds: 10
       tolerations:
         - effect: NoExecute
           key: node.kubernetes.io/not-ready

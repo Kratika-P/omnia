@@ -86,6 +86,9 @@
         - path: /etc/fstab
           content: |
             {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}   {{ k8s_client_mount_path }}        nfs    noatime,nolock     0 0
+            {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}/{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}/etcd      /var/lib/etcd        nfs noatime,nolock 0 0
+            {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}/{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}/kubelet   /var/lib/kubelet     nfs noatime,nolock 0 0
+            {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}/{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}/kubernetes   /etc/kubernetes      nfs noatime,nolock 0 0
             tmpfs   /tmp/crio-storage   tmpfs   size=8G,noatime,nodev,nosuid   0 0
           permissions: '0644'
 
@@ -173,7 +176,7 @@
                 - name: vip_interface
                   value: vip_interface
                 - name: vip_cidr
-                  value: "32"
+                  value: "{{ admin_netmask_bits }}"
                 - name: dns_mode
                   value: first
                 - name: cp_enable
@@ -233,6 +236,7 @@
               --apiserver-advertise-address={% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %} \
               --node-name {% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %} \
               --cri-socket=unix:///var/run/crio/crio.sock \
+              --control-plane-endpoint={% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}:6443 \
               --apiserver-cert-extra-sans {{ kube_vip }}
         
         - path: /usr/local/bin/install-helm.sh
@@ -342,508 +346,615 @@
         - sudo modprobe nf_conntrack || true
         - sudo modprobe vxlan || true
         - sysctl --system
-        - mkdir -p /tmp/crio-storage {{ k8s_client_mount_path }}
+        - mkdir -p /tmp/crio-storage {{ k8s_client_mount_path }} /var/lib/etcd  /var/lib/kubelet /etc/kubernetes
         - mount -a
         - |
           tmpfile=$(mktemp)
-          grep '^search' /etc/resolv.conf > "$tmpfile"
+          # Extract the first 'search' line only (ignore duplicates)
+          search_line=$(grep '^search' /etc/resolv.conf | head -n1)
+          [ -n "$search_line" ] && echo "$search_line" > "$tmpfile"
+
+          # Add your new nameserver entries
           {% for ns in dns %}
           echo "nameserver {{ ns }}" >> "$tmpfile"
           {% endfor %}
+
+          # Add remaining lines except search and empty lines
           grep -v '^search' /etc/resolv.conf | grep -v '^$' >> "$tmpfile"
-          cat "$tmpfile" > /etc/resolv.conf
+
+          # Remove duplicate lines
+          awk '!seen[$0]++' "$tmpfile" > /etc/resolv.conf
         - |
           if command -v chattr >/dev/null 2>&1; then
             chattr +i /etc/resolv.conf || true
           fi
-
         - systemctl start crio.service
         - systemctl enable crio.service
         - sudo systemctl enable --now kubelet
         - mv /tmp/crio.conf /etc/containers/registries.conf.d/crio.conf
-        - mv /tmp/ipaddress_pool.yaml {{ k8s_client_mount_path }}/metallb/ipaddress_pool.yaml
-        - mv /tmp/l2advertisement.yaml {{ k8s_client_mount_path }}/metallb/l2advertisement.yaml
         - cp {{ k8s_client_mount_path }}/pulp_webserver.crt /etc/pki/ca-trust/source/anchors
         - update-ca-trust extract
         - systemctl daemon-reload
         - systemctl restart crio
         - kubeadm config images pull
-        # Setup Kubernetes cluster
-        - /usr/local/bin/k8s-cluster-setup.sh || true
-        - mkdir -p $HOME/.kube
-        - cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
-        - chown $(id -u):$(id -g) $HOME/.kube/config
-        - |
-          echo "Updating strictARP to true in kube-proxy configmap"
-          kubectl get configmap kube-proxy -n kube-system -o yaml | \
-          sed -e "s/strictARP: false/strictARP: true/" | \
-          kubectl apply -f - -n kube-system
-        - cp {{ k8s_client_mount_path }}/calico/{{ calico_package }}.yml {{ k8s_client_mount_path }}/calico/updated-{{ calico_package }}.yml
-
-        - |
-          CALICO_YAML="{{ k8s_client_mount_path }}/calico/updated-{{ calico_package }}.yml"
-          ADMIN_NIC_CIDR="{{ admin_nic_cidr }}"
-
-          # Only add if not already present
-          if ! grep -q 'name: IP_AUTODETECTION_METHOD' "$CALICO_YAML"; then
-            sed -i '/value: "autodetect"/a\            - name: IP_AUTODETECTION_METHOD\n              value: "cidr='"$ADMIN_NIC_CIDR"'"' "$CALICO_YAML"
-            echo "IP_AUTODETECTION_METHOD set to $ADMIN_NIC_CIDR in $CALICO_YAML"
-          else
-            echo "IP_AUTODETECTION_METHOD already present in $CALICO_YAML"
-          fi
-          
-          # To apply the Calico manifest
-          kubectl apply -f "$CALICO_YAML"
-
-        - |
-          export KUBECONFIG=/etc/kubernetes/admin.conf
-          echo "Waiting for one Ready control plane node ..."
-          # Loop until we have at least one control plane node with status Ready
-          while true; do
-            control_plane_ready=$(kubectl get nodes -l node-role.kubernetes.io/control-plane="" --no-headers 2>/dev/null | awk '$2=="Ready"' | wc -l)
-            if [ "$control_plane_ready" -ge 1 ]; then
-              echo "Found $control_plane_ready Ready control plane node(s)!"
-              break
-            else
-              echo "No Ready control plane node yet, waiting 5s ..."
-              sleep 5
-            fi
-          done
-
-          # Wait for all pods in all namespaces to be ready (status=Running or Completed)
-          echo "Waiting for all pods to be Ready (Running/Completed)..."
-          while true; do
-            not_ready=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | awk '{ print $4 }' | grep -vE '^(Running|Completed)$' | wc -l)
-            if [ "${not_ready}" -eq 0 ]; then
-              echo "All pods are Running or Completed."
-              break
-            else
-              echo "$not_ready pods not yet ready, waiting 5s ..."
-              sleep 5
-            fi
-          done
-
-          echo "Listing all Kubernetes nodes:"
-          kubectl get nodes -o wide
-          echo "Listing all Kubernetes pods in all namespaces:"
-          kubectl get pods --all-namespaces -o wide
-
-        - |
-          kube_vip="{{ kube_vip }}"
-          kubectl get configmap kubeadm-config -n kube-system -o yaml > /tmp/kubeadm-config.yaml
-          if grep -q 'controlPlaneEndpoint:' /tmp/kubeadm-config.yaml; then
-            sed -i "s|controlPlaneEndpoint:.*|controlPlaneEndpoint: ${kube_vip}:6443|" /tmp/kubeadm-config.yaml
-          else
-            # Use correct YAML key capitalization!
-            sed -i "/ClusterConfiguration:/a\    controlPlaneEndpoint: ${kube_vip}:6443" /tmp/kubeadm-config.yaml
-          fi
-          kubectl apply -f /tmp/kubeadm-config.yaml
-        - |
-          VIP="{{ kube_vip }}"
-          KUBE_PORT="6443"
-          sed -i "s|server: https://[^:]*:${KUBE_PORT}|server: https://${VIP}:${KUBE_PORT}|" /etc/kubernetes/admin.conf
-          KUBECONFIG="${HOME}/.kube/config"
-          if [ -f "$KUBECONFIG" ]; then
-            sed -i "s|server: https://[^:]*:${KUBE_PORT}|server: https://${VIP}:${KUBE_PORT}|" "$KUBECONFIG"
-          fi
-          cp /etc/kubernetes/admin.conf $HOME/.kube/config
-          mkdir -p /root/.kube
-          cp /etc/kubernetes/admin.conf /root/.kube/config
-
-        - |
-          #!/bin/bash
-          NODE_IP="{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}"
-          # Find the interface with this IP
-          VIP_IFACE=$(ip -o addr show | awk -v ip="$NODE_IP" '$4 ~ ip {print $2}')
-          # Replace the vip_interface placeholder in the yaml
-          sed -i "s/value: vip_interface/value: ${VIP_IFACE}/" /tmp/kube-vip.yaml
-          cp /tmp/kube-vip.yaml /etc/kubernetes/manifests/kube-vip.yaml
-        - systemctl restart kubelet
-
-        - |
-          KUBE_VIP="{{ kube_vip }}"
-          if kubectl config view --minify | grep -q "server: https://${KUBE_VIP}:6443"; then
-            echo "SUCCESS: kube_vip (${KUBE_VIP}) is set in kubeconfig."
-            echo "Running: kubeadm init phase certs apiserver --control-plane-endpoint ${KUBE_VIP}:6443"
-            kubeadm init phase certs apiserver --control-plane-endpoint ${KUBE_VIP}:6443
-
-          else
-            echo "FAIL: kube_vip (${KUBE_VIP}) is NOT set in kubeconfig."
-          fi
-        
-        
-
-        - |
-          K8S_CLIENT_MOUNT_PATH="{{ k8s_client_mount_path }}"
-
-          # Get the certificate key
-          CERT_KEY=$(kubeadm init phase upload-certs --upload-certs | tail -1 | tr -d '\r\n ')
-          if [ -n "$CERT_KEY" ]; then
-            CONTROL_PLANE_JOIN_CMD=$(kubeadm token create --ttl 0 --print-join-command --certificate-key "$CERT_KEY")
-            echo "$CONTROL_PLANE_JOIN_CMD" > "${K8S_CLIENT_MOUNT_PATH}/control-plane-join-command.sh"
-            echo "Saved control-plane join command to: ${K8S_CLIENT_MOUNT_PATH}/control-plane-join-command.sh"
-          else
-            echo "ERROR: Certificate key is empty! Cannot generate control-plane join command."
-            exit 1
-          fi
-
-          # For joining worker nodes (regular join command)
-          WORKER_JOIN_CMD=$(kubeadm token create --ttl 0 --print-join-command)
-          echo "$WORKER_JOIN_CMD" > "${K8S_CLIENT_MOUNT_PATH}/worker-join-command.sh"
-          echo "Saved worker join command to:       ${K8S_CLIENT_MOUNT_PATH}/worker-join-command.sh"
-        
-        # - |
-        #   # --- Begin Kubernetes Secret Encryption setup ---
-        #   echo "[INFO] Configuring Kubernetes secret encryption"
-
-        #   ENCRYPTION_CONFIG_PATH="/etc/kubernetes/encryption-config.yaml"
-        #   NUM_KEYS=2
-
-        #   # Generate random 32-byte Base64 keys (silently)
-        #   KEYS=()
-        #   for i in $(seq 1 $NUM_KEYS); do
-        #     KEYS+=("$(head -c 32 /dev/urandom | base64)")
-        #   done
-
-        #   # Build EncryptionConfiguration YAML
-        #   {
-        #     echo "apiVersion: apiserver.config.k8s.io/v1"
-        #     echo "kind: EncryptionConfiguration"
-        #     echo "resources:"
-        #     echo "  - resources:"
-        #     echo "      - secrets"
-        #     echo "    providers:"
-        #     echo "      - aescbc:"
-        #     echo "          keys:"
-        #     i=1
-        #     for key in "${KEYS[@]}"; do
-        #       echo "            - name: key${i}"
-        #       echo "              secret: ${key}"
-        #       i=$((i + 1))
-        #     done
-        #     echo "      - identity: {}"
-        #   } > "${ENCRYPTION_CONFIG_PATH}"
-
-        #   chmod 600 "${ENCRYPTION_CONFIG_PATH}"
-        #   chown root:root "${ENCRYPTION_CONFIG_PATH}"
-
-        #   # Ensure kube-apiserver manifest references encryption config
-        #   if ! grep -q -- "--encryption-provider-config=${ENCRYPTION_CONFIG_PATH}" /etc/kubernetes/manifests/kube-apiserver.yaml; then
-        #     sed -i '/--tls-private-key-file=\/etc\/kubernetes\/pki\/apiserver.key/a\    - --encryption-provider-config=/etc/kubernetes/encryption-config.yaml' /etc/kubernetes/manifests/kube-apiserver.yaml
-        #     sed -i '/volumeMounts:/a\    - mountPath: /etc/kubernetes/encryption-config.yaml\n      name: encryption-config\n      readOnly: true' /etc/kubernetes/manifests/kube-apiserver.yaml
-        #     sed -i '/volumes:/a\  - name: encryption-config\n    hostPath:\n      path: /etc/kubernetes/encryption-config.yaml\n      type: File' /etc/kubernetes/manifests/kube-apiserver.yaml
-        #   fi
-
-        #   echo "[INFO] Restarting kubelet to reload kube-apiserver manifest..."
-        #   systemctl restart kubelet
-
-        #   # Wait for kube-apiserver to restart and become healthy
-        #   echo "[INFO] Waiting for kube-apiserver pod to restart..."
-        #   for i in {1..30}; do
-        #     sleep 5
-        #     if crictl ps | grep -q kube-apiserver; then
-        #       echo "[INFO] kube-apiserver container detected (iteration $i)"
-        #       if kubectl get --raw='/healthz' &>/dev/null; then
-        #         echo "[SUCCESS] kube-apiserver is healthy and responding"
-        #         break
-        #       fi
-        #     fi
-        #     if [ "$i" -eq 30 ]; then
-        #       echo "[WARNING] kube-apiserver did not become healthy within timeout!"
-        #     fi
-        #   done
-
-        #   echo "[INFO] Kubernetes secret encryption configuration applied"
-        #   # --- End Kubernetes Secret Encryption setup ---
-
         - echo "Installing helm"
         - /usr/local/bin/install-helm.sh
 
         - |
-          set -e
-          cd {{ k8s_client_mount_path }}
-          export KUBECONFIG=/etc/kubernetes/admin.conf
+          MARKER="/etc/kubernetes/.cluster_initialized"
+          export KUBECONFIG="/etc/kubernetes/admin.conf"
+          if [ ! -f "$MARKER" ]; then
+            # FIRST BOOT - CLUSTER INIT
+            # -- All the commands below this line should be run ONCE ONLY:
+            echo "Initial boot - initializing and setting up service_kube_control_plane_first_x86_64"
+            mv /tmp/ipaddress_pool.yaml {{ k8s_client_mount_path }}/metallb/ipaddress_pool.yaml
+            mv /tmp/l2advertisement.yaml {{ k8s_client_mount_path }}/metallb/l2advertisement.yaml
+            # Setup Kubernetes cluster
+            rm -rf /var/lib/etcd/*  /var/lib/kubelet/* /etc/kubernetes/*
+            rm -rf /var/lib/etcd/.*  /var/lib/kubelet/.* /etc/kubernetes/.*
+            #!/bin/bash
+            NODE_IP="{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}"
+            # Find the interface with this IP
+            VIP_IFACE=$(ip -o addr show | awk -v ip="$NODE_IP" '$4 ~ ip {print $2}')
+            # Replace the vip_interface placeholder in the yaml
+            sed -i "s/value: vip_interface/value: ${VIP_IFACE}/" /tmp/kube-vip.yaml
+            mkdir -p /etc/kubernetes/manifests/
+            cp /tmp/kube-vip.yaml /etc/kubernetes/manifests/kube-vip.yaml
 
-          echo "Waiting for at least one READY Kubernetes worker node ..."
-          while true; do
-            # List nodes, exclude master/control-plane, look for Ready
-            if kubectl get nodes --no-headers | grep -Ev 'control-plane|master' | grep ' Ready '; then
-               echo "Worker node(s) present and Ready."
-               break
+            /usr/local/bin/k8s-cluster-setup.sh || true
+            mkdir -p $HOME/.kube
+            cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
+            chown $(id -u):$(id -g) $HOME/.kube/config
+  
+            echo "Updating strictARP to true in kube-proxy configmap"
+            kubectl get configmap kube-proxy -n kube-system -o yaml | \
+            sed -e "s/strictARP: false/strictARP: true/" | \
+            kubectl apply -f - -n kube-system
+            cp {{ k8s_client_mount_path }}/calico/{{ calico_package }}.yml {{ k8s_client_mount_path }}/calico/updated-{{ calico_package }}.yml
+
+            CALICO_YAML="{{ k8s_client_mount_path }}/calico/updated-{{ calico_package }}.yml"
+            ADMIN_NIC_CIDR="{{ admin_nic_cidr }}"
+
+            # Only add if not already present
+            if ! grep -q 'name: IP_AUTODETECTION_METHOD' "$CALICO_YAML"; then
+              sed -i '/value: "autodetect"/a\            - name: IP_AUTODETECTION_METHOD\n              value: "cidr='"$ADMIN_NIC_CIDR"'"' "$CALICO_YAML"
+              echo "IP_AUTODETECTION_METHOD set to $ADMIN_NIC_CIDR in $CALICO_YAML"
             else
-               echo "No Ready worker node detected yet. Retrying in 10 seconds..."
-               sleep 10
+              echo "IP_AUTODETECTION_METHOD already present in $CALICO_YAML"
             fi
-          done
+            
+            # To apply the Calico manifest
+            kubectl apply -f "$CALICO_YAML"
 
-          echo "Installing plugins"
-          echo "Installing nfs-client-provisioner"
-          /usr/local/bin/helm install nfs-client {{ k8s_client_mount_path }}/nfs-client-provisioner/{{ nfs_subdir_external_provisioner_pkg }}.tar.gz \
-            --namespace default --create-namespace \
-            --set nfs.server={{ k8s_nfs_server_ip }} \
-            --set nfs.path={{ k8s_server_share_path }} \
-            --set storageClass.defaultClass=true
-          echo "Waiting for nfs-subdir-external-provisioner pods to appear..."
-          # Give controller some time to create pods
-          sleep 15
+            export KUBECONFIG=/etc/kubernetes/admin.conf
+            echo "Waiting for one Ready control plane node ..."
+            # Loop until we have at least one control plane node with status Ready
+            while true; do
+              control_plane_ready=$(kubectl get nodes -l node-role.kubernetes.io/control-plane="" --no-headers 2>/dev/null | awk '$2=="Ready"' | wc -l)
+              if [ "$control_plane_ready" -ge 1 ]; then
+                echo "Found $control_plane_ready Ready control plane node(s)!"
+                break
+              else
+                echo "No Ready control plane node yet, waiting 5s ..."
+                sleep 5
+              fi
+            done
 
-          # Wait only if pods exist
-          if kubectl get pods -n default -l app=nfs-subdir-external-provisioner | grep -q nfs-subdir; then
-            kubectl wait --for=condition=Ready pod -l app=nfs-subdir-external-provisioner -n default --timeout=300s || true
-          else
-            echo "Pods not yet created, retrying after 10 seconds..."
-            sleep 10
-            kubectl wait --for=condition=Ready pod -l app=nfs-subdir-external-provisioner -n default --timeout=300s || true
-          fi
+            # Wait for all pods in all namespaces to be ready (status=Running or Completed)
+            echo "Waiting for all pods to be Ready (Running/Completed)..."
+            while true; do
+              not_ready=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | awk '{ print $4 }' | grep -vE '^(Running|Completed)$' | wc -l)
+              if [ "${not_ready}" -eq 0 ]; then
+                echo "All pods are Running or Completed."
+                break
+              else
+                echo "$not_ready pods not yet ready, waiting 5s ..."
+                sleep 5
+              fi
+            done
 
-          echo "Installing Metallb"
-          kubectl create -f metallb/{{ metallb_package }}.yml
-          echo "Waiting for MetalLB pods to be ready..."
-          kubectl wait --namespace metallb-system --for=condition=Ready pods --all --timeout=300s
-          echo "Deploy ipaddress pool"
-          kubectl create -f metallb/ipaddress_pool.yaml
-          echo "Deploy Layer2 Configuration"
-          kubectl create -f metallb/l2advertisement.yaml
+            echo "Listing all Kubernetes nodes:"
+            kubectl get nodes -o wide
+            echo "Listing all Kubernetes pods in all namespaces:"
+            kubectl get pods --all-namespaces -o wide
 
-          # echo "Deploy Multus"
-          # kubectl apply -f multus/{{ multus_package }}.yml
-          # echo "Waiting for multus pods to be ready..."
-          # kubectl wait --for=condition=Ready pod -l app=multus -n kube-system --timeout=300s
 
-          # echo "Deploy Wherabouts"
-          # kubectl apply -f whereabouts/whereabouts/doc/crds/daemonset-install.yaml
-          # kubectl apply -f whereabouts/whereabouts/doc/crds/whereabouts.cni.cncf.io_ippools.yaml
-          # kubectl apply -f whereabouts/whereabouts/doc/crds/whereabouts.cni.cncf.io_overlappingrangeipreservations.yaml
-          # echo "Waiting for whereabouts pods to be ready..."
-          # kubectl wait --for=condition=Ready pod -l app=whereabouts -n kube-system --timeout=300s
-
-        - |
-          export KUBECONFIG=/etc/kubernetes/admin.conf
-          echo "Display nodes and pods status after deploying plugins"
-          echo "Listing all Kubernetes nodes:"
-          kubectl get nodes -o wide
-
-          echo "Listing all Kubernetes pods in all namespaces:"
-          kubectl get pods --all-namespaces -o wide
-
-        - |
-          CSI_DRIVER_SUPPORT="{{ csi_driver_powerscale_support | lower }}"
-          echo "===== Checking if PowerScale CSI driver support is enabled ====="
-
-          if [ "$CSI_DRIVER_SUPPORT" != "true" ]; then
-            echo "PowerScale CSI driver support is disabled. Skipping deployment."
-            true
-          else
-            echo "PowerScale CSI driver support is enabled. Proceeding with deployment."
-            echo "===== Copying CSI PowerScale driver from NFS-mounted path ====="
-            mkdir -p /opt/omnia
-            POWERSCALE_DEPLOYMENT_FAILED=0
-
-            if cp -rp {{ k8s_client_mount_path }}/csi-driver-powerscale /opt/omnia/; then
-              echo "Copied CSI PowerScale driver to /opt/omnia successfully."
+            kube_vip="{{ kube_vip }}"
+            kubectl get configmap kubeadm-config -n kube-system -o yaml > /tmp/kubeadm-config.yaml
+            if grep -q 'controlPlaneEndpoint:' /tmp/kubeadm-config.yaml; then
+              sed -i "s|controlPlaneEndpoint:.*|controlPlaneEndpoint: ${kube_vip}:6443|" /tmp/kubeadm-config.yaml
             else
-              echo "ERROR: Failed to copy PowerScale driver. Skipping PowerScale deployment."
-              POWERSCALE_DEPLOYMENT_FAILED=1
+              # Use correct YAML key capitalization!
+              sed -i "/ClusterConfiguration:/a\    controlPlaneEndpoint: ${kube_vip}:6443" /tmp/kubeadm-config.yaml
+            fi
+            kubectl apply -f /tmp/kubeadm-config.yaml
+ 
+            # Update cluster-info
+            kubectl get configmap cluster-info -n kube-public -o yaml > /tmp/cluster-info.yaml
+            sed -i "s|server: https://.*:6443|server: https://${kube_vip}:6443|" /tmp/cluster-info.yaml
+            kubectl apply -f /tmp/cluster-info.yaml
+            
+            VIP="{{ kube_vip }}"
+            KUBE_PORT="6443"
+            sed -i "s|server: https://[^:]*:${KUBE_PORT}|server: https://${VIP}:${KUBE_PORT}|" /etc/kubernetes/admin.conf
+            KUBECONFIG="${HOME}/.kube/config"
+            if [ -f "$KUBECONFIG" ]; then
+              sed -i "s|server: https://[^:]*:${KUBE_PORT}|server: https://${VIP}:${KUBE_PORT}|" "$KUBECONFIG"
+            fi
+            cp /etc/kubernetes/admin.conf $HOME/.kube/config
+            mkdir -p /root/.kube
+            cp /etc/kubernetes/admin.conf /root/.kube/config
+ 
+            systemctl restart kubelet
+
+            KUBE_VIP="{{ kube_vip }}"
+            if kubectl config view --minify | grep -q "server: https://${KUBE_VIP}:6443"; then
+              echo "SUCCESS: kube_vip (${KUBE_VIP}) is set in kubeconfig."
+              echo "Running: kubeadm init phase certs apiserver --control-plane-endpoint ${KUBE_VIP}:6443"
+              kubeadm init phase certs apiserver --control-plane-endpoint ${KUBE_VIP}:6443
+
+            else
+              echo "FAIL: kube_vip (${KUBE_VIP}) is NOT set in kubeconfig."
             fi
 
-            if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-              SECRET_FILE="/opt/omnia/csi-driver-powerscale/secret.yaml"
-              echo "Checking if creds are provided by user"
+            K8S_CLIENT_MOUNT_PATH="{{ k8s_client_mount_path }}"
 
-              if [[ -f "$SECRET_FILE" ]]; then
-                echo "Found secret file at $SECRET_FILE"
-                csi_username=$(grep -v '^[[:space:]]*#' "$SECRET_FILE" | grep 'username:' | head -1 | awk -F':' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' | base64 --decode 2>/dev/null)
-                csi_password=$(grep -v '^[[:space:]]*#' "$SECRET_FILE" | grep 'password:' | head -1 | awk -F':' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' | base64 --decode 2>/dev/null)
+            # Get the certificate key
+            CERT_KEY=$(kubeadm init phase upload-certs --upload-certs | tail -1 | tr -d '\r\n ')
+            if [ -n "$CERT_KEY" ]; then
+              CONTROL_PLANE_JOIN_CMD=$(kubeadm token create --ttl 0 --print-join-command --certificate-key "$CERT_KEY")
+              echo "$CONTROL_PLANE_JOIN_CMD" > "${K8S_CLIENT_MOUNT_PATH}/control-plane-join-command.sh"
+              echo "Saved control-plane join command to: ${K8S_CLIENT_MOUNT_PATH}/control-plane-join-command.sh"
+            else
+              echo "ERROR: Certificate key is empty! Cannot generate control-plane join command."
+              exit 1
+            fi
 
-                if [ -z "${csi_username}" ] || [ -z "${csi_password}" ]; then
-                  echo " ERROR: CSI credentials not defined in secret.yaml."
-                  POWERSCALE_DEPLOYMENT_FAILED=1
-                else
-                  export csi_username
-                  export csi_password
-                fi
+            # For joining worker nodes (regular join command)
+            WORKER_JOIN_CMD=$(kubeadm token create --ttl 0 --print-join-command)
+            echo "$WORKER_JOIN_CMD" > "${K8S_CLIENT_MOUNT_PATH}/worker-join-command.sh"
+            echo "Saved worker join command to:       ${K8S_CLIENT_MOUNT_PATH}/worker-join-command.sh"
+          
+            # - |
+            #   # --- Begin Kubernetes Secret Encryption setup ---
+            #   echo "[INFO] Configuring Kubernetes secret encryption"
+
+            #   ENCRYPTION_CONFIG_PATH="/etc/kubernetes/encryption-config.yaml"
+            #   NUM_KEYS=2
+
+            #   # Generate random 32-byte Base64 keys (silently)
+            #   KEYS=()
+            #   for i in $(seq 1 $NUM_KEYS); do
+            #     KEYS+=("$(head -c 32 /dev/urandom | base64)")
+            #   done
+
+            #   # Build EncryptionConfiguration YAML
+            #   {
+            #     echo "apiVersion: apiserver.config.k8s.io/v1"
+            #     echo "kind: EncryptionConfiguration"
+            #     echo "resources:"
+            #     echo "  - resources:"
+            #     echo "      - secrets"
+            #     echo "    providers:"
+            #     echo "      - aescbc:"
+            #     echo "          keys:"
+            #     i=1
+            #     for key in "${KEYS[@]}"; do
+            #       echo "            - name: key${i}"
+            #       echo "              secret: ${key}"
+            #       i=$((i + 1))
+            #     done
+            #     echo "      - identity: {}"
+            #   } > "${ENCRYPTION_CONFIG_PATH}"
+
+            #   chmod 600 "${ENCRYPTION_CONFIG_PATH}"
+            #   chown root:root "${ENCRYPTION_CONFIG_PATH}"
+
+            #   # Ensure kube-apiserver manifest references encryption config
+            #   if ! grep -q -- "--encryption-provider-config=${ENCRYPTION_CONFIG_PATH}" /etc/kubernetes/manifests/kube-apiserver.yaml; then
+            #     sed -i '/--tls-private-key-file=\/etc\/kubernetes\/pki\/apiserver.key/a\    - --encryption-provider-config=/etc/kubernetes/encryption-config.yaml' /etc/kubernetes/manifests/kube-apiserver.yaml
+            #     sed -i '/volumeMounts:/a\    - mountPath: /etc/kubernetes/encryption-config.yaml\n      name: encryption-config\n      readOnly: true' /etc/kubernetes/manifests/kube-apiserver.yaml
+            #     sed -i '/volumes:/a\  - name: encryption-config\n    hostPath:\n      path: /etc/kubernetes/encryption-config.yaml\n      type: File' /etc/kubernetes/manifests/kube-apiserver.yaml
+            #   fi
+
+            #   echo "[INFO] Restarting kubelet to reload kube-apiserver manifest..."
+            #   systemctl restart kubelet
+
+            #   # Wait for kube-apiserver to restart and become healthy
+            #   echo "[INFO] Waiting for kube-apiserver pod to restart..."
+            #   for i in {1..30}; do
+            #     sleep 5
+            #     if crictl ps | grep -q kube-apiserver; then
+            #       echo "[INFO] kube-apiserver container detected (iteration $i)"
+            #       if kubectl get --raw='/healthz' &>/dev/null; then
+            #         echo "[SUCCESS] kube-apiserver is healthy and responding"
+            #         break
+            #       fi
+            #     fi
+            #     if [ "$i" -eq 30 ]; then
+            #       echo "[WARNING] kube-apiserver did not become healthy within timeout!"
+            #     fi
+            #   done
+
+            #   echo "[INFO] Kubernetes secret encryption configuration applied"
+            #   # --- End Kubernetes Secret Encryption setup ---
+
+
+            set -e
+            export KUBECONFIG=/etc/kubernetes/admin.conf
+
+            echo "Waiting for at least one READY Kubernetes worker node ..."
+            while true; do
+              # List nodes, exclude master/control-plane, look for Ready
+              if kubectl get nodes --no-headers | grep -Ev 'control-plane|master' | grep ' Ready '; then
+                echo "Worker node(s) present and Ready."
+                break
               else
-                echo "ERROR: secret.yaml not found at $SECRET_FILE."
-                POWERSCALE_DEPLOYMENT_FAILED=1
+                echo "No Ready worker node detected yet. Retrying in 10 seconds..."
+                sleep 10
               fi
+            done
+          
+
+            echo "Installing plugins"
+            echo "Installing nfs-client-provisioner"
+            /usr/local/bin/helm install nfs-client {{ k8s_client_mount_path }}/nfs-client-provisioner/{{ nfs_subdir_external_provisioner_pkg }}.tar.gz \
+              --namespace default --create-namespace \
+              --set nfs.server={{ k8s_nfs_server_ip }} \
+              --set nfs.path={{ k8s_server_share_path }} \
+              --set storageClass.defaultClass=true \
+              --set storageClass.reclaimPolicy=Retain
+            echo "Waiting for nfs-subdir-external-provisioner pods to appear..."
+            # Give controller some time to create pods
+            sleep 15
+
+            # Wait only if pods exist
+            if kubectl get pods -n default -l app=nfs-subdir-external-provisioner | grep -q nfs-subdir; then
+              kubectl wait --for=condition=Ready pod -l app=nfs-subdir-external-provisioner -n default --timeout=300s || true
+            else
+              echo "Pods not yet created, retrying after 10 seconds..."
+              sleep 10
+              kubectl wait --for=condition=Ready pod -l app=nfs-subdir-external-provisioner -n default --timeout=300s || true
             fi
 
-            if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-              echo "===== Checking if PowerScale driver is deployed ====="
-              if kubectl get pods -n isilon --no-headers 2>/dev/null | grep -q '^isilon-'; then
-                echo "PowerScale driver is already deployed on the cluster."
-                POWERSCALE_DEPLOYMENT_FAILED=1
-              fi
-            fi
+            echo "Installing Metallb"
+            kubectl create -f {{ k8s_client_mount_path }}/metallb/{{ metallb_package }}.yml
+            echo "Waiting for MetalLB pods to be ready..."
+            kubectl wait --namespace metallb-system --for=condition=Ready pods --all --timeout=300s
+            echo "Waiting for MetalLB webhook to be ready..."
+            until kubectl get endpoints metallb-webhook-service -n metallb-system \
+              -o jsonpath='{.subsets[*].addresses[*].ip}' | grep -qE '[0-9]'; do
+              echo "Webhook endpoints not ready yet. Retrying in 5s..."
+              sleep 5
+            done
+            echo "MetalLB webhook is ready."
+            echo "Deploy ipaddress pool"
+            kubectl create -f {{ k8s_client_mount_path }}/metallb/ipaddress_pool.yaml
+            echo "Deploy Layer2 Configuration"
+            kubectl create -f {{ k8s_client_mount_path }}/metallb/l2advertisement.yaml
 
-            if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-              echo "===== Checking Helm installation ====="
-              if ! command -v helm >/dev/null 2>&1; then
-                echo "Helm not found. Installing..."
-                /usr/local/bin/install-helm.sh || POWERSCALE_DEPLOYMENT_FAILED=1
-              fi
-            fi
+            #echo "Deploy Multus"
+            #kubectl apply -f {{ k8s_client_mount_path }}/multus/{{ multus_package }}.yml
+            #echo "Waiting for multus pods to be ready..."
+            #kubectl wait --for=condition=Ready pod -l app=multus -n kube-system --timeout=300s
 
-            if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-              echo "===== Extracting PowerScale host from secret.yaml ====="
-              powerscale_endpoint=$(grep '^[[:space:]]*endpoint:' "$SECRET_FILE" | head -1 | awk -F'"' '{print $2}')
-              powerscale_host=$(echo "$powerscale_endpoint" | sed -E 's#https?://##' | sed -E 's#/.*##')
+            #echo "Deploy Wherabouts"
+            #kubectl apply -f {{ k8s_client_mount_path }}/whereabouts/whereabouts/doc/crds/daemonset-install.yaml
+            #kubectl apply -f {{ k8s_client_mount_path }}/whereabouts/whereabouts/doc/crds/whereabouts.cni.cncf.io_ippools.yaml
+            #kubectl apply -f {{ k8s_client_mount_path }}/whereabouts/whereabouts/doc/crds/whereabouts.cni.cncf.io_overlappingrangeipreservations.yaml
+            #echo "Waiting for whereabouts pods to be ready..."
+            #kubectl wait --for=condition=Ready pod -l app=whereabouts -n kube-system --timeout=300s
 
-              echo "Extracted PowerScale Host: $powerscale_host"
-              echo "===== Checking connectivity to PowerScale host ====="
-              if ping -c 1 "$powerscale_host" >/dev/null 2>&1; then
-                echo "PowerScale Host ($powerscale_host) is reachable."
-              else
-                echo "ERROR: PowerScale Host ($powerscale_host) is NOT reachable."
-                POWERSCALE_DEPLOYMENT_FAILED=1
-              fi
-            fi
 
-            if [ "$POWERSCALE_DEPLOYMENT_FAILED" -ne 0 ]; then
-              echo "PowerScale prerequisites failed. Skipping remaining deployment steps."
+            export KUBECONFIG=/etc/kubernetes/admin.conf
+            echo "Display nodes and pods status after deploying plugins"
+            echo "Listing all Kubernetes nodes:"
+            kubectl get nodes -o wide
+
+            echo "Listing all Kubernetes pods in all namespaces:"
+            kubectl get pods --all-namespaces -o wide
+
+
+            CSI_DRIVER_SUPPORT="{{ csi_driver_powerscale_support | lower }}"
+            echo "===== Checking if PowerScale CSI driver support is enabled ====="
+
+            if [ "$CSI_DRIVER_SUPPORT" != "true" ]; then
+              echo "PowerScale CSI driver support is disabled. Skipping deployment."
               true
             else
-              echo "===== Ensuring 'isilon' namespace exists ====="
-              kubectl create namespace isilon --dry-run=client -o yaml | kubectl apply -f - || {
-                echo "ERROR: Failed to create or verify 'isilon' namespace."
+              echo "PowerScale CSI driver support is enabled. Proceeding with deployment."
+              echo "===== Copying CSI PowerScale driver from NFS-mounted path ====="
+              mkdir -p /opt/omnia
+              POWERSCALE_DEPLOYMENT_FAILED=0
+
+              if cp -rp {{ k8s_client_mount_path }}/csi-driver-powerscale /opt/omnia/; then
+                echo "Copied CSI PowerScale driver to /opt/omnia successfully."
+              else
+                echo "ERROR: Failed to copy PowerScale driver. Skipping PowerScale deployment."
                 POWERSCALE_DEPLOYMENT_FAILED=1
-              }
-
-              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                echo "===== Creating and patching isilon-creds secret ====="
-                kubectl delete secret isilon-creds -n isilon >/dev/null 2>&1 || true
-                kubectl create secret generic isilon-creds -n isilon \
-                  --from-file=config="$SECRET_FILE" >/dev/null 2>&1 || POWERSCALE_DEPLOYMENT_FAILED=1
-
-                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                  kubectl get secret isilon-creds -n isilon -o jsonpath='{.data.config}' | base64 -d > /tmp/decoded_config.yaml 2>/dev/null
-                  awk -v user="$csi_username" -v pass="$csi_password" '
-                    /^[[:space:]]*#/ {print; next}
-                    /^ *username:/ {sub(/:.*/, ": " user)}
-                    /^ *password:/ {sub(/:.*/, ": " pass)}
-                    {print}
-                  ' /tmp/decoded_config.yaml > /tmp/updated_config.yaml
-                  encoded_config=$(base64 -w 0 /tmp/updated_config.yaml)
-                  kubectl patch secret isilon-creds -n isilon \
-                    --type merge \
-                    -p "{\"data\":{\"config\":\"${encoded_config}\"}}" >/dev/null 2>&1 || POWERSCALE_DEPLOYMENT_FAILED=1
-                  rm -f /tmp/decoded_config.yaml /tmp/updated_config.yaml
-                  echo "isilon-creds secret created and patched successfully."
-                fi
               fi
 
               if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                echo "===== Applying empty certificate secret ====="
-                if [ -f "/opt/omnia/csi-driver-powerscale/empty_isilon-certs.yaml" ]; then
-                  kubectl apply -f /opt/omnia/csi-driver-powerscale/empty_isilon-certs.yaml || {
-                    echo "Failed to apply empty certs secret. Continuing..."
+                SECRET_FILE="/opt/omnia/csi-driver-powerscale/secret.yaml"
+                echo "Checking if creds are provided by user"
+
+                if [[ -f "$SECRET_FILE" ]]; then
+                  echo "Found secret file at $SECRET_FILE"
+                  csi_username=$(grep -v '^[[:space:]]*#' "$SECRET_FILE" | grep 'username:' | head -1 | awk -F':' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' | base64 --decode 2>/dev/null)
+                  csi_password=$(grep -v '^[[:space:]]*#' "$SECRET_FILE" | grep 'password:' | head -1 | awk -F':' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' | base64 --decode 2>/dev/null)
+
+                  if [ -z "${csi_username}" ] || [ -z "${csi_password}" ]; then
+                    echo " ERROR: CSI credentials not defined in secret.yaml."
                     POWERSCALE_DEPLOYMENT_FAILED=1
-                  }
-                fi
-              fi
-
-              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                echo "===== Deploying External Snapshotter CRDs ====="
-                if [ -d "/opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/client/config/crd" ]; then
-                  kubectl apply -f /opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/client/config/crd/ >/dev/null 2>&1 || {
-                    echo "CRD deployment failed (expected). Continuing..."
-                  }
-                fi
-              fi
-
-              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                echo "===== Deploying Snapshot Controller ====="
-                if [ -d "/opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/deploy/kubernetes/snapshot-controller" ]; then
-                  kubectl apply -f /opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/deploy/kubernetes/snapshot-controller/ >/dev/null 2>&1 || {
-                    echo "Snapshot Controller deployment failed (expected). Continuing..."
-                  }
-
-                  echo "Updating Snapshot Controller image to v8.3.0..."
-                  kubectl set image deployment/snapshot-controller snapshot-controller=registry.k8s.io/sig-storage/snapshot-controller:v8.3.0 -n kube-system >/dev/null 2>&1 || true
-
-                  echo "Waiting for Snapshot Controller rollout to finish (timeout: 5 minutes)..."
-                  kubectl rollout status deployment/snapshot-controller -n kube-system --timeout=300s >/dev/null 2>&1 || {
-                    echo "Snapshot Controller rollout did not complete in time."
-                  }
-                  sleep 10
-                  echo "Waiting for Snapshot Controller pods to reach Running state..."
-                  MAX_ATTEMPTS=60
-                  WAIT_TIME=5
-                  for ((i=1; i<=MAX_ATTEMPTS; i++)); do
-                    not_ready=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep snapshot-controller | awk '{ print $3 }' | grep -vE '^(Running|Completed)$' | wc -l)
-                    if [ "$not_ready" -eq 0 ]; then
-                      echo "Snapshot Controller pods are Running or Completed."
-                      break
-                    else
-                      echo "[$i/$MAX_ATTEMPTS] $not_ready Snapshot Controller pods not ready, waiting ${WAIT_TIME}s..."
-                      sleep $WAIT_TIME
-                    fi
-                  done
-                  echo "Snapshot Controller deployment completed (or timed out safely)."
-                fi
-              fi
-
-              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                echo "===== Running CSI PowerScale installation script ====="
-                INSTALL_SCRIPT="/opt/omnia/csi-driver-powerscale/csi-powerscale/dell-csi-helm-installer/csi-install.sh"
-                if [ -x "$INSTALL_SCRIPT" ]; then
-                  cd "$(dirname "$INSTALL_SCRIPT")" || true
-                  ./csi-install.sh --namespace isilon --values /opt/omnia/csi-driver-powerscale/values.yaml &
-                  CSI_PID=$!
-                  echo "Waiting for CSI install script (PID $CSI_PID) to complete..."
-                  wait $CSI_PID
+                  else
+                    export csi_username
+                    export csi_password
+                  fi
                 else
-                  echo "ERROR: CSI install script not found."
+                  echo "ERROR: secret.yaml not found at $SECRET_FILE."
                   POWERSCALE_DEPLOYMENT_FAILED=1
                 fi
               fi
 
               if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
-                echo "===== Waiting for CSI pods ====="
-                MAX_ATTEMPTS=30
-                WAIT_TIME=10
-                CSI_READY=0
-                for ((i=1; i<=MAX_ATTEMPTS; i++)); do
-                  if kubectl get pods -n isilon --no-headers 2>/dev/null | grep -q '^isilon-'; then
-                    NON_RUNNING=$(kubectl get pods -n isilon --no-headers 2>/dev/null | grep '^isilon-' | grep -v "Running" | wc -l)
-                    if [ "$NON_RUNNING" -eq 0 ]; then
-                      echo "All CSI pods are running."
-                      CSI_READY=1
-                      break
-                    fi
-                  fi
-                  echo "Attempt $i/$MAX_ATTEMPTS: Waiting for CSI pods to be Running..."
-                  sleep $WAIT_TIME
-                done
+                echo "===== Checking if PowerScale driver is deployed ====="
+                if kubectl get pods -n isilon --no-headers 2>/dev/null | grep -q '^isilon-'; then
+                  echo "PowerScale driver is already deployed on the cluster."
+                  POWERSCALE_DEPLOYMENT_FAILED=1
+                fi
+              fi
 
-                if [ "$CSI_READY" -eq 1 ]; then
-                  echo "CSI PowerScale driver installed successfully."
-                  if [ -f "/opt/omnia/csi-driver-powerscale/ps_storage_class.yml" ]; then
-                    kubectl apply -f /opt/omnia/csi-driver-powerscale/ps_storage_class.yml
-                    echo "PowerScale StorageClass applied successfully."
-                  fi
+              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                echo "===== Checking Helm installation ====="
+                if ! command -v helm >/dev/null 2>&1; then
+                  echo "Helm not found. Installing..."
+                  /usr/local/bin/install-helm.sh || POWERSCALE_DEPLOYMENT_FAILED=1
+                fi
+              fi
+
+              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                echo "===== Extracting PowerScale host from secret.yaml ====="
+                powerscale_endpoint=$(grep '^[[:space:]]*endpoint:' "$SECRET_FILE" | head -1 | awk -F'"' '{print $2}')
+                powerscale_host=$(echo "$powerscale_endpoint" | sed -E 's#https?://##' | sed -E 's#/.*##')
+
+                echo "Extracted PowerScale Host: $powerscale_host"
+                echo "===== Checking connectivity to PowerScale host ====="
+                if ping -c 1 "$powerscale_host" >/dev/null 2>&1; then
+                  echo "PowerScale Host ($powerscale_host) is reachable."
                 else
-                  echo "ERROR: CSI PowerScale driver pods not ready after waiting. Skipping StorageClass creation."
+                  echo "ERROR: PowerScale Host ($powerscale_host) is NOT reachable."
+                  POWERSCALE_DEPLOYMENT_FAILED=1
+                fi
+              fi
+
+              if [ "$POWERSCALE_DEPLOYMENT_FAILED" -ne 0 ]; then
+                echo "PowerScale prerequisites failed. Skipping remaining deployment steps."
+                true
+              else
+                echo "===== Ensuring 'isilon' namespace exists ====="
+                kubectl create namespace isilon --dry-run=client -o yaml | kubectl apply -f - || {
+                  echo "ERROR: Failed to create or verify 'isilon' namespace."
+                  POWERSCALE_DEPLOYMENT_FAILED=1
+                }
+
+                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                  echo "===== Creating and patching isilon-creds secret ====="
+                  kubectl delete secret isilon-creds -n isilon >/dev/null 2>&1 || true
+                  kubectl create secret generic isilon-creds -n isilon \
+                    --from-file=config="$SECRET_FILE" >/dev/null 2>&1 || POWERSCALE_DEPLOYMENT_FAILED=1
+
+                  if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                    kubectl get secret isilon-creds -n isilon -o jsonpath='{.data.config}' | base64 -d > /tmp/decoded_config.yaml 2>/dev/null
+                    awk -v user="$csi_username" -v pass="$csi_password" '
+                      /^[[:space:]]*#/ {print; next}
+                      /^ *username:/ {sub(/:.*/, ": " user)}
+                      /^ *password:/ {sub(/:.*/, ": " pass)}
+                      {print}
+                    ' /tmp/decoded_config.yaml > /tmp/updated_config.yaml
+                    encoded_config=$(base64 -w 0 /tmp/updated_config.yaml)
+                    kubectl patch secret isilon-creds -n isilon \
+                      --type merge \
+                      -p "{\"data\":{\"config\":\"${encoded_config}\"}}" >/dev/null 2>&1 || POWERSCALE_DEPLOYMENT_FAILED=1
+                    rm -f /tmp/decoded_config.yaml /tmp/updated_config.yaml
+                    echo "isilon-creds secret created and patched successfully."
+                  fi
+                fi
+
+                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                  echo "===== Applying empty certificate secret ====="
+                  if [ -f "/opt/omnia/csi-driver-powerscale/empty_isilon-certs.yaml" ]; then
+                    kubectl apply -f /opt/omnia/csi-driver-powerscale/empty_isilon-certs.yaml || {
+                      echo "Failed to apply empty certs secret. Continuing..."
+                      POWERSCALE_DEPLOYMENT_FAILED=1
+                    }
+                  fi
+                fi
+
+                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                  echo "===== Deploying External Snapshotter CRDs ====="
+                  if [ -d "/opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/client/config/crd" ]; then
+                    kubectl apply -f /opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/client/config/crd/ >/dev/null 2>&1 || {
+                      echo "CRD deployment failed (expected). Continuing..."
+                    }
+                  fi
+                fi
+
+                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                  echo "===== Deploying Snapshot Controller ====="
+                  if [ -d "/opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/deploy/kubernetes/snapshot-controller" ]; then
+                    kubectl apply -f /opt/omnia/csi-driver-powerscale/csi-powerscale/external-snapshotter/deploy/kubernetes/snapshot-controller/ >/dev/null 2>&1 || {
+                      echo "Snapshot Controller deployment failed (expected). Continuing..."
+                    }
+
+                    echo "Updating Snapshot Controller image to v8.3.0..."
+                    kubectl set image deployment/snapshot-controller snapshot-controller=registry.k8s.io/sig-storage/snapshot-controller:v8.3.0 -n kube-system >/dev/null 2>&1 || true
+
+                    echo "Waiting for Snapshot Controller rollout to finish (timeout: 5 minutes)..."
+                    kubectl rollout status deployment/snapshot-controller -n kube-system --timeout=300s >/dev/null 2>&1 || {
+                      echo "Snapshot Controller rollout did not complete in time."
+                    }
+                    sleep 10
+                    echo "Waiting for Snapshot Controller pods to reach Running state..."
+                    MAX_ATTEMPTS=60
+                    WAIT_TIME=5
+                    for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+                      not_ready=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep snapshot-controller | awk '{ print $3 }' | grep -vE '^(Running|Completed)$' | wc -l)
+                      if [ "$not_ready" -eq 0 ]; then
+                        echo "Snapshot Controller pods are Running or Completed."
+                        break
+                      else
+                        echo "[$i/$MAX_ATTEMPTS] $not_ready Snapshot Controller pods not ready, waiting ${WAIT_TIME}s..."
+                        sleep $WAIT_TIME
+                      fi
+                    done
+                    echo "Snapshot Controller deployment completed (or timed out safely)."
+                  fi
+                fi
+
+                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                  echo "===== Running CSI PowerScale installation script ====="
+                  INSTALL_SCRIPT="/opt/omnia/csi-driver-powerscale/csi-powerscale/dell-csi-helm-installer/csi-install.sh"
+                  if [ -x "$INSTALL_SCRIPT" ]; then
+                    cd "$(dirname "$INSTALL_SCRIPT")" || true
+                    ./csi-install.sh --namespace isilon --values /opt/omnia/csi-driver-powerscale/values.yaml &
+                    CSI_PID=$!
+                    echo "Waiting for CSI install script (PID $CSI_PID) to complete..."
+                    wait $CSI_PID
+                  else
+                    echo "ERROR: CSI install script not found."
+                    POWERSCALE_DEPLOYMENT_FAILED=1
+                  fi
+                fi
+
+                if [ "$POWERSCALE_DEPLOYMENT_FAILED" -eq 0 ]; then
+                  echo "===== Waiting for CSI pods ====="
+                  MAX_ATTEMPTS=30
+                  WAIT_TIME=10
+                  CSI_READY=0
+                  for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+                    if kubectl get pods -n isilon --no-headers 2>/dev/null | grep -q '^isilon-'; then
+                      NON_RUNNING=$(kubectl get pods -n isilon --no-headers 2>/dev/null | grep '^isilon-' | grep -v "Running" | wc -l)
+                      if [ "$NON_RUNNING" -eq 0 ]; then
+                        echo "All CSI pods are running."
+                        CSI_READY=1
+                        break
+                      fi
+                    fi
+                    echo "Attempt $i/$MAX_ATTEMPTS: Waiting for CSI pods to be Running..."
+                    sleep $WAIT_TIME
+                  done
+
+                  if [ "$CSI_READY" -eq 1 ]; then
+                    echo "CSI PowerScale driver installed successfully."
+                    if [ -f "/opt/omnia/csi-driver-powerscale/ps_storage_class.yml" ]; then
+                      kubectl apply -f /opt/omnia/csi-driver-powerscale/ps_storage_class.yml
+                      echo "PowerScale StorageClass applied successfully."
+                    fi
+                  else
+                    echo "ERROR: CSI PowerScale driver pods not ready after waiting. Skipping StorageClass creation."
+                  fi
+                  echo "===== PowerScale CSI deployed successfully — updating default StorageClass ====="
+                  echo "Checking if StorageClass 'nfs-client' exists..."
+                  if kubectl get sc nfs-client >/dev/null 2>&1; then
+                    NFS_SC_EXISTS=1
+                    echo "nfs-client StorageClass found."
+                  else
+                    NFS_SC_EXISTS=0
+                    echo "nfs-client StorageClass NOT found."
+                  fi
+
+                  echo "Checking if StorageClass 'ps01' exists..."
+                  if kubectl get sc ps01 >/dev/null 2>&1; then
+                    PS01_SC_EXISTS=1
+                    echo "ps01 StorageClass found."
+                  else
+                    PS01_SC_EXISTS=0
+                    echo "ps01 StorageClass NOT found."
+                  fi
+
+                  # Only proceed if ps01 exists (means CSI is installed correctly)
+                  if [ "$PS01_SC_EXISTS" -eq 1 ]; then
+                    echo "===== Updating StorageClass defaults ====="
+
+                    # Disable default class on nfs-client
+                    if [ "$NFS_SC_EXISTS" -eq 1 ]; then
+                      echo "Checking if nfs-client is currently default..."
+                      DEFAULT_ANNOT=$(kubectl get sc nfs-client -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null)
+
+                      if [ "$DEFAULT_ANNOT" = "true" ]; then
+                        echo "Removing default StorageClass annotation from nfs-client..."
+                        kubectl annotate sc nfs-client storageclass.kubernetes.io/is-default-class="false" --overwrite
+                      else
+                        echo "nfs-client is not default. Skipping."
+                      fi
+                    fi
+
+                    # Set ps01 as default
+                    echo "Setting ps01 as default StorageClass..."
+                    kubectl annotate sc ps01 storageclass.kubernetes.io/is-default-class="true" --overwrite
+
+                    echo "===== StorageClass update completed successfully ====="
+                  else
+                    echo "ps01 StorageClass not found. Cannot update default StorageClass settings."
+                  fi
                 fi
               fi
             fi
-          fi
-        
-        - |
-          echo "Installing Necessary Python pip packages"
-          python3 -m ensurepip
 
-          PACKAGES=({% for pkg in k8s_pip_packages %}"{{ pkg }}"{% if not loop.last %} {% endif %}{% endfor %})
+            echo "Installing Necessary Python pip packages"
+            python3 -m ensurepip
 
-          for pkg in "${PACKAGES[@]}"; do
-              echo "Installing $pkg from offline repo..."
-              pip3 install "$pkg" \
-                  --find-links="{{ offline_pip_module_path }}/${pkg}/" \
-                  --trusted-host "{{ pulp_server_ip }}" \
-                  --no-index
-          done
+            PACKAGES=({% for pkg in k8s_pip_packages %}"{{ pkg }}"{% if not loop.last %} {% endif %}{% endfor %})
+
+            for pkg in "${PACKAGES[@]}"; do
+                echo "Installing $pkg from offline repo..."
+                pip3 install "$pkg" \
+                    --find-links="{{ offline_pip_module_path }}/${pkg}/" \
+                    --trusted-host "{{ pulp_server_ip }}" \
+                    --no-index
+            done
+
 
 {% if hostvars['localhost']['idrac_telemetry_support'] or hostvars['localhost']['ldms_support'] %}
-        -  echo "Applying Telemetry Kubernetes deployments"
-        - /root/telemetry.sh
+            echo "Applying Telemetry Kubernetes deployments"
+            /root/telemetry.sh
 {% endif %}
+            echo "Rollout and Restart coredns"
+            kubectl rollout restart deployment coredns -n kube-system
+            echo "Waiting for coredns pods to appear.."
+            kubectl wait --for=condition=Ready pod -l k8s-app=kube-dns -n kube-system --timeout=300s
+            # Mark initialization complete so all of above is skipped on reboot!
+            touch "$MARKER"
+
+          else
+            # SUBSEQUENT BOOT - SKIP INIT
+            echo "service_kube_control_plane_first_x86_64 is already part of cluster."
+            echo "Cluster already initialized. Performing node reboot procedures."
+            # CRI and kubelet already enabled above
+            # You can log health status etc if you wish:
+            mkdir -p $HOME/.kube /root/.kube
+            cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
+            chown $(id -u):$(id -g) $HOME/.kube/config
+            yes | cp -i /etc/kubernetes/admin.conf /root/.kube/config
+            kubectl get nodes -o wide || echo "Cluster not yet fully up"
+            kubectl get pods --all-namespaces -o wide || echo "Pods may not be ready yet"
+
+            # Wait for all pods in all namespaces to be ready (status=Running or Completed)
+            echo "Waiting for all pods to be Ready (Running/Completed)..."
+            while true; do
+              not_ready=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | awk '{ print $4 }' | grep -vE '^(Running|Completed)$' | wc -l)
+              if [ "${not_ready}" -eq 0 ]; then
+                echo "All pods are Running or Completed."
+                break
+              else
+                echo "$not_ready pods not yet ready, waiting 5s ..."
+                sleep 5
+              fi
+            done
+
+            echo "Listing all Kubernetes nodes:"
+            kubectl get nodes -o wide
+            echo "Listing all Kubernetes pods in all namespaces:"
+            kubectl get pods --all-namespaces -o wide
+
+          fi

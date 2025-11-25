@@ -73,6 +73,9 @@
         - path: /etc/fstab
           content: |
             {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}   {{ k8s_client_mount_path }}        nfs    noatime,nolock     0 0
+            {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}/{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}/etcd      /var/lib/etcd        nfs noatime,nolock 0 0
+            {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}/{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}/kubelet   /var/lib/kubelet     nfs noatime,nolock 0 0
+            {{ k8s_nfs_server_ip }}:{{ k8s_server_share_path }}/{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}/kubernetes   /etc/kubernetes      nfs noatime,nolock 0 0
             tmpfs   /tmp/crio-storage   tmpfs   size=8G,noatime,nodev,nosuid   0 0
           permissions: '0644'
         - path: /etc/containers/storage.conf
@@ -150,7 +153,7 @@
                     - name: vip_interface
                       value: vip_interface
                     - name: vip_cidr
-                      value: "32"
+                      value: "{{ admin_netmask_bits }}"
                     - name: dns_mode
                       value: first
                     - name: cp_enable
@@ -272,8 +275,29 @@
         - sudo modprobe nf_conntrack || true
         - sudo modprobe vxlan || true
         - sysctl --system
-        - mkdir -p /tmp/crio-storage {{ k8s_client_mount_path }}
+        - mkdir -p /tmp/crio-storage {{ k8s_client_mount_path }} /var/lib/etcd  /var/lib/kubelet /etc/kubernetes
         - mount -a
+        - |
+          tmpfile=$(mktemp)
+
+          # Extract the first 'search' line only (ignore duplicates)
+          search_line=$(grep '^search' /etc/resolv.conf | head -n1)
+          [ -n "$search_line" ] && echo "$search_line" > "$tmpfile"
+
+          # Add your new nameserver entries
+          {% for ns in dns %}
+          echo "nameserver {{ ns }}" >> "$tmpfile"
+          {% endfor %}
+
+          # Add remaining lines except search and empty lines
+          grep -v '^search' /etc/resolv.conf | grep -v '^$' >> "$tmpfile"
+
+          # Remove duplicate lines
+          awk '!seen[$0]++' "$tmpfile" > /etc/resolv.conf
+        - |
+          if command -v chattr >/dev/null 2>&1; then
+            chattr +i /etc/resolv.conf || true
+          fi
         - systemctl start crio.service
         - systemctl enable crio.service
         - sudo systemctl enable --now kubelet
@@ -283,11 +307,22 @@
         - systemctl daemon-reload
         - systemctl restart crio
         - kubeadm config images pull
-        # Join Kubernetes cluster
+        - echo "Installing helm"
+        - /usr/local/bin/install-helm.sh
+
         - |
+          MARKER="/etc/kubernetes/.cluster_initialized"
+          export KUBECONFIG="/etc/kubernetes/admin.conf"
+          set -e
+          if [ ! -f "$MARKER" ]; then
+            # Join Kubernetes cluster
+            echo "Initial boot - initializing and setting up service_kube_control_plane_x86_64"
+            rm -rf /var/lib/etcd/*  /var/lib/kubelet/* /etc/kubernetes/*
+            rm -rf /var/lib/etcd/.*  /var/lib/kubelet/.* /etc/kubernetes/.*
             K8S_CLIENT_MOUNT_PATH="{{ k8s_client_mount_path }}"
             NODE_NAME="{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}"
             KUBE_VIP="{{ kube_vip }}"
+            KUBE_PORT="6443"
             JOIN_CMD_FILE="${K8S_CLIENT_MOUNT_PATH}/control-plane-join-command.sh"
             echo "----------------------------------------------------------------------"
             echo "Waiting for the service_kube_control_plane_first_x86_64 to be initialized."
@@ -312,15 +347,12 @@
             mkdir -p /root/.kube
             cp -f /etc/kubernetes/admin.conf /root/.kube/config
             chown root:root /root/.kube/config
-        - |
+
             NODE_IP="{% raw %}{{ ds.meta_data.instance_data.local_ipv4 }}{% endraw %}"
             VIP_IFACE=$(ip -o addr show | awk -v ip="$NODE_IP" '$4 ~ ip {print $2}')
             sed -i "s/value: vip_interface/value: ${VIP_IFACE}/" /tmp/kube-vip.yaml
             cp /tmp/kube-vip.yaml /etc/kubernetes/manifests/kube-vip.yaml
         
-        - /usr/local/bin/install-helm.sh
-
-        - |
             if [ -f /etc/kubernetes/kubelet.conf ]; then
               cp /etc/kubernetes/kubelet.conf /etc/kubernetes/kubelet.conf.bak
               sed -i "s#server: https://[^:]*:6443#server: https://{{ kube_vip }}:6443#" /etc/kubernetes/kubelet.conf
@@ -329,16 +361,48 @@
               echo "WARNING: /etc/kubernetes/kubelet.conf not found. Kubelet may not be initialized yet."
             fi
 
-        - |
-          echo "Installing Necessary Python pip packages"
-          python3 -m ensurepip
+            echo "Installing Necessary Python pip packages"
+            python3 -m ensurepip
 
-          PACKAGES=({% for pkg in k8s_pip_packages %}"{{ pkg }}"{% if not loop.last %} {% endif %}{% endfor %})
+            PACKAGES=({% for pkg in k8s_pip_packages %}"{{ pkg }}"{% if not loop.last %} {% endif %}{% endfor %})
 
-          for pkg in "${PACKAGES[@]}"; do
-              echo "Installing $pkg from offline repo..."
-              pip3 install "$pkg" \
-                  --find-links="{{ offline_pip_module_path }}/${pkg}/" \
-                  --trusted-host "{{ pulp_server_ip }}" \
-                  --no-index
-          done
+            for pkg in "${PACKAGES[@]}"; do
+                echo "Installing $pkg from offline repo..."
+                pip3 install "$pkg" \
+                    --find-links="{{ offline_pip_module_path }}/${pkg}/" \
+                    --trusted-host "{{ pulp_server_ip }}" \
+                    --no-index
+            done
+              # Mark initialization complete so all of above is skipped on reboot!
+            touch "$MARKER"
+          else
+            # SUBSEQUENT BOOT - SKIP JOIN
+            echo "service_kube_control_plane_x86_64 is already part of cluster."
+            echo "Cluster already initialized. Performing node reboot procedures."
+            # CRI and kubelet already enabled above
+            # You can log health status etc if you wish:
+            mkdir -p $HOME/.kube /root/.kube
+            cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
+            chown $(id -u):$(id -g) $HOME/.kube/config
+            yes | cp -i /etc/kubernetes/admin.conf /root/.kube/config
+            kubectl get nodes -o wide || echo "Cluster not yet fully up"
+            kubectl get pods --all-namespaces -o wide || echo "Pods may not be ready yet"
+
+            # Wait for all pods in all namespaces to be ready (status=Running or Completed)
+            echo "Waiting for all pods to be Ready (Running/Completed)..."
+            while true; do
+              not_ready=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | awk '{ print $4 }' | grep -vE '^(Running|Completed)$' | wc -l)
+              if [ "${not_ready}" -eq 0 ]; then
+                echo "All pods are Running or Completed."
+                break
+              else
+                echo "$not_ready pods not yet ready, waiting 5s ..."
+                sleep 5
+              fi
+            done
+
+            echo "Listing all Kubernetes nodes:"
+            kubectl get nodes -o wide
+            echo "Listing all Kubernetes pods in all namespaces:"
+            kubectl get pods --all-namespaces -o wide
+          fi

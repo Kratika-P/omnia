@@ -3,7 +3,7 @@ kind: StorageClass
 metadata:
   name: ps01
 provisioner: csi-isilon.dellemc.com
-reclaimPolicy: Delete
+reclaimPolicy: Retain
 allowVolumeExpansion: true
 volumeBindingMode: Immediate
 parameters:
