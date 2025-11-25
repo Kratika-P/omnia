@@ -620,7 +620,12 @@ validate_oim() {
         exit 1
     fi
 
-
+    oim_timezone=$(timedatectl | grep "Time zone" | awk '{print $3}')
+    if [[ -z "$oim_timezone" ]]; then
+        echo -e "${RED}Timezone is not set!${NC}"
+        exit 1
+    fi
+    
     podman --version
 
     # Capture the exit status
@@ -740,6 +745,7 @@ EOF
             echo "oim_hostname: $(hostname)"
             echo "oim_node_name: $(hostname -s)"
             echo "domain_name: $domain_name"
+            echo "oim_timezone: $oim_timezone"
             echo "omnia_core_hashed_passwd: $hashed_passwd"
             echo "omnia_share_option: $share_option"
         } >> "$oim_metadata_file"
