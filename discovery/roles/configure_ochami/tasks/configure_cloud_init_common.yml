@@ -18,6 +18,31 @@
   changed_when: true
   failed_when: false
 
+- name: Include global variables for cloud-init RACADM support
+  ansible.builtin.include_vars: "{{ role_path }}/../../../common/vars/openchami_image_cmd.yml"
+
+- name: Include software configuration for RACADM cloud-init
+  ansible.builtin.include_vars:
+    file: "{{ software_config_file_path }}"
+    name: software_config
+
+- name: Run pulp status command to get pulp configuration for cloud-init
+  ansible.builtin.command: /usr/local/bin/pulp status
+  changed_when: false
+  register: cloud_init_pulp_status_output
+  delegate_to: localhost
+  connection: local
+
+- name: Set pulp connection variables
+  ansible.builtin.set_fact:
+    pulp_content_origin: "{{ (cloud_init_pulp_status_output.stdout | from_json).content_settings.content_origin }}"
+
+- name: Set fact for pulp protocol, ip and port
+  ansible.builtin.set_fact:
+    pulp_protocol: "{{ pulp_content_origin | urlsplit('scheme') | lower }}"
+    pulp_server_ip: "{{ pulp_content_origin | urlsplit('hostname') }}"
+    pulp_server_port: "{{ pulp_content_origin | urlsplit('port') }}"
+
 - name: Render ci group common template
   ansible.builtin.template:
     src: "{{ ci_group_common_template }}"

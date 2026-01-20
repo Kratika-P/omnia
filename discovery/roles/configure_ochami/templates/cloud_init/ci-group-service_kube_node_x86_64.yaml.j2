@@ -55,6 +55,10 @@
                 done
             fi
 
+{% if enable_racadm_install | default(true) %}
+{% include 'ci-group-racadm.yaml.j2' %}
+{% endif %}
+
         - path: /etc/modules-load.d/k8s.conf
           content: |
             br_netfilter
