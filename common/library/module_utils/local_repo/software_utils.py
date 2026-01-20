@@ -199,7 +199,7 @@ def transform_package_dict(data, arch_val,logger):
 
 
 def parse_repo_urls(repo_config, local_repo_config_path,
-                    version_variables, vault_key_path, sub_urls,logger):
+                    version_variables, vault_key_path, sub_urls,logger,sw_archs=None):
     """
     Parses the repository URLs from the given local repository configuration file.
     Args:
@@ -210,6 +210,8 @@ def parse_repo_urls(repo_config, local_repo_config_path,
         sub_urls (dict): Mapping of architectures to subscription URLs that override 
                          default RHEL URLs when provided.
         logger (logging.Logger): Logger instance used for structured logging of process steps.
+        sw_archs (list, optional): List of architectures to process based on software_config.json.
+                                   If None, defaults to ARCH_SUFFIXES.
     Returns:
         tuple: A tuple where the first element is either the parsed repository URLs as a JSON string
                (on success) or the rendered URL (if unreachable),
@@ -222,7 +224,10 @@ def parse_repo_urls(repo_config, local_repo_config_path,
     user_repo_entry = {}
     rhel_repo_entry = {}
 
-    for arch in ARCH_SUFFIXES:
+    archs_to_process = sw_archs if sw_archs else ARCH_SUFFIXES
+    logger.info(f"Processing repository URLs for architectures: {archs_to_process}")
+
+    for arch in archs_to_process:
         
         # Always ensure these are lists
         rhel_repo_entry[arch] = list(local_yaml.get(f"rhel_os_url_{arch}") or [])

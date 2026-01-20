@@ -119,15 +119,9 @@ OMNIA_CREDENTIALS_VAULT_PATH = "/opt/omnia/input/project_default/.omnia_config_c
 # Used by process_rpm_config.py
 # ----------------------------
 
-# Pulp Sync Concurrency Settings
+# Pulp Concurrency Settings
 # Controls the number of concurrent sync/publish operations
-# For NFS storage: Use 1 for maximum reliability (prevents 500/502/504 errors)
-# For local storage: Use 2 for optimal performance
-# For high-performance SAN: Can try 3-4 (monitor for errors)
-# Note :  PULP_SYNC_CONCURRENCY & PULP_PUBLISH_CONCURRENCY should have same values [ Recommeded]
-# If you face more sync /publication issues update the PULP_SYNC_CONCURRENCY & PULP_PUBLISH_CONCURRENCY to 1
-PULP_SYNC_CONCURRENCY = 2
-PULP_PUBLISH_CONCURRENCY = 2
+PULP_CONCURRENCY = 1  # Default: 1 (most reliable for NFS)
 
 pulp_rpm_commands = {
     "create_repository": "pulp rpm repository create --name %s",
@@ -147,7 +141,11 @@ pulp_rpm_commands = {
     "delete_remote": "pulp rpm remote destroy --name %s",
     "delete_distribution": "pulp rpm distribution destroy --name %s",
     "list_publications": "pulp rpm publication list --repository %s",
-    "update_distribution_publication": "pulp rpm distribution update --name %s --publication %s"
+    "update_distribution_publication": "pulp rpm distribution update --name %s --publication %s",
+    "check_distribution": "pulp rpm distribution show --name %s",
+    "check_publication": "pulp rpm publication list --repository %s",
+    "delete_publication": "pulp rpm publication destroy --href %s",
+    "get_repo_version": "pulp rpm repository show --name %s"
 }
 
 # ----------------------------
