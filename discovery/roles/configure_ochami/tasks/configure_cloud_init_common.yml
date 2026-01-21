@@ -42,7 +42,7 @@
 
     - name: Extract racadm tarball name
       ansible.builtin.set_fact:
-        racadm_tarball_name: "{{ racadm_tarball_list[0].package | deafult ('') }}"
+        racadm_tarball_name: "{{ racadm_tarball_list[0].package | default('') }}"
         racadm_tarball_found: true
       when: admin_debug_packages_enabled and racadm_tarball_list | length > 0
 
