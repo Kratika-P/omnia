@@ -18,13 +18,37 @@
   changed_when: true
   failed_when: false
 
-- name: Include global variables for cloud-init RACADM support
-  ansible.builtin.include_vars: "{{ role_path }}/../../../common/vars/openchami_image_cmd.yml"
-
 - name: Include software configuration for RACADM cloud-init
   ansible.builtin.include_vars:
     file: "{{ software_config_file_path }}"
     name: software_config
+
+- name: Determine if RACADM installation should be enabled
+  block:
+    - name: Set admin_debug_packages_enabled fact
+      ansible.builtin.set_fact:
+        admin_debug_packages_enabled: "{{ software_config.softwares | selectattr('name', 'equalto', 'admin_debug_packages') | list | length > 0 }}"  # noqa: yaml[line-length]
+
+    - name: Load admin_debug_packages.json
+      ansible.builtin.include_vars:
+        file: "{{ input_project_dir }}/config/x86_64/{{ software_config.cluster_os_type }}/{{ software_config.cluster_os_version }}/admin_debug_packages.json"  # noqa: yaml[line-length]
+        name: admin_debug_packages_data
+      when: admin_debug_packages_enabled
+
+    - name: Check if racadm tarball exists in admin_debug_packages
+      ansible.builtin.set_fact:
+        racadm_tarball_list: "{{ admin_debug_packages_data.admin_debug_packages.cluster | selectattr('package', 'search', 'racadm') | selectattr('type', 'equalto', 'tarball') | list }}"  # noqa: yaml[line-length]
+      when: admin_debug_packages_enabled
+
+    - name: Extract racadm tarball name
+      ansible.builtin.set_fact:
+        racadm_tarball_name: "{{ racadm_tarball_list[0].package | deafult ('') }}"
+        racadm_tarball_found: true
+      when: admin_debug_packages_enabled and racadm_tarball_list | length > 0
+
+    - name: Set enable_racadm_install fact
+      ansible.builtin.set_fact:
+        enable_racadm_install: "{{ admin_debug_packages_enabled and racadm_tarball_found | default(false) }}"
 
 - name: Run pulp status command to get pulp configuration for cloud-init
   ansible.builtin.command: /usr/local/bin/pulp status

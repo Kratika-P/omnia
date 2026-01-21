@@ -1,0 +1,15 @@
+- path: /usr/local/bin/install-racadm.sh
+  permissions: '0755'
+  content: |
+    #!/bin/bash
+    set -euo pipefail
+    TMPDIR=$(mktemp -d /tmp/idrac-racadm10.XXXXXX)
+    curl -kfL -o "${TMPDIR}/{{ racadm_tarball_name }}.tar.gz" {{ pulp_protocol }}://{{ pulp_server_ip }}:{{ pulp_server_port }}/pulp/content/opt/omnia/offline_repo/cluster/x86_64/{{ software_config.cluster_os_type }}/{{ software_config.cluster_os_version }}/tarball/{{ racadm_tarball_name }}/{{ racadm_tarball_name }}.tar.gz
+    tar -xzf "${TMPDIR}/{{ racadm_tarball_name }}.tar.gz" -C "${TMPDIR}"
+    mkdir -p "${TMPDIR}/iDRACTools/racadm/RHEL10/x86_64"
+    cp -r "${TMPDIR}/iDRACTools/racadm/RHEL9/x86_64/"* "${TMPDIR}/iDRACTools/racadm/RHEL10/x86_64/"
+    rpm -ivh --nodeps "${TMPDIR}/iDRACTools/racadm/RHEL10/x86_64/"*.rpm
+    ln -sf /opt/dell/srvadmin/bin/idracadm7 /usr/local/bin/racadm
+    /opt/dell/srvadmin/bin/idracadm7 version
+    racadm version
+    rm -rf "${TMPDIR}"

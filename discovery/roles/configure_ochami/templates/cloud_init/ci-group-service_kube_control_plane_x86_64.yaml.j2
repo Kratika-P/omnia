@@ -217,12 +217,15 @@
             /usr/local/bin/helm completion bash > /etc/bash_completion.d/helm.sh
             chmod 0755 /etc/bash_completion.d/helm.sh
 
-{% if enable_racadm_install | default(true) %}
-{% include 'ci-group-racadm.yaml.j2' %}
+{% if enable_racadm_install %}
+        {{ lookup('template', 'install-racadm.yaml.j2') | indent(8) }}
 {% endif %}
 
       runcmd:
         - /usr/local/bin/set-ssh.sh
+{% if enable_racadm_install %}
+        - /usr/local/bin/install-racadm.sh
+{% endif %}
         - "systemctl enable chronyd"
         - "systemctl restart chronyd"
         - "chronyc sources"

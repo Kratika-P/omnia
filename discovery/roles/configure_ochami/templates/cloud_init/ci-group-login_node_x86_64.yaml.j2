@@ -90,12 +90,15 @@
           content: |
             {{ lookup('template', 'templates/slurm/check_slurm_controller_status.sh.j2') | indent(12) }}
 
-{% if enable_racadm_install | default(true) %}
-{% include 'ci-group-racadm.yaml.j2' %}
+{% if enable_racadm_install %}
+        {{ lookup('template', 'install-racadm.yaml.j2') | indent(8) }}
 {% endif %}
 
       runcmd:
         - /usr/local/bin/set-ssh.sh
+{% if enable_racadm_install %}
+        - /usr/local/bin/install-racadm.sh
+{% endif %}
         - groupadd -r {{ slurm_group_name }}
         - useradd -r -g {{ slurm_group_name }} -d {{ home_dir }} -s /sbin/nologin {{ user }}
 

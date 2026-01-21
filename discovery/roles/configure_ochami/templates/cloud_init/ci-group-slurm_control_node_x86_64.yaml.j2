@@ -236,8 +236,15 @@
               sleep 5
             done
 
+{% if enable_racadm_install %}
+        {{ lookup('template', 'install-racadm.yaml.j2') | indent(8) }}
+{% endif %}
+
       runcmd:
          - /usr/local/bin/set-ssh.sh
+{% if enable_racadm_install %}
+         - /usr/local/bin/install-racadm.sh
+{% endif %}
          - useradd -mG wheel -p '$6$VHdSKZNm$O3iFYmRiaFQCemQJjhfrpqqV7DdHBi5YpY6Aq06JSQpABPw.3d8PQ8bNY9NuZSmDv7IL/TsrhRJ6btkgKaonT.' testuser # Required??
          - groupadd -r {{ slurm_group_name }}
          - useradd -r -g {{ slurm_group_name }} -d {{ home_dir }} -s /sbin/nologin {{ user }}

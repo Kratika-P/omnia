@@ -23,11 +23,6 @@ base_image_commands:
   - "rm -f /var/lib/rpm/__db*"
   - "rpmdb --rebuilddb"
 
-# RACADM installation for RHEL 10 (using RHEL 9 packages)
-# Set to true to enable RACADM installation during image build
-enable_racadm_install: true
-# racadm_tarball_path: "opt/omnia/offline_repo/cluster/x86_64/rhel/10.0/tarball/Dell-iDRACTools-Web-LX-11.3.0.0-795_A00/Dell-iDRACTools-Web-LX-11.3.0.0-795_A00.tar.gz"
-racadm_tarball_name: "Dell-iDRACTools-Web-LX-11.3.0.0-795_A00"
 #  x86_64 compute commands
 default_x86_64_compute_commands:
   - "echo 'Default x86_64 compute'"
