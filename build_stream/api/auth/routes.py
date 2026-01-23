@@ -141,7 +141,7 @@ async def register_client(
     Raises:
         HTTPException: With appropriate status code on failure.
     """
-    logger.info("Client registration request received for: %s", request.client_name)
+    logger.info("Client registration request received")
 
     try:
         registered_client = _auth_service.register_client(
@@ -150,11 +150,7 @@ async def register_client(
             allowed_scopes=request.allowed_scopes,
         )
 
-        logger.info(
-            "Client registered successfully: %s (client_id: %s)",
-            registered_client.client_name,
-            registered_client.client_id,
-        )
+        logger.info("Client registered successfully")
 
         return ClientRegistrationResponse(
             client_id=registered_client.client_id,
@@ -166,7 +162,7 @@ async def register_client(
         )
 
     except ClientExistsError:
-        logger.warning("Client registration failed - client exists: %s", request.client_name)
+        logger.warning("Client registration failed - client exists")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "client_exists", "error_description": "Client name already registered"},

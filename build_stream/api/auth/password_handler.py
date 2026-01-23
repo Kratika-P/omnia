@@ -116,6 +116,6 @@ def generate_credentials() -> Tuple[str, str, str]:
     client_secret = generate_client_secret()
     hashed_secret = hash_password(client_secret)
 
-    logger.debug("Generated new client credentials for client_id: %s", client_id)
+    logger.debug("Generated new client credentials")
 
     return client_id, client_secret, hashed_secret

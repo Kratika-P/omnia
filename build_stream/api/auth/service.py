@@ -113,7 +113,7 @@ class AuthService:  # pylint: disable=too-few-public-methods
             logger.warning("Invalid registration password attempted")
             raise AuthenticationError("Invalid credentials")
 
-        logger.info("Registration credentials verified for user: %s", username)
+        logger.info("Registration credentials verified successfully")
         return True
 
     def register_client(
@@ -148,8 +148,8 @@ class AuthService:  # pylint: disable=too-few-public-methods
             )
 
         if self.vault_client.client_exists(client_name):
-            logger.warning("Attempted to register existing client: %s", client_name)
-            raise ClientExistsError(f"Client '{client_name}' already exists")
+            logger.warning("Attempted to register existing client")
+            raise ClientExistsError("Client already exists")
 
         scopes = allowed_scopes if allowed_scopes else DEFAULT_SCOPES
         client_id, client_secret, hashed_secret = generate_credentials()
@@ -170,11 +170,7 @@ class AuthService:  # pylint: disable=too-few-public-methods
             logger.error("Failed to save client to vault: %s", client_name)
             raise
 
-        logger.info(
-            "Client registered successfully: %s (client_id: %s)",
-            client_name,
-            client_id,
-        )
+        logger.info("Client registered successfully")
 
         return RegisteredClient(
             client_id=client_id,

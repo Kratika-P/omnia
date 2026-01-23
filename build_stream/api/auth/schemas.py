@@ -95,9 +95,9 @@ class ClientRegistrationResponse(BaseModel):  # pylint: disable=too-few-public-m
         "json_schema_extra": {
             "examples": [
                 {
-                    "client_id": "bld_c1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6",
-                    "client_secret": "bld_s_7f8g9h0i1j2k3l4m5n6o7p8q9r0s1t2u3v4w5x6y7z8",
-                    "client_name": "omnia-controller-node-01",
+                    "client_id": "bld_<32_hex_characters>",
+                    "client_secret": "bld_s_<base64_url_safe_characters>",
+                    "client_name": "example-client-name",
                     "allowed_scopes": ["catalog:read", "catalog:write"],
                     "created_at": "2026-01-21T07:31:00Z",
                     "expires_at": None,

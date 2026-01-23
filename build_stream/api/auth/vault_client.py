@@ -69,6 +69,8 @@ class VaultClient:  # pylint: disable=too-few-public-methods
             "/etc/omnia/input/project_default/build_stream_oauth_credentials.yml"
         )
 
+    _ALLOWED_VAULT_COMMANDS = frozenset({"view", "encrypt", "decrypt"})
+
     def _run_vault_command(
         self,
         command: str,
@@ -80,16 +82,20 @@ class VaultClient:  # pylint: disable=too-few-public-methods
         Args:
             command: The vault command (view, encrypt, decrypt).
             vault_path: Path to the vault file.
-            input_data: Optional input data for stdin.
+            input_data: Optional input data for stdin (passed to process stdin, not shell).
 
         Returns:
             Command output as string.
 
         Raises:
+            VaultError: If command is not in allowlist.
             VaultNotFoundError: If vault file doesn't exist.
             VaultDecryptError: If decryption fails.
             VaultEncryptError: If encryption fails.
         """
+        if command not in self._ALLOWED_VAULT_COMMANDS:
+            raise VaultError("Invalid vault command")
+
         if command == "view" and not os.path.exists(vault_path):
             raise VaultNotFoundError(f"Vault file not found: {vault_path}")
 
