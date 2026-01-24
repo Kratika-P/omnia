@@ -48,15 +48,10 @@ def ParseCatalog(file_path: str, schema_path: str = _DEFAULT_SCHEMA_PATH) -> Cat
     logger.debug("Validating catalog JSON against schema")
     try:
         validate(instance=catalog_json, schema=schema)
-    except ValidationError as exc:
-        path = ".".join(str(p) for p in exc.path) or "<root>"
+    except ValidationError:
         logger.error(
             "Catalog validation failed for %s",
             file_path,
-        )
-        logger.debug(
-            "Catalog validation failed at path: %s",
-            path,
         )
         raise
     data = catalog_json["Catalog"]
