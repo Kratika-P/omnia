@@ -1,0 +1,29 @@
+# ===============================================================
+# omnia_postgres Quadlet Service
+# PostgreSQL Database for Omnia BuildStream
+# ===============================================================
+[Unit]
+Description=PostgreSQL Database for Omnia BuildStream
+After=omnia_core.service
+Requires=omnia_core.service
+
+[Container]
+ContainerName={{ postgres_container_name }}
+HostName={{ postgres_container_name }}
+Image={{ postgres_image }}:{{ postgres_image_tag }}
+Network=host
+
+# Environment variables
+Environment=POSTGRES_USER={{ postgres_user }}
+Environment=POSTGRES_PASSWORD={{ postgres_password }}
+Environment=POSTGRES_DB={{ postgres_db_name }}
+
+# Volume mounts
+Volume={{ postgres_data_dir }}:/var/lib/postgresql/data{{ selinux_option }}
+Volume={{ postgres_log_dir }}:/var/log/postgresql{{ selinux_option }}
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target
