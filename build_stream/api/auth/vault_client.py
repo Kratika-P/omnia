@@ -172,17 +172,29 @@ class VaultClient:  # pylint: disable=too-few-public-methods
             encoding="utf-8",
         ) as temp_file:
             temp_file.write(yaml_content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
             temp_path = temp_file.name
 
         try:
+            logger.debug("Encrypting temp file: %s", temp_path)
             encrypt_cmd = [
                 "ansible-vault",
                 "encrypt",
                 temp_path,
                 "--vault-password-file",
                 self.vault_password_file,
+                "--encrypt-vault-id",
+                "default",
             ]
-            subprocess.run(encrypt_cmd, check=True, capture_output=True, timeout=30)
+            result = subprocess.run(
+                encrypt_cmd,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            logger.debug("Encryption completed, reading encrypted content")
 
             with open(temp_path, "r", encoding="utf-8") as f:
                 encrypted_content = f.read()
@@ -191,10 +203,14 @@ class VaultClient:  # pylint: disable=too-few-public-methods
                 f.write(encrypted_content)
 
             os.chmod(vault_path, 0o600)
-            logger.info("Vault written successfully: %s", vault_path)
+            logger.debug("Vault written successfully")
 
-        except subprocess.CalledProcessError:
-            logger.error("Failed to encrypt vault")
+        except subprocess.CalledProcessError as e:
+            logger.error(
+                "Failed to encrypt vault. Return code: %d, stderr: %s",
+                e.returncode,
+                e.stderr,
+            )
             raise VaultEncryptError("Failed to encrypt vault") from None
         except subprocess.TimeoutExpired:
             logger.error("Vault encryption timed out")
