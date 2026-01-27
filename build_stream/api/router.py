@@ -16,8 +16,10 @@
 
 from fastapi import APIRouter
 
+from .auth import router as auth_router
 from .parse_catalog import router as parse_catalog_router
 
 api_router = APIRouter(prefix="/api/v1")
 
+api_router.include_router(auth_router)
 api_router.include_router(parse_catalog_router)

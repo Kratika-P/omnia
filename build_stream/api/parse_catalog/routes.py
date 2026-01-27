@@ -28,13 +28,13 @@ from .service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/parse-catalog", tags=["Catalog Parsing"])
+router = APIRouter(prefix="/jobs", tags=["Catalog Parsing"])
 
 _service = ParseCatalogService()
 
 
 @router.post(
-    "",
+    "/{jobId}/stages/parse-catalog",
     response_model=ParseCatalogResponse,
     status_code=status.HTTP_200_OK,
     summary="Parse a catalog file",
@@ -59,6 +59,7 @@ _service = ParseCatalogService()
     },
 )
 async def parse_catalog(
+    jobId: str,
     file: UploadFile = File(..., description="The catalog JSON file to parse"),
 ) -> ParseCatalogResponse:
     """Parse a catalog from an uploaded JSON file.
