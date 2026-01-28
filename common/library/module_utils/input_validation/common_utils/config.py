@@ -122,7 +122,7 @@ passwords_set = {
     "mysqldb_root_password",
     "grafana_password",
     "provision_password",
-    "postgresdb_password",
+    "postgres_password",
     "bmc_password",
     "switch_snmp3_password",
     "docker_password"

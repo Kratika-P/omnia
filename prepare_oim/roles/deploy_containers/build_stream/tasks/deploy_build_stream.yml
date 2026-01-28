@@ -56,6 +56,9 @@
     nfs_type: "{{ metadata_content.stdout | regex_search('nfs_type:\\s*(\\S+)', '\\1') | first | default('') }}"
     pulp_server_ip: "{{ hostvars['localhost']['admin_nic_ip'] }}"
     pulp_password: "{{ hostvars['localhost']['pulp_password'] }}"
+    postgres_user: "{{ hostvars['localhost']['postgres_user'] }}"
+    postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
+    postgres_db_name: "{{ hostvars['localhost']['postgres_db_name'] }}"
   no_log: true
 
 - name: Set SELinux option for volume mounts

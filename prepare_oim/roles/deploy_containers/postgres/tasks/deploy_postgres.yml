@@ -15,13 +15,13 @@
 ---
 
 # Check and remove existing postgres container if running
-- name: Check if omnia_postgres service exists
+- name: Check if build_stream_postgres service exists
   ansible.builtin.systemd:
     name: "{{ postgres_container_name }}.service"
   register: postgres_service_status
   failed_when: false
 
-- name: Stop omnia_postgres service if running
+- name: Stop build_stream_postgres service if running
   ansible.builtin.systemd:
     name: "{{ postgres_container_name }}.service"
     state: stopped
@@ -29,13 +29,13 @@
   when: postgres_service_status.status is defined
   failed_when: false
 
-- name: Check if omnia_postgres container exists
+- name: Check if build_stream_postgres container exists
   containers.podman.podman_container_info:
     name: "{{ postgres_container_name }}"
   register: existing_container_info
   failed_when: false
 
-- name: Remove existing omnia_postgres container
+- name: Remove existing build_stream_postgres container
   containers.podman.podman_container:
     name: "{{ postgres_container_name }}"
     state: absent
@@ -60,20 +60,20 @@
     selinux_option: "{{ ':z' if (share_option != 'NFS' or nfs_type | default('') != 'external') else '' }}"
 
 # Create required directories
-- name: Create data directory for omnia_postgres
+- name: Create data directory for build_stream_postgres
   ansible.builtin.file:
     path: "{{ postgres_data_dir }}"
     state: directory
     mode: "{{ postgres_dir_mode }}"
 
-- name: Create log directory for omnia_postgres
+- name: Create log directory for build_stream_postgres
   ansible.builtin.file:
     path: "{{ postgres_log_dir }}"
     state: directory
     mode: "{{ postgres_dir_mode }}"
 
 # Pull container image
-- name: Pull omnia_postgres image from Docker Hub
+- name: Pull build_stream_postgres image from Docker Hub
   containers.podman.podman_image:
     name: "{{ postgres_image }}"
     tag: "{{ postgres_image_tag }}"

@@ -45,9 +45,9 @@ pulp_webserver_cert: "{{ pulp_certs_dir }}/pulp_webserver.crt"
 pulp_base_url: "https://{{ admin_nic_ip }}:2225"
 
 # PostgreSQL configuration (from postgres role)
-postgres_user: "omnia_user"
-postgres_db_name: "build_stream"
+postgres_user: "build_stream_user"
 postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
+postgres_db_name: "build_stream"
 
 # Quadlet service file path
 build_stream_quadlet_path: "/etc/containers/systemd/{{ build_stream_container_name }}.container"
