@@ -205,8 +205,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
             os.chmod(vault_path, 0o600)
             logger.debug("Vault written successfully")
 
-        except subprocess.CalledProcessError as e:
-            logger.error("Failed to encrypt vault. Return code: %d", e.returncode)
+        except subprocess.CalledProcessError:
             raise VaultEncryptError("Failed to encrypt vault") from None
         except subprocess.TimeoutExpired:
             logger.error("Vault encryption timed out")
