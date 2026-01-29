@@ -38,15 +38,73 @@ logging.basicConfig(
 logger = logging.getLogger("integration_tests")
 
 
+def generate_secure_test_password(length: int = 24) -> str:
+    """Generate a secure password for integration tests.
+
+    Args:
+        length: Length of the password (default: 24 for extra security)
+
+    Returns:
+        Secure random password
+    """
+    import string
+    import secrets
+
+    # Use stronger character set for integration tests
+    lowercase = string.ascii_lowercase
+    uppercase = string.ascii_uppercase
+    digits = string.digits
+    special = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+
+    # Ensure minimum security requirements
+    if length < 16:
+        raise ValueError("Password length must be at least 16 characters")
+
+    # Start with one of each required character type
+    password = [
+        secrets.choice(lowercase),
+        secrets.choice(uppercase),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+
+    # Fill remaining length
+    all_chars = lowercase + uppercase + digits + special
+    for _ in range(length - 4):
+        password.append(secrets.choice(all_chars))
+
+    # Shuffle to avoid predictable pattern
+    secrets.SystemRandom().shuffle(password)
+
+    return ''.join(password)
+
+
 class IntegrationTestConfig:
     """Configuration for integration tests."""
 
-    VAULT_PASSWORD = "omnia_test_vault_password"
+    # Username is not a secret
     AUTH_USERNAME = "build_stream_registrar"
-    AUTH_PASSWORD = "build_stream_test_password"
     SERVER_HOST = "127.0.0.1"
     SERVER_PORT = 18443  # Use different port to avoid conflicts
     SERVER_STARTUP_TIMEOUT = 30
+
+    @classmethod
+    def get_vault_password(cls) -> str:
+        """Get a dynamically generated vault password.
+
+        Returns:
+            Secure random vault password
+        """
+        return generate_secure_test_password(24)
+
+    @classmethod
+    def get_auth_password(cls) -> str:
+        """Get a dynamically generated auth password.
+
+        Returns:
+            Secure random auth password
+        """
+        return generate_secure_test_password(24)
 
 
 class VaultManager:
@@ -86,7 +144,7 @@ class VaultManager:
         self.vault_dir.mkdir(parents=True, exist_ok=True)
         logger.info("  Created vault directory")
 
-        self.vault_pass_file.write_text(IntegrationTestConfig.VAULT_PASSWORD)
+        self.vault_pass_file.write_text(IntegrationTestConfig.get_vault_password())
         self.vault_pass_file.chmod(0o600)
         logger.info("  Created vault password file")
 
@@ -322,7 +380,7 @@ class ServerManager:
             if self.process.stderr:
                 stderr_output = self.process.stderr.read().decode()
                 logger.error("Server STDERR:\n%s", stderr_output)
-            
+
             # Check process return code
             self.process.poll()
             if self.process.returncode is not None:
@@ -371,11 +429,12 @@ def integration_test_dir() -> Generator[str, None, None]:
 
 
 @pytest.fixture(scope="module")
-def vault_manager(integration_test_dir: str) -> Generator[VaultManager, None, None]:
+def vault_manager(integration_test_dir: str, auth_password: str) -> Generator[VaultManager, None, None]:
     """Create and configure vault manager.
 
     Args:
         integration_test_dir: Temporary directory for test files.
+        auth_password: The auth password to use for vault setup.
 
     Yields:
         Configured VaultManager instance.
@@ -383,7 +442,7 @@ def vault_manager(integration_test_dir: str) -> Generator[VaultManager, None, No
     manager = VaultManager(integration_test_dir)
     manager.setup(
         username=IntegrationTestConfig.AUTH_USERNAME,
-        password=IntegrationTestConfig.AUTH_PASSWORD,
+        password=auth_password,
     )
     yield manager
     manager.cleanup()
@@ -453,15 +512,28 @@ def base_url(server_manager: ServerManager) -> str:
     return server_manager.base_url
 
 
+@pytest.fixture(scope="module")
+def auth_password() -> str:
+    """Generate a single auth password for the entire test module.
+
+    Returns:
+        Auth password to be used consistently across tests.
+    """
+    return IntegrationTestConfig.get_auth_password()
+
+
 @pytest.fixture
-def valid_auth_header() -> Dict[str, str]:
+def valid_auth_header(auth_password: str) -> Dict[str, str]:
     """Create valid Basic Auth header.
+
+    Args:
+        auth_password: The auth password to use.
 
     Returns:
         Dictionary with Authorization header.
     """
     credentials = base64.b64encode(
-        f"{IntegrationTestConfig.AUTH_USERNAME}:{IntegrationTestConfig.AUTH_PASSWORD}".encode()
+        f"{IntegrationTestConfig.AUTH_USERNAME}:{auth_password}".encode()
     ).decode()
     return {"Authorization": f"Basic {credentials}"}
 
@@ -478,21 +550,22 @@ def invalid_auth_header() -> Dict[str, str]:
 
 
 @pytest.fixture
-def reset_vault(vault_manager: VaultManager) -> Generator[None, None, None]:
+def reset_vault(vault_manager: VaultManager, auth_password: str) -> Generator[None, None, None]:
     """Reset vault to initial state before and after test.
 
     Args:
         vault_manager: Vault manager fixture.
+        auth_password: The auth password to use for vault setup.
 
     Yields:
         None
     """
     vault_manager.setup(
         username=IntegrationTestConfig.AUTH_USERNAME,
-        password=IntegrationTestConfig.AUTH_PASSWORD,
+        password=auth_password,
     )
     yield
     vault_manager.setup(
         username=IntegrationTestConfig.AUTH_USERNAME,
-        password=IntegrationTestConfig.AUTH_PASSWORD,
+        password=auth_password,
     )
