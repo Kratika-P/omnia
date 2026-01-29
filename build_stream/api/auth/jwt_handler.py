@@ -135,7 +135,7 @@ class JWTHandler:
                     f"JWT private key not found: {self.config.private_key_path}"
                 ) from None
             except IOError as e:
-                logger.error("Failed to read JWT private key: %s", e)
+                logger.error("Failed to read JWT private key: %s", str(e))
                 raise JWTCreationError("Failed to read JWT private key") from None
         return self._private_key
 
@@ -158,7 +158,7 @@ class JWTHandler:
                     f"JWT public key not found: {self.config.public_key_path}"
                 ) from None
             except IOError as e:
-                logger.error("Failed to read JWT public key: %s", e)
+                logger.error("Failed to read JWT public key: %s", str(e))
                 raise JWTValidationError("Failed to read JWT public key") from None
         return self._public_key
 
@@ -215,7 +215,7 @@ class JWTHandler:
             logger.info("Access token created for client: %s", client_id)
             return token, int(expires_delta.total_seconds())
         except Exception as e:
-            logger.error("Failed to create access token: %s", e)
+            logger.error("Failed to create access token: %s", str(e))
             raise JWTCreationError("Failed to create access token") from None
 
     def validate_token(self, token: str) -> TokenData:
@@ -254,14 +254,14 @@ class JWTHandler:
             logger.warning("Token has expired")
             raise JWTExpiredError("Token has expired") from None
         except (InvalidAudienceError, InvalidIssuerError) as e:
-            logger.warning("Invalid token claims: %s", e)
-            raise JWTValidationError(f"Invalid token claims: {e}") from None
+            logger.warning("Invalid token claims: %s", str(e))
+            raise JWTValidationError("Invalid token claims") from None
         except InvalidSignatureError:
             logger.warning("Invalid token signature")
             raise JWTInvalidSignatureError("Invalid token signature") from None
         except DecodeError as e:
-            logger.warning("Invalid token format: %s", e)
+            logger.warning("Invalid token format: %s", str(e))
             raise JWTValidationError("Invalid token format") from None
         except Exception as e:
-            logger.error("Unexpected error validating token: %s", e)
+            logger.error("Unexpected error validating token: %s", str(e))
             raise JWTValidationError("Token validation failed") from None

@@ -302,7 +302,7 @@ class AuthService:
                 scopes=granted_scopes,
             )
         except JWTCreationError as e:
-            logger.error("Failed to create access token: %s", e)
+            logger.error("Failed to create access token: %s", str(e))
             raise TokenCreationError("Failed to create access token") from None
 
         logger.info("Token generated for client: %s", client_id[:8] + "...")
