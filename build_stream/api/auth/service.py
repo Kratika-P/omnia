@@ -118,12 +118,10 @@ class AuthService:
         try:
             auth_config = self.vault_client.get_auth_config()
         except VaultNotFoundError:
-            logger.error("Auth configuration vault not found")
             raise RegistrationDisabledError(
                 "Registration is not configured"
             ) from None
         except VaultDecryptError:
-            logger.error("Failed to decrypt auth configuration")
             raise RegistrationDisabledError(
                 "Registration configuration error"
             ) from None
@@ -133,20 +131,16 @@ class AuthService:
         stored_password_hash = registration_config.get("password_hash")
 
         if not stored_username or not stored_password_hash:
-            logger.error("Registration credentials not configured in vault")
             raise RegistrationDisabledError(
                 "Registration is not configured"
             ) from None
 
         if username != stored_username:
-            logger.warning("Invalid registration username attempted")
             raise AuthenticationError("Invalid credentials")
 
         if not verify_password(password, stored_password_hash):
-            logger.warning("Invalid registration password attempted")
             raise AuthenticationError("Invalid credentials")
 
-        logger.info("Registration credentials verified successfully")
         return True
 
     def register_client(
@@ -172,14 +166,12 @@ class AuthService:
         """
         active_count = self.vault_client.get_active_client_count()
         if active_count >= 1:
-            logger.warning("Max client limit reached")
             raise MaxClientsReachedError(
                 "Maximum number of clients (1) already registered. "
                 "Only one active client is supported."
             )
 
         if self.vault_client.client_exists(client_name):
-            logger.warning("Attempted to register existing client")
             raise ClientExistsError("Client already exists")
 
         scopes = allowed_scopes if allowed_scopes else DEFAULT_SCOPES
@@ -198,10 +190,7 @@ class AuthService:
         try:
             self.vault_client.save_oauth_client(client_id, client_data)
         except VaultError:
-            logger.error("Failed to save client to vault")
             raise
-
-        logger.info("Client registered successfully")
 
         return RegisteredClient(
             client_id=client_id,
