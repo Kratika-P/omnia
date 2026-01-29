@@ -23,45 +23,73 @@ from api.auth.password_handler import (
     hash_password,
     verify_password,
 )
+from tests.utils.test_data import generate_secure_password, generate_password_pair
+
+
+@pytest.fixture
+def test_password():
+    """Generate a random test password for each test."""
+    return generate_secure_password(16)
+
+
+@pytest.fixture
+def test_password_pair():
+    """Generate a pair of different test passwords."""
+    return generate_password_pair(16)
 
 
 @pytest.mark.unit
 class TestPasswordHashing:
     """Test suite for password hashing functions."""
 
-    def test_hash_password_returns_argon2_hash(self):
+    def test_hash_password_returns_argon2_hash(self, test_password):
         """Test that hash_password returns Argon2id hash."""
-        password = "test_password"
-        hashed = hash_password(password)
+        hashed = hash_password(test_password)
 
         assert hashed.startswith("$argon2id$")
-        assert password not in hashed
+        assert test_password not in hashed
 
-    def test_hash_password_different_for_same_input(self):
+    def test_hash_password_different_for_same_input(self, test_password):
         """Test that hashing same password twice produces different hashes."""
-        password = "test_password"
-        hash1 = hash_password(password)
-        hash2 = hash_password(password)
+        hash1 = hash_password(test_password)
+        hash2 = hash_password(test_password)
 
         assert hash1 != hash2
 
-    def test_verify_password_correct_password(self):
+    def test_verify_password_correct_password(self, test_password):
         """Test verify_password returns True for correct password."""
-        password = "correct_password"
-        hashed = hash_password(password)
+        hashed = hash_password(test_password)
 
-        assert verify_password(password, hashed) is True
+        assert verify_password(test_password, hashed) is True
 
-    def test_verify_password_incorrect_password(self):
+    def test_verify_password_incorrect_password(self, test_password_pair):
         """Test verify_password returns False for incorrect password."""
-        password = "correct_password"
-        hashed = hash_password(password)
+        correct_password, wrong_password = test_password_pair
+        hashed = hash_password(correct_password)
 
-        assert verify_password("wrong_password", hashed) is False
+        assert verify_password(wrong_password, hashed) is False
 
-    def test_verify_password_invalid_hash(self):
+    def test_verify_password_invalid_hash(self, test_password):
         """Test verify_password returns False for invalid hash."""
-        assert verify_password("password", "invalid_hash") is False
+        assert verify_password(test_password, "invalid_hash") is False
+
+    def test_generated_password_strength(self, test_password):
+        """Test that generated passwords meet strength requirements."""
+        # Password should be at least 16 characters
+        assert len(test_password) >= 16
+        
+        # Should contain at least one lowercase letter
+        assert any(c.islower() for c in test_password)
+        
+        # Should contain at least one uppercase letter
+        assert any(c.isupper() for c in test_password)
+        
+        # Should contain at least one digit
+        assert any(c.isdigit() for c in test_password)
+        
+        # Should contain at least one special character
+        special_chars = "!@#$%^&*"
+        assert any(c in special_chars for c in test_password)
 
 
 @pytest.mark.unit

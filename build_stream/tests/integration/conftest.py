@@ -153,6 +153,7 @@ class ServerManager:
         "python-multipart",
         "jsonschema",
         "ansible",
+        "cryptography",
     ]
 
     def __init__(
@@ -311,6 +312,21 @@ class ServerManager:
             except httpx.RequestError:
                 pass
             time.sleep(0.5)
+
+        # Log server output before stopping
+        if self.process:
+            logger.error("Server failed to start. Checking process output...")
+            if self.process.stdout:
+                stdout_output = self.process.stdout.read().decode()
+                logger.error("Server STDOUT:\n%s", stdout_output)
+            if self.process.stderr:
+                stderr_output = self.process.stderr.read().decode()
+                logger.error("Server STDERR:\n%s", stderr_output)
+            
+            # Check process return code
+            self.process.poll()
+            if self.process.returncode is not None:
+                logger.error("Server process exited with code: %s", self.process.returncode)
 
         self.stop()
         raise RuntimeError(
