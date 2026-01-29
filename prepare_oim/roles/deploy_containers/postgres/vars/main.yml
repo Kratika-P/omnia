@@ -27,7 +27,7 @@ postgres_image_tag: "16"
 postgres_port: 5432
 
 # Database configuration
-postgres_user: "build_stream_user"
+postgres_user: "{{ hostvars['localhost']['postgres_user'] }}"
 postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
 postgres_db_name: "build_stream"
 

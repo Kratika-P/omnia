@@ -45,7 +45,7 @@ pulp_webserver_cert: "{{ pulp_certs_dir }}/pulp_webserver.crt"
 pulp_base_url: "https://{{ admin_nic_ip }}:2225"
 
 # PostgreSQL configuration (from postgres role)
-postgres_user: "build_stream_user"
+postgres_user: "{{ hostvars['localhost']['postgres_user'] }}"
 postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
 postgres_db_name: "build_stream"
 
