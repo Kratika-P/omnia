@@ -206,11 +206,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
             logger.debug("Vault written successfully")
 
         except subprocess.CalledProcessError as e:
-            logger.error(
-                "Failed to encrypt vault. Return code: %d, stderr: %s",
-                e.returncode,
-                e.stderr,
-            )
+            logger.error("Failed to encrypt vault. Return code: %d", e.returncode)
             raise VaultEncryptError("Failed to encrypt vault") from None
         except subprocess.TimeoutExpired:
             logger.error("Vault encryption timed out")
@@ -272,7 +268,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
         existing_data["oauth_clients"][client_id] = client_data
 
         self.write_vault(self.oauth_clients_vault_path, existing_data)
-        logger.info("OAuth client saved: %s", client_id)
+        logger.info("OAuth client saved: %s", client_id[:8] + "...")
 
     def get_active_client_count(self) -> int:
         """Get the count of active registered clients.

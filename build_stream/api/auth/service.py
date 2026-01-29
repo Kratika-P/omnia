@@ -198,7 +198,7 @@ class AuthService:
         try:
             self.vault_client.save_oauth_client(client_id, client_data)
         except VaultError:
-            logger.error("Failed to save client to vault: %s", client_name)
+            logger.error("Failed to save client to vault")
             raise
 
         logger.info("Client registered successfully")
@@ -302,7 +302,7 @@ class AuthService:
                 scopes=granted_scopes,
             )
         except JWTCreationError as e:
-            logger.error("Failed to create access token: %s", str(e))
+            logger.error("Failed to create access token")
             raise TokenCreationError("Failed to create access token") from None
 
         logger.info("Token generated for client: %s", client_id[:8] + "...")
