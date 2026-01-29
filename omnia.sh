@@ -829,13 +829,25 @@ post_setup_config() {
     fi
 
     # Copy input files from /omnia to /opt/omnia/project_default/ inside omnia_core container
-    podman exec -u root omnia_core bash -c "cd /omnia && git pull"
+    podman exec -u root omnia_core bash -c "cd /omnia && git fetch origin pub/build_stream && git checkout -B pub/build_stream origin/pub/build_stream && git pull --ff-only origin pub/build_stream"
     echo -e "${BLUE} Moving input files from /omnia dir to project_default folder.${NC}"
     podman exec -u root omnia_core bash -c "
     mkdir -p /opt/omnia/input/project_default
     cp -r /omnia/input/* /opt/omnia/input/project_default
     rm -rf /omnia/input
     rm -rf /omnia/omnia.sh"
+
+    # Copy build_stream folder to NFS share
+    echo -e "${BLUE} Copying build_stream folder to NFS share at /opt/omnia/build_stream.${NC}"
+    podman exec -u root omnia_core bash -c "
+    #if [ -d /omnia/build_stream ]; then
+    if [ -d /omnia_build_stream/build_stream ]; then
+        mkdir -p /opt/omnia/build_stream
+        cp -r /omnia/build_stream/* /opt/omnia/build_stream/
+        echo 'Build stream folder copied successfully to /opt/omnia/build_stream'
+    else
+        echo 'Warning: /omnia/build_stream directory not found in container'
+    fi"
 
     init_ssh_config
 }

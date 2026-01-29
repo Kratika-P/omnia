@@ -4,8 +4,8 @@
 # ===============================================================
 [Unit]
 Description=Omnia Build Stream FastAPI Container
-After=omnia_core.service
-Requires=omnia_core.service
+After=omnia_core.service pulp.service
+Requires=omnia_core.service pulp.service
 
 [Container]
 ContainerName={{ build_stream_container_name }}

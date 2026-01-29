@@ -93,6 +93,12 @@
     state: directory
     mode: "{{ build_stream_dir_mode }}"
 
+- name: Create Pulp certificates directory
+  ansible.builtin.file:
+    path: "{{ pulp_certs_dir }}"
+    state: directory
+    mode: "{{ build_stream_dir_mode }}"
+
 # Generate SSL certificates
 - name: Check if SSL certificates already exist
   ansible.builtin.stat:
@@ -138,22 +144,21 @@
         enabled: true
         state: started
 
-    # TODO: Uncomment when API server is implemented
-    # - name: Wait for container to be ready
-    #   ansible.builtin.pause:
-    #     seconds: "{{ container_ready_wait_seconds }}"
-    #
-    # - name: Verify API endpoint health
-    #   ansible.builtin.uri:
-    #     url: "{{ build_stream_health_endpoint }}"
-    #     method: GET
-    #     return_content: true
-    #     status_code: "{{ health_check_status_code }}"
-    #     validate_certs: false
-    #   register: health_check
-    #   retries: "{{ health_check_retries }}"
-    #   delay: "{{ health_check_delay }}"
-    #   until: health_check.status == health_check_status_code
+    - name: Wait for container to be ready
+      ansible.builtin.pause:
+        seconds: "{{ container_ready_wait_seconds }}"
+
+    - name: Verify API endpoint health
+      ansible.builtin.uri:
+        url: "{{ build_stream_health_endpoint }}"
+        method: GET
+        return_content: true
+        status_code: "{{ health_check_status_code }}"
+        validate_certs: false
+      register: health_check
+      retries: "{{ health_check_retries }}"
+      delay: "{{ health_check_delay }}"
+      until: health_check.status == health_check_status_code
 
     - name: Configure firewall
       ansible.builtin.systemd:
