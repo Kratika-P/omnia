@@ -704,6 +704,12 @@ setup_container() {
         selinux_option=""
     fi
 
+    # Check if RHEL subscription is enabled
+    subscription_enabled=false
+    if [ -d "/etc/pki/entitlement" ] && [ "$(ls -A /etc/pki/entitlement/*.pem 2>/dev/null)" ]; then
+        subscription_enabled=true
+    fi
+
     # --- Generate Quadlet container file ---
     cat > /etc/containers/systemd/${container_name}.container <<EOF
 # ===============================================================
@@ -728,6 +734,17 @@ Volume=${omnia_path}/omnia/ssh_config/.ssh:/root/.ssh${selinux_option}
 Volume=${omnia_path}/omnia/log/core/container:/var/log${selinux_option}
 Volume=${omnia_path}/omnia/hosts:/etc/hosts${selinux_option}
 Volume=${omnia_path}/omnia/pulp/pulp_ha:/root/.config/pulp${selinux_option}
+EOF
+
+    # Add subscription volume mounts only if subscription is enabled
+    if [ "$subscription_enabled" = true ]; then
+        cat >> /etc/containers/systemd/${container_name}.container <<EOF
+Volume=/etc/pki/entitlement:/etc/pki/entitlement:ro,z
+Volume=/etc/yum.repos.d/redhat.repo:/etc/yum.repos.d/redhat.repo:ro,z
+EOF
+    fi
+
+    cat >> /etc/containers/systemd/${container_name}.container <<EOF
 
 [Service]
 Restart=always
@@ -829,6 +846,7 @@ post_setup_config() {
     fi
 
     # Copy input files from /omnia to /opt/omnia/project_default/ inside omnia_core container
+    #podman exec -u root omnia_core bash -c "cd /omnia && git pull"
     podman exec -u root omnia_core bash -c "cd /omnia && git fetch origin pub/build_stream && git checkout -B pub/build_stream origin/pub/build_stream && git pull --ff-only origin pub/build_stream"
     echo -e "${BLUE} Moving input files from /omnia dir to project_default folder.${NC}"
     podman exec -u root omnia_core bash -c "
@@ -840,8 +858,7 @@ post_setup_config() {
     # Copy build_stream folder to NFS share
     echo -e "${BLUE} Copying build_stream folder to NFS share at /opt/omnia/build_stream.${NC}"
     podman exec -u root omnia_core bash -c "
-    #if [ -d /omnia/build_stream ]; then
-    if [ -d /omnia_build_stream/build_stream ]; then
+    if [ -d /omnia/build_stream ]; then
         mkdir -p /opt/omnia/build_stream
         cp -r /omnia/build_stream/* /opt/omnia/build_stream/
         echo 'Build stream folder copied successfully to /opt/omnia/build_stream'
@@ -1129,3 +1146,4 @@ main() {
 
 # Call the main function
 main "$1"
+
