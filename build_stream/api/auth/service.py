@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Authentication service for OAuth2 client registration."""
+"""Authentication service for OAuth2 client registration and token generation."""
 
 import logging
 import os
@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from .jwt_handler import JWTCreationError, JWTHandler
 from .password_handler import generate_credentials, verify_password
 from .vault_client import VaultClient, VaultDecryptError, VaultError, VaultNotFoundError
 
@@ -44,6 +45,22 @@ class RegistrationDisabledError(Exception):
     """Exception raised when registration is disabled or misconfigured."""
 
 
+class InvalidClientError(Exception):
+    """Exception raised when client credentials are invalid."""
+
+
+class ClientDisabledError(Exception):
+    """Exception raised when client account is disabled."""
+
+
+class InvalidScopeError(Exception):
+    """Exception raised when requested scope is not allowed."""
+
+
+class TokenCreationError(Exception):
+    """Exception raised when token creation fails."""
+
+
 @dataclass
 class RegisteredClient:
     """Data class representing a registered OAuth client."""
@@ -56,16 +73,32 @@ class RegisteredClient:
     expires_at: Optional[datetime] = None
 
 
-class AuthService:  # pylint: disable=too-few-public-methods
+@dataclass
+class TokenResult:
+    """Data class representing a token generation result."""
+
+    access_token: str
+    token_type: str
+    expires_in: int
+    scope: str
+
+
+class AuthService:
     """Service for handling OAuth2 authentication operations."""
 
-    def __init__(self, vault_client: Optional[VaultClient] = None):
+    def __init__(
+        self,
+        vault_client: Optional[VaultClient] = None,
+        jwt_handler: Optional[JWTHandler] = None,
+    ):
         """Initialize the authentication service.
 
         Args:
             vault_client: Optional VaultClient instance. Creates default if not provided.
+            jwt_handler: Optional JWTHandler instance. Creates default if not provided.
         """
         self.vault_client = vault_client or VaultClient()
+        self.jwt_handler = jwt_handler or JWTHandler()
         self._registration_username = os.getenv("AUTH_REGISTRATION_USERNAME")
 
     def verify_registration_credentials(self, username: str, password: str) -> bool:
@@ -85,12 +118,10 @@ class AuthService:  # pylint: disable=too-few-public-methods
         try:
             auth_config = self.vault_client.get_auth_config()
         except VaultNotFoundError:
-            logger.error("Auth configuration vault not found")
             raise RegistrationDisabledError(
                 "Registration is not configured"
             ) from None
         except VaultDecryptError:
-            logger.error("Failed to decrypt auth configuration")
             raise RegistrationDisabledError(
                 "Registration configuration error"
             ) from None
@@ -100,20 +131,16 @@ class AuthService:  # pylint: disable=too-few-public-methods
         stored_password_hash = registration_config.get("password_hash")
 
         if not stored_username or not stored_password_hash:
-            logger.error("Registration credentials not configured in vault")
             raise RegistrationDisabledError(
                 "Registration is not configured"
             ) from None
 
         if username != stored_username:
-            logger.warning("Invalid registration username attempted")
             raise AuthenticationError("Invalid credentials")
 
         if not verify_password(password, stored_password_hash):
-            logger.warning("Invalid registration password attempted")
             raise AuthenticationError("Invalid credentials")
 
-        logger.info("Registration credentials verified successfully")
         return True
 
     def register_client(
@@ -139,14 +166,12 @@ class AuthService:  # pylint: disable=too-few-public-methods
         """
         active_count = self.vault_client.get_active_client_count()
         if active_count >= 1:
-            logger.warning("Max client limit reached")
             raise MaxClientsReachedError(
                 "Maximum number of clients (1) already registered. "
                 "Only one active client is supported."
             )
 
         if self.vault_client.client_exists(client_name):
-            logger.warning("Attempted to register existing client")
             raise ClientExistsError("Client already exists")
 
         scopes = allowed_scopes if allowed_scopes else DEFAULT_SCOPES
@@ -164,11 +189,8 @@ class AuthService:  # pylint: disable=too-few-public-methods
 
         try:
             self.vault_client.save_oauth_client(client_id, client_data)
-        except VaultError as e:
-            logger.error("Failed to save client to vault: %s", client_name)
+        except VaultError:
             raise
-
-        logger.info("Client registered successfully")
 
         return RegisteredClient(
             client_id=client_id,
@@ -177,4 +199,106 @@ class AuthService:  # pylint: disable=too-few-public-methods
             allowed_scopes=scopes,
             created_at=created_at,
             expires_at=None,
+        )
+
+    def verify_client_credentials(
+        self,
+        client_id: str,
+        client_secret: str,
+    ) -> dict:
+        """Verify client credentials for token endpoint.
+
+        Args:
+            client_id: The client identifier.
+            client_secret: The client secret.
+
+        Returns:
+            Client data dictionary if credentials are valid.
+
+        Raises:
+            InvalidClientError: If client_id is unknown or secret is invalid.
+            ClientDisabledError: If client account is disabled.
+        """
+        try:
+            oauth_clients = self.vault_client.get_oauth_clients()
+        except (VaultNotFoundError, VaultDecryptError):
+            logger.error("Failed to load OAuth clients from vault")
+            raise InvalidClientError("Client authentication failed") from None
+
+        if client_id not in oauth_clients:
+            logger.warning("Unknown client_id attempted: %s", client_id[:8] + "...")
+            raise InvalidClientError("Client authentication failed")
+
+        client_data = oauth_clients[client_id]
+
+        if not client_data.get("is_active", False):
+            logger.warning("Disabled client attempted token request: %s", client_id[:8] + "...")
+            raise ClientDisabledError("Client account is disabled")
+
+        stored_hash = client_data.get("client_secret_hash")
+        if not stored_hash or not verify_password(client_secret, stored_hash):
+            logger.warning("Invalid client secret for: %s", client_id[:8] + "...")
+            raise InvalidClientError("Client authentication failed")
+
+        logger.info("Client credentials verified: %s", client_id[:8] + "...")
+        return client_data
+
+    def generate_token(
+        self,
+        client_id: str,
+        client_secret: str,
+        requested_scope: Optional[str] = None,
+    ) -> TokenResult:
+        """Generate a JWT access token for authenticated client.
+
+        Args:
+            client_id: The client identifier.
+            client_secret: The client secret.
+            requested_scope: Optional space-separated list of requested scopes.
+
+        Returns:
+            TokenResult with access token and metadata.
+
+        Raises:
+            InvalidClientError: If client credentials are invalid.
+            ClientDisabledError: If client account is disabled.
+            InvalidScopeError: If requested scope is not allowed.
+            TokenCreationError: If token creation fails.
+        """
+        client_data = self.verify_client_credentials(client_id, client_secret)
+
+        allowed_scopes = client_data.get("allowed_scopes", DEFAULT_SCOPES)
+        client_name = client_data.get("client_name", "")
+
+        if requested_scope:
+            requested_scopes = requested_scope.split()
+            for scope in requested_scopes:
+                if scope not in allowed_scopes:
+                    logger.warning(
+                        "Client %s requested unauthorized scope: %s",
+                        client_id[:8] + "...",
+                        scope,
+                    )
+                    raise InvalidScopeError(f"Scope '{scope}' is not allowed for this client")
+            granted_scopes = requested_scopes
+        else:
+            granted_scopes = allowed_scopes
+
+        try:
+            access_token, expires_in = self.jwt_handler.create_access_token(
+                client_id=client_id,
+                client_name=client_name,
+                scopes=granted_scopes,
+            )
+        except JWTCreationError as e:
+            logger.error("Failed to create access token")
+            raise TokenCreationError("Failed to create access token") from None
+
+        logger.info("Token generated for client: %s", client_id[:8] + "...")
+
+        return TokenResult(
+            access_token=access_token,
+            token_type="Bearer",
+            expires_in=expires_in,
+            scope=" ".join(granted_scopes),
         )

@@ -205,6 +205,7 @@ class ServerManager:
         "fastapi",
         "uvicorn",
         "pydantic",
+        "PyJWT",
         "argon2-cffi",
         "pyyaml",
         "httpx",

@@ -15,7 +15,6 @@
 """FastAPI routes for OAuth2 authentication endpoints."""
 
 import logging
-import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,13 +24,19 @@ from .schemas import (
     AuthErrorResponse,
     ClientRegistrationRequest,
     ClientRegistrationResponse,
+    TokenRequest,
+    TokenResponse,
 )
 from .service import (
     AuthenticationError,
     AuthService,
+    ClientDisabledError,
     ClientExistsError,
+    InvalidClientError,
+    InvalidScopeError,
     MaxClientsReachedError,
     RegistrationDisabledError,
+    TokenCreationError,
 )
 from .vault_client import VaultError
 
@@ -67,13 +72,19 @@ def _verify_basic_auth(
     except AuthenticationError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "invalid_credentials", "error_description": "Invalid Basic Auth credentials"},
+            detail={
+                "error": "invalid_credentials",
+                "error_description": "Invalid Basic Auth credentials",
+            },
             headers={"WWW-Authenticate": "Basic"},
         ) from None
     except RegistrationDisabledError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"error": "service_unavailable", "error_description": "Registration service is not available"},
+            detail={
+                "error": "service_unavailable",
+                "error_description": "Registration service is not available",
+            },
         ) from None
 
 
@@ -165,7 +176,10 @@ async def register_client(
         logger.warning("Client registration failed - client exists")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "client_exists", "error_description": "Client name already registered"},
+            detail={
+                "error": "client_exists",
+                "error_description": "Client name already registered",
+            },
         ) from None
 
     except MaxClientsReachedError:
@@ -182,12 +196,145 @@ async def register_client(
         logger.error("Client registration failed - vault error for: %s", request.client_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "server_error", "error_description": "Failed to store client credentials"},
+            detail={
+                "error": "server_error",
+                "error_description": "Failed to store client credentials",
+            },
         ) from None
 
     except Exception:
         logger.exception("Unexpected error during client registration: %s", request.client_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "server_error", "error_description": "An unexpected error occurred"},
+            detail={
+                "error": "server_error",
+                "error_description": "An unexpected error occurred",
+            },
+        ) from None
+
+
+@router.post(
+    "/token",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Request an access token",
+    description="Exchange client credentials for a JWT access token using "
+    "OAuth2 client_credentials grant type.",
+    responses={
+        200: {
+            "description": "Token generated successfully",
+            "model": TokenResponse,
+        },
+        400: {
+            "description": "Invalid request (unsupported grant type, invalid scope)",
+            "model": AuthErrorResponse,
+        },
+        401: {
+            "description": "Invalid client credentials",
+            "model": AuthErrorResponse,
+        },
+        403: {
+            "description": "Client account is disabled",
+            "model": AuthErrorResponse,
+        },
+        500: {
+            "description": "Internal server error",
+            "model": AuthErrorResponse,
+        },
+    },
+)
+async def request_token(
+    request: Annotated[TokenRequest, Depends()],
+) -> TokenResponse:
+    """Request an OAuth2 access token.
+
+    This endpoint implements the OAuth2 client_credentials grant type.
+    Clients must provide their client_id and client_secret to receive
+    a JWT access token.
+
+    Args:
+        request: Token request containing grant_type, client_id, client_secret, and optional scope.
+
+    Returns:
+        TokenResponse with access_token, token_type, expires_in, and scope.
+
+    Raises:
+        HTTPException: With appropriate status code on failure.
+    """
+    logger.info("Token request received")
+
+    if request.client_id is None or request.client_secret is None:
+        logger.warning("Token request missing client credentials")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "invalid_request",
+                "error_description": "client_id and client_secret are required",
+            },
+        )
+
+    try:
+        token_result = _auth_service.generate_token(
+            client_id=request.client_id,
+            client_secret=request.client_secret,
+            requested_scope=request.scope,
+        )
+
+        logger.info("Token generated successfully")
+
+        return TokenResponse(
+            access_token=token_result.access_token,
+            token_type=token_result.token_type,
+            expires_in=token_result.expires_in,
+            scope=token_result.scope,
+        )
+
+    except InvalidClientError:
+        logger.warning("Token request failed - invalid client")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "invalid_client",
+                "error_description": "Client authentication failed",
+            },
+        ) from None
+
+    except ClientDisabledError:
+        logger.warning("Token request failed - client disabled")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "client_disabled",
+                "error_description": "Client account is disabled",
+            },
+        ) from None
+
+    except InvalidScopeError as e:
+        logger.warning("Token request failed - invalid scope")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "invalid_scope",
+                "error_description": str(e),
+            },
+        ) from None
+
+    except TokenCreationError:
+        logger.error("Token request failed - token creation error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "server_error",
+                "error_description": "Failed to create access token",
+            },
+        ) from None
+
+    except Exception:
+        logger.exception("Unexpected error during token request")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "server_error",
+                "error_description": "An unexpected error occurred",
+            },
         ) from None
