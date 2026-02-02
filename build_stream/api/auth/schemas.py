@@ -16,6 +16,7 @@
 
 import re
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -130,6 +131,83 @@ class AuthErrorResponse(BaseModel):  # pylint: disable=too-few-public-methods
                     "error": "client_exists",
                     "error_description": "Client name already registered",
                 },
+            ]
+        }
+    }
+
+
+class GrantType(str, Enum):
+    """Supported OAuth2 grant types."""
+
+    CLIENT_CREDENTIALS = "client_credentials"
+
+
+class TokenRequest(BaseModel):  # pylint: disable=too-few-public-methods
+    """Request model for OAuth2 token endpoint (application/x-www-form-urlencoded)."""
+
+    grant_type: GrantType = Field(
+        ...,
+        description="OAuth2 grant type (must be 'client_credentials')",
+    )
+    client_id: Optional[str] = Field(
+        default=None,
+        description="Client identifier (prefix: bld_)",
+    )
+    client_secret: Optional[str] = Field(
+        default=None,
+        description="Client secret (prefix: bld_s_)",
+    )
+    scope: Optional[str] = Field(
+        default=None,
+        description="Space-separated list of requested scopes",
+    )
+
+    @field_validator("client_id")
+    @classmethod
+    def validate_client_id(cls, v: Optional[str]) -> Optional[str]:
+        """Validate client_id format if provided."""
+        if v is not None and not v.startswith("bld_"):
+            raise ValueError("client_id must start with 'bld_' prefix")
+        return v
+
+    @field_validator("client_secret")
+    @classmethod
+    def validate_client_secret(cls, v: Optional[str]) -> Optional[str]:
+        """Validate client_secret format if provided."""
+        if v is not None and not v.startswith("bld_s_"):
+            raise ValueError("client_secret must start with 'bld_s_' prefix")
+        return v
+
+
+class TokenResponse(BaseModel):  # pylint: disable=too-few-public-methods
+    """Response model for successful token generation (RFC 6749 compliant)."""
+
+    access_token: str = Field(
+        ...,
+        description="JWT access token",
+    )
+    token_type: str = Field(
+        default="Bearer",
+        description="Token type (always 'Bearer')",
+    )
+    expires_in: int = Field(
+        ...,
+        description="Token lifetime in seconds",
+    )
+    scope: str = Field(
+        ...,
+        description="Granted scopes (space-separated)",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "scope": "catalog:read catalog:write",
+                }
             ]
         }
     }

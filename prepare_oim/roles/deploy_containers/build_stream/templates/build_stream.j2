@@ -38,6 +38,9 @@ Environment=PULP_VERIFY_SSL=true
 Environment=REQUESTS_CA_BUNDLE={{ build_stream_pulp_cert_container_path }}
 Environment=SSL_CERT_FILE={{ build_stream_pulp_cert_container_path }}
 
+# Database configuration
+Environment=DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@localhost:5432/{{ postgres_db_name }}
+
 # Volume mounts (shared from omnia_core)
 Volume={{ omnia_path }}/omnia:/opt/omnia{{ selinux_option }}
 Volume={{ build_stream_log_dir }}:/var/log/omnia_build_stream{{ selinux_option }}

@@ -48,6 +48,7 @@ omnia_credentials:
       - { username: docker_username, password: docker_password }
     mandatory:
       - { password: pulp_password }
+      - { username: postgres_user, password: postgres_password }
       - { password: minio_s3_password }
   local_repo:
     optional:
