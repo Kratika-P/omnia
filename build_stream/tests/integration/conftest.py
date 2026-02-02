@@ -107,7 +107,7 @@ class IntegrationTestConfig:
         return generate_secure_test_password(24)
 
 
-class VaultManager:
+class VaultManager:  # noqa: R0902 pylint: disable=too-many-instance-attributes
     """Manages Ansible Vault setup and teardown for integration tests."""
 
     def __init__(self, base_dir: str):
@@ -256,7 +256,7 @@ class ServerManager:
         "cryptography",
     ]
 
-    def __init__(
+    def __init__(  # noqa: R0913,R0917 pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         host: str,
         port: int,
@@ -376,6 +376,7 @@ class ServerManager:
         logger.info("    Working directory: %s", self.project_dir)
 
         # Process needs to be managed separately for start/stop lifecycle
+        # Cannot use 'with' statement as process must persist after method returns
         self.process = subprocess.Popen(  # noqa: R1732
             [
                 self.python_path,

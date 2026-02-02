@@ -39,7 +39,7 @@ import httpx
 import pytest
 
 
-class APIFlowContext:
+class APIFlowContext:  # noqa: R0902 pylint: disable=too-many-instance-attributes
     """Context object to store state across API flow tests.
 
     This class maintains state between test steps, allowing tests to

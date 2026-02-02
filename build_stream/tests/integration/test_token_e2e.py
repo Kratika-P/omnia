@@ -34,9 +34,10 @@ import pytest
 
 @pytest.fixture
 def registered_client_e2e(
+    self,
     base_url: str,
     valid_auth_header: Dict[str, str],
-    reset_vault,  # noqa: W0613
+    reset_vault: None,  # noqa: W0613 pylint: disable=unused-argument
 ) -> Dict[str, str]:
     """Register a client and return its credentials for token tests.
 
