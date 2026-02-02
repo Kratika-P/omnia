@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Shared fixtures for Jobs API integration tests."""
+
 import os
 from typing import Dict
 
 import pytest
 from fastapi.testclient import TestClient
 
-from main import app
-from infra.id_generator import UUIDv7Generator
+from build_stream.main import app
+from build_stream.infra.id_generator import UUIDv4Generator
 
 
 @pytest.fixture(scope="function")
@@ -31,8 +33,8 @@ def client():
 
 @pytest.fixture
 def uuid_generator():
-    """UUID v7 generator for test fixtures."""
-    return UUIDv7Generator()
+    """UUID generator for test fixtures."""
+    return UUIDv4Generator()
 
 
 @pytest.fixture
@@ -40,18 +42,18 @@ def auth_headers(uuid_generator) -> Dict[str, str]:
     """Standard authentication headers for testing."""
     return {
         "Authorization": "Bearer test-client-123",
-        "X-Correlation-Id": uuid_generator.generate().value,
-        "Idempotency-Key": f"test-key-{uuid_generator.generate().value}",
+        "X-Correlation-Id": str(uuid_generator.generate()),
+        "Idempotency-Key": f"test-key-{uuid_generator.generate()}",
     }
 
 
 @pytest.fixture
 def unique_idempotency_key(uuid_generator) -> str:
     """Generate unique idempotency key for each test."""
-    return f"test-key-{uuid_generator.generate().value}"
+    return f"test-key-{uuid_generator.generate()}"
 
 
 @pytest.fixture
 def unique_correlation_id(uuid_generator) -> str:
     """Generate unique correlation ID for each test."""
-    return uuid_generator.generate().value
+    return str(uuid_generator.generate())

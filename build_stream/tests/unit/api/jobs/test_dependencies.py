@@ -15,8 +15,8 @@
 import pytest
 from fastapi import HTTPException
 
-from api.jobs.dependencies import get_client_id, get_idempotency_key
-from core.jobs.value_objects import ClientId
+from build_stream.api.jobs.dependencies import get_client_id, get_idempotency_key
+from build_stream.core.jobs.value_objects import ClientId
 
 
 class TestGetClientId:

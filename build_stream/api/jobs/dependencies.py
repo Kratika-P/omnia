@@ -12,22 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""FastAPI dependency providers for Jobs API."""
+
 from typing import Optional
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Header, HTTPException, status
 
-from core.jobs.value_objects import ClientId, CorrelationId
-from container import Container
-from infra.id_generator import UUIDv7Generator
-from infra.repositories import InMemoryJobRepository, InMemoryStageRepository
-from orchestrator.jobs.use_cases import CreateJobUseCase
+from build_stream.core.jobs.value_objects import ClientId, CorrelationId
+from build_stream.container import Container
+from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
+from build_stream.infra.repositories import InMemoryJobRepository, InMemoryStageRepository
+from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
 
 
 @inject
 def get_id_generator(
-    generator: UUIDv7Generator = Depends(Provide[Container.job_id_generator]),
-) -> UUIDv7Generator:
+    generator: JobUUIDGenerator = Depends(Provide[Container.job_id_generator]),
+) -> JobUUIDGenerator:
+    """Provide job ID generator."""
     return generator
 
 
@@ -35,6 +38,7 @@ def get_id_generator(
 def get_create_job_use_case(
     use_case: CreateJobUseCase = Depends(Provide[Container.create_job_use_case]),
 ) -> CreateJobUseCase:
+    """Provide create job use case."""
     return use_case
 
 
@@ -42,6 +46,7 @@ def get_create_job_use_case(
 def get_job_repo(
     repo: InMemoryJobRepository = Depends(Provide[Container.job_repository]),
 ) -> InMemoryJobRepository:
+    """Provide job repository."""
     return repo
 
 
@@ -49,26 +54,30 @@ def get_job_repo(
 def get_stage_repo(
     repo: InMemoryStageRepository = Depends(Provide[Container.stage_repository]),
 ) -> InMemoryStageRepository:
+    """Provide stage repository."""
     return repo
 
 
 def get_client_id(
     authorization: str = Header(..., description="Bearer token for authentication"),
 ) -> ClientId:
+    """Extract ClientId from Bearer token header."""
     if not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authorization header format",
         )
-    
-    token = authorization[7:]
+
+    # Trim only the Bearer prefix and leading whitespace; preserve trailing
+    # whitespace as part of token
+    token = authorization[7:].lstrip()
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authentication token",
         )
-    
-    # TODO: Implement actual token validation and client_id extraction
+
+    # Implement real token validation and client_id extraction when auth is available.
     # For now, use token as client_id placeholder
     try:
         return ClientId(token[:128] if len(token) > 128 else token)
@@ -86,17 +95,18 @@ def get_correlation_id(
         alias="X-Correlation-Id",
         description="Request tracing ID",
     ),
-    generator: UUIDv7Generator = Depends(Provide[Container.job_id_generator]),
+    generator: UUIDv4Generator = Depends(Provide[Container.uuid_generator]),
 ) -> CorrelationId:
+    """Return provided correlation ID or generate one."""
     if x_correlation_id:
         try:
             correlation_id = CorrelationId(x_correlation_id)
             return correlation_id
         except ValueError:
             pass
-    
+
     generated_id = generator.generate()
-    return CorrelationId(generated_id.value)
+    return CorrelationId(str(generated_id))
 
 
 def get_idempotency_key(
@@ -106,9 +116,19 @@ def get_idempotency_key(
         description="Client-provided deduplication token",
     ),
 ) -> str:
-    if not idempotency_key or len(idempotency_key) > 255:
+    """Validate and return the Idempotency-Key header."""
+    if idempotency_key is None or not idempotency_key.strip():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Idempotency-Key must be 1-255 characters",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Idempotency-Key must be provided",
         )
-    return idempotency_key
+
+    key = idempotency_key.strip()
+
+    if len(key) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Idempotency-Key length must be <= 255 characters",
+        )
+
+    return key

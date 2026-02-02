@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Pydantic schemas for Jobs API requests and responses."""
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -19,12 +21,16 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CreateJobRequest(BaseModel):
+    """Request payload for creating a job."""
     catalog_uri: str = Field(
         ...,
         min_length=1,
         max_length=2048,
-        alias="catalogUri",
         description="S3 URI to catalog file",
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional metadata describing the job",
     )
     parameters: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -32,23 +38,24 @@ class CreateJobRequest(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
-    
+
     @field_validator("catalog_uri")
     @classmethod
     def validate_catalog_uri(cls, v: str) -> str:
         """Validate catalog URI format."""
         if not v or not v.strip():
             raise ValueError("catalog_uri cannot be empty")
-        
+
         if not v.startswith(("s3://", "http://", "https://", "file://")):
             raise ValueError(
                 "catalog_uri must be a valid URI (s3://, http://, https://, or file://)"
             )
-        
+
         return v
 
 
 class StageResponse(BaseModel):
+    """Response model for a stage entry."""
     stage_name: str = Field(..., description="Stage identifier")
     stage_state: str = Field(..., description="Stage state")
     started_at: Optional[str] = Field(default=None, description="Start timestamp (ISO 8601)")
@@ -58,6 +65,7 @@ class StageResponse(BaseModel):
 
 
 class CreateJobResponse(BaseModel):
+    """Response model for job creation."""
     job_id: str = Field(..., description="Job identifier")
     correlation_id: str = Field(..., description="Correlation identifier")
     job_state: str = Field(..., description="Job state")
@@ -66,16 +74,20 @@ class CreateJobResponse(BaseModel):
 
 
 class GetJobResponse(BaseModel):
+    """Response model for retrieving a job."""
     job_id: str = Field(..., description="Job identifier")
     correlation_id: str = Field(..., description="Correlation identifier")
     job_state: str = Field(..., description="Job state")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
-    updated_at: str = Field(..., description="Update timestamp (ISO 8601)")
-    tombstone: bool = Field(..., description="Tombstone flag")
+    updated_at: Optional[str] = Field(
+        default=None, description="Update timestamp (ISO 8601)"
+    )
+    tombstone: Optional[bool] = Field(default=None, description="Tombstone flag")
     stages: List[StageResponse] = Field(..., description="Job stages")
 
 
 class ErrorResponse(BaseModel):
+    """Standard error response body."""
     error: str = Field(..., description="Error code")
     message: str = Field(..., description="Error message")
     correlation_id: str = Field(..., description="Request correlation ID")
@@ -83,6 +95,7 @@ class ErrorResponse(BaseModel):
 
     @classmethod
     def create(cls, error: str, message: str, correlation_id: str) -> "ErrorResponse":
+        """Convenience constructor with current UTC timestamp."""
         return cls(
             error=error,
             message=message,

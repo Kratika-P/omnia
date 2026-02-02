@@ -12,21 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Dependency Injector containers for the Jobs API."""
+# pylint: disable=c-extension-no-member
+
 import os
 
 from dependency_injector import containers, providers
 
-from infra.id_generator import UUIDv7Generator
-from infra.repositories import (
+from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
+from build_stream.infra.repositories import (
     InMemoryJobRepository,
     InMemoryStageRepository,
     InMemoryIdempotencyRepository,
     InMemoryAuditEventRepository,
 )
-from orchestrator.jobs.use_cases import CreateJobUseCase
+from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
 
 
-class DevContainer(containers.DeclarativeContainer):
+class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Development profile container.
     
     Uses in-memory mock repositories for fast development and testing.
@@ -34,24 +37,25 @@ class DevContainer(containers.DeclarativeContainer):
     
     Activated when ENV=dev (default).
     """
-    
+
     wiring_config = containers.WiringConfiguration(
         modules=[
             "api.jobs.routes",
             "api.jobs.dependencies",
         ]
     )
-    
-    job_id_generator = providers.Singleton(UUIDv7Generator)
-    
+
+    job_id_generator = providers.Singleton(JobUUIDGenerator)
+    uuid_generator = providers.Singleton(UUIDv4Generator)
+
     job_repository = providers.Singleton(InMemoryJobRepository)
-    
+
     stage_repository = providers.Singleton(InMemoryStageRepository)
-    
+
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
-    
+
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
-    
+
     create_job_use_case = providers.Factory(
         CreateJobUseCase,
         job_repo=job_repository,
@@ -59,35 +63,37 @@ class DevContainer(containers.DeclarativeContainer):
         idempotency_repo=idempotency_repository,
         audit_repo=audit_repository,
         job_id_generator=job_id_generator,
+        uuid_generator=uuid_generator,
     )
 
 
-class ProdContainer(containers.DeclarativeContainer):
+class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Production profile container.
     
     Currently uses mock repositories (same as dev).
     TODO: Replace with PostgreSQL repositories when SQL implementation is ready.
-    
+
     Activated when ENV=prod.
     """
-    
+
     wiring_config = containers.WiringConfiguration(
         modules=[
             "api.jobs.routes",
             "api.jobs.dependencies",
         ]
     )
-    
-    job_id_generator = providers.Singleton(UUIDv7Generator)
-    
+
+    job_id_generator = providers.Singleton(JobUUIDGenerator)
+    uuid_generator = providers.Singleton(UUIDv4Generator)
+
     job_repository = providers.Singleton(InMemoryJobRepository)
-    
+
     stage_repository = providers.Singleton(InMemoryStageRepository)
-    
+
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
-    
+
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
-    
+
     create_job_use_case = providers.Factory(
         CreateJobUseCase,
         job_repo=job_repository,
@@ -95,6 +101,7 @@ class ProdContainer(containers.DeclarativeContainer):
         idempotency_repo=idempotency_repository,
         audit_repo=audit_repository,
         job_id_generator=job_id_generator,
+        uuid_generator=uuid_generator,
     )
 
 
@@ -125,10 +132,10 @@ def get_container_class():
         python main.py
     """
     env = os.getenv("ENV", "dev").lower()
-    
+
     if env == "prod":
         return ProdContainer
-    
+
     return DevContainer
 
 

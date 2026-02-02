@@ -1,6 +1,6 @@
 # Test Suite for JobId Feature
 
-This directory contains comprehensive unit and integration tests for the JobId feature API layer.
+This directory contains the unit and integration tests for the Jobs API (JobId, correlation/idempotency, CRUD flows).
 
 ## Test Structure
 
@@ -10,14 +10,14 @@ tests/
 │   └── api/
 │       └── jobs/
 │           ├── conftest.py                    # Shared fixtures
-│           ├── test_create_job_api.py         # POST /jobs tests (25 tests)
-│           ├── test_get_job_api.py            # GET /jobs/{id} tests (10 tests)
-│           └── test_delete_job_api.py         # DELETE /jobs/{id} tests (10 tests)
+│           ├── test_create_job_api.py         # POST /jobs tests
+│           ├── test_get_job_api.py            # GET /jobs/{id} tests
+│           └── test_delete_job_api.py         # DELETE /jobs/{id} tests
 └── unit/
     └── api/
         └── jobs/
-            ├── test_schemas.py                # Pydantic schema tests (15 tests)
-            └── test_dependencies.py           # Dependency injection tests (12 tests)
+            ├── test_schemas.py                # Pydantic schema tests
+            └── test_dependencies.py           # Dependency injection tests
 ```
 
 ## Prerequisites
@@ -84,87 +84,6 @@ pytest tests/integration/api/jobs/test_create_job_api.py::TestCreateJobSuccess::
 # Run tests matching pattern
 pytest tests/integration/ -k idempotency -v
 ```
-
-## Test Coverage
-
-### Integration Tests (45 tests)
-
-#### Create Job API (25 tests)
-- **Success Cases (6 tests)**:
-  - Valid request returns 201
-  - UUID v7 format validation
-  - Job state is CREATED
-  - All 9 stages created
-  - All stages in PENDING state
-  - Correlation ID returned
-
-- **Idempotency (3 tests)**:
-  - Same key returns 200 with same job
-  - Different correlation ID, same job
-  - Different payload returns 409 conflict
-
-- **Validation (3 tests)**:
-  - Missing catalog_uri returns 422
-  - Empty catalog_uri returns 400
-  - Invalid URI format returns 400
-
-- **Authentication (3 tests)**:
-  - Missing auth header returns 422
-  - Invalid auth format returns 401
-  - Empty bearer token returns 401
-
-- **Headers (2 tests)**:
-  - Missing idempotency key returns 422
-  - Auto-generates correlation ID
-
-#### Get Job API (10 tests)
-- **Success Cases (3 tests)**:
-  - Get existing job returns 200
-  - All stages returned
-  - Correlation ID returned
-
-- **Not Found (2 tests)**:
-  - Nonexistent job returns 404
-  - Invalid UUID format returns 400
-
-- **Authentication (2 tests)**:
-  - Missing auth returns 422
-  - Invalid auth format returns 401
-
-- **Client Isolation (1 test)**:
-  - Different client cannot access job
-
-#### Delete Job API (10 tests)
-- **Success Cases (3 tests)**:
-  - Delete returns 204
-  - Idempotent deletion
-  - Deleted job not retrievable
-
-- **Not Found (2 tests)**:
-  - Nonexistent job returns 404
-  - Invalid UUID format returns 400
-
-- **Authentication (2 tests)**:
-  - Missing auth returns 422
-  - Invalid auth format returns 401
-
-- **Client Isolation (1 test)**:
-  - Different client cannot delete job
-
-### Unit Tests (27 tests)
-
-#### Schema Tests (15 tests)
-- CreateJobRequest validation
-- CreateJobResponse validation
-- StageResponse validation
-- GetJobResponse validation
-- ErrorResponse validation
-
-#### Dependency Tests (12 tests)
-- Client ID extraction from Bearer token
-- Idempotency key validation
-- Token format validation
-- Length constraints
 
 ## Test Fixtures
 

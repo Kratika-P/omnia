@@ -12,26 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""FastAPI routes for job lifecycle operations."""
+
 import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from core.jobs.exceptions import (
+from build_stream.core.jobs.exceptions import (
     IdempotencyConflictError,
     InvalidStateTransitionError,
     JobNotFoundError,
 )
-from core.jobs.value_objects import ClientId, CorrelationId, IdempotencyKey, JobId
-from orchestrator.jobs.commands import CreateJobCommand
-from orchestrator.jobs.use_cases import CreateJobUseCase
+from build_stream.core.jobs.value_objects import (
+    ClientId,
+    CorrelationId,
+    IdempotencyKey,
+    JobId,
+)
+from build_stream.orchestrator.jobs.commands import CreateJobCommand
+from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
 
 from .dependencies import (
     get_client_id,
     get_correlation_id,
     get_create_job_use_case,
     get_idempotency_key,
-    get_job_repo,
     get_stage_repo,
 )
 from .schemas import (
@@ -83,6 +89,8 @@ async def create_job(
     use_case: CreateJobUseCase = Depends(get_create_job_use_case),
     stage_repo = Depends(get_stage_repo),
 ) -> CreateJobResponse:
+    """Create a job, handling idempotency and domain errors."""
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     logger.info(
         "Create job request: client_id=%s, correlation_id=%s, idempotency_key=%s",
         client_id.value,
@@ -97,16 +105,13 @@ async def create_job(
             correlation_id=correlation_id,
             idempotency_key=IdempotencyKey(idempotency_key),
         )
-        
         result = use_case.execute(command)
-        
         # Set status code based on whether job was newly created
         if result.is_new:
             response.status_code = status.HTTP_201_CREATED
         else:
             response.status_code = status.HTTP_200_OK
-        
-        stages_entities = stage_repo.find_all_by_job(JobId(result.job_id))
+        stages_entities = stage_repo.find_all_by_job(JobId(result.job_id))  # pylint: disable=no-member
         stages = [
             StageResponse(
                 stage_name=str(s.stage_name),
@@ -118,7 +123,6 @@ async def create_job(
             )
             for s in stages_entities
         ]
-        
         return CreateJobResponse(
             job_id=result.job_id,
             correlation_id=correlation_id.value,
@@ -166,6 +170,7 @@ async def get_job(
     client_id: ClientId = Depends(get_client_id),
     correlation_id: CorrelationId = Depends(get_correlation_id),
 ) -> GetJobResponse:
+    """Return a job if it exists for the requesting client."""
     logger.info(
         "Get job request: job_id=%s, client_id=%s, correlation_id=%s",
         job_id,
@@ -185,19 +190,19 @@ async def get_job(
             ).model_dump(),
         ) from e
 
-    from .dependencies import get_job_repo, get_stage_repo
-    job_repo = get_job_repo()
-    stage_repo = get_stage_repo()
-    
+    from .dependencies import get_job_repo, get_stage_repo  # pylint: disable=import-outside-toplevel,redefined-outer-name
+    job_repo_instance = get_job_repo()
+    stage_repo_instance = get_stage_repo()
+
     try:
-        job = job_repo.find_by_id(validated_job_id)
+        job = job_repo_instance.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None or job.tombstoned:
             raise JobNotFoundError(job_id, correlation_id.value)
-        
+
         if job.client_id != client_id:
             raise JobNotFoundError(job_id, correlation_id.value)
-        
-        stages_entities = stage_repo.find_all_by_job(validated_job_id)
+
+        stages_entities = stage_repo_instance.find_all_by_job(validated_job_id)  # pylint: disable=no-member
         stages = [
             StageResponse(
                 stage_name=str(s.stage_name),
@@ -209,7 +214,6 @@ async def get_job(
             )
             for s in stages_entities
         ]
-        
         return GetJobResponse(
             job_id=str(job.job_id),
             correlation_id=correlation_id.value,
@@ -259,6 +263,7 @@ async def delete_job(
     client_id: ClientId = Depends(get_client_id),
     correlation_id: CorrelationId = Depends(get_correlation_id),
 ) -> None:
+    """Delete (tombstone) a job for the requesting client if it exists."""
     logger.info(
         "Delete job request: job_id=%s, client_id=%s, correlation_id=%s",
         job_id,
@@ -278,26 +283,29 @@ async def delete_job(
             ).model_dump(),
         ) from e
 
-    from .dependencies import get_job_repo, get_stage_repo
-    job_repo = get_job_repo()
-    stage_repo = get_stage_repo()
-    
+    from .dependencies import (  # pylint: disable=import-outside-toplevel
+        get_job_repo as _get_job_repo,
+        get_stage_repo as _get_stage_repo,
+    )
+    job_repo_instance = _get_job_repo()
+    stage_repo_instance = _get_stage_repo()
+
     try:
-        job = job_repo.find_by_id(validated_job_id)
+        job = job_repo_instance.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None:
             raise JobNotFoundError(job_id, correlation_id.value)
-        
+
         if job.client_id != client_id:
             raise JobNotFoundError(job_id, correlation_id.value)
-        
+
         job.tombstone()
-        job_repo.save(job)
-        
-        stages_entities = stage_repo.find_all_by_job(validated_job_id)
+        job_repo_instance.save(job)  # pylint: disable=no-member
+
+        stages_entities = stage_repo_instance.find_all_by_job(validated_job_id)  # pylint: disable=no-member
         for stage in stages_entities:
             if not stage.stage_state.is_terminal():
                 stage.cancel()
-                stage_repo.save(stage)
+                stage_repo_instance.save(stage)  # pylint: disable=no-member
 
     except JobNotFoundError as e:
         logger.warning("Job not found: %s", job_id)
