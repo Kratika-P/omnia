@@ -842,7 +842,7 @@ post_setup_config() {
     podman exec -u root omnia_core bash -c "
     if [ -d /omnia/build_stream ]; then
         mkdir -p /opt/omnia/build_stream
-        cp -r /omnia/build_stream/* /opt/omnia/build_stream/
+        cp -r /omnia/build_stream/. /opt/omnia/build_stream/
         echo 'Build stream folder copied successfully to /opt/omnia/build_stream'
     else
         echo 'Warning: /omnia/build_stream directory not found in container'
