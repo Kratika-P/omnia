@@ -14,6 +14,8 @@
 
 """Pytest fixtures for integration tests with real Ansible Vault."""
 
+# pylint: disable=redefined-outer-name,consider-using-with
+
 import base64
 import logging
 import os
@@ -31,7 +33,7 @@ from typing import Dict, Generator, Optional
 import httpx
 import pytest
 import yaml
-from argon2 import PasswordHasher, Type
+from argon2 import PasswordHasher, Type  # noqa: E0611 pylint: disable=no-name-in-module
 
 # Configure logging for integration tests
 logging.basicConfig(

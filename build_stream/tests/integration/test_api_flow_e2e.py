@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""End-to-end integration tests for complete API flow.
+"""End-to-end integration tests for complete API workflow.
 
 These tests validate the complete API workflow from client registration
 through token generation and subsequent API calls. This test suite is
@@ -32,6 +32,8 @@ Test Flow:
     3. Token Generation - Obtain access token using client credentials
     4. (Future) Protected API calls using the access token
 """
+
+# pylint: disable=redefined-outer-name
 
 from typing import Dict, Optional
 

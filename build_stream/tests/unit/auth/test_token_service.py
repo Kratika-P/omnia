@@ -14,6 +14,8 @@
 
 """Unit tests for AuthService token generation functionality."""
 
+# pylint: disable=redefined-outer-name
+
 import pytest
 
 from api.auth.service import (

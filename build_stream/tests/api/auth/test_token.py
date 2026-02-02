@@ -14,7 +14,9 @@
 
 """Integration tests for the /api/v1/auth/token endpoint."""
 
-from typing import Dict, Generator
+# pylint: disable=redefined-outer-name
+
+from typing import Dict, Generator  # noqa: W0611 pylint: disable=unused-import
 
 import pytest
 from fastapi import status

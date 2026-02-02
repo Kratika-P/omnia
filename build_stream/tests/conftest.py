@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared pytest fixtures for Build Stream API tests.
+"""Shared pytest fixtures for Build Stream API tests."""
 
-Note: This conftest is for mock-based unit/integration tests.
+# pylint: disable=redefined-outer-name,global-statement,import-outside-toplevel,protected-access
+
+"""Note: This conftest is for mock-based unit/integration tests.
 E2E integration tests use tests/integration/conftest.py which does not
 import the app directly (it runs the server as a subprocess).
 """
@@ -169,7 +171,9 @@ def test_client(mock_vault_client, mock_jwt_handler) -> Generator:  # noqa: W062
 
 
 @pytest.fixture
-def test_client_with_existing_client(mock_vault_with_client, mock_jwt_handler) -> Generator:  # noqa: W0621
+def test_client_with_existing_client(  # noqa: C0301,W0621
+        mock_vault_with_client, mock_jwt_handler
+    ) -> Generator:
     """Create a TestClient with a pre-registered client in vault.
 
     Args:
