@@ -66,121 +66,86 @@
   no_log: true
 
 # -------------------------------------------------------------------
-# 2) Compute SELinux label option for mounts
-# -------------------------------------------------------------------
-- name: Set SELinux option for volume mounts
-  ansible.builtin.set_fact:
-    selinux_option: "{{ ':z' if (share_option != 'NFS' or nfs_type | default('') != 'external') else '' }}"
-
-# -------------------------------------------------------------------
-# 3) Set pulp_base_url correctly (SAN contains DNS:localhost, and quadlet uses Network=host)
-# -------------------------------------------------------------------
-- name: Set Pulp base URL for build_stream (SAN-correct)
-  ansible.builtin.set_fact:
-    pulp_base_url: "https://localhost:2225"
-
-# -------------------------------------------------------------------
-# 4) FAIL FAST if Pulp container missing / not running
+# 2) FAIL if Pulp container missing / not running
 # -------------------------------------------------------------------
 - name: Precheck - fail if Pulp container is missing or not running
   block:
     - name: Ensure pulp container exists
-      ansible.builtin.command: "podman container exists {{ pulp_container_name }}"
-      changed_when: false
+      containers.podman.podman_container_info:
+        name: "{{ pulp_container_name }}"
+      register: pulp_container_info
 
-    - name: Check pulp running state
-      ansible.builtin.command: "podman inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' {{ pulp_container_name }}"
-      register: pulp_running
-      changed_when: false
-
-    - name: Fail if pulp is not running
+    - name: Fail if Pulp container is missing OR not running
       ansible.builtin.fail:
-        msg: >-
-          Pulp container '{{ pulp_container_name }}' exists but is not running.
-          Running={{ pulp_running.stdout | trim }}.
-          Start Pulp first (deployed by another task).
-      when: (pulp_running.stdout | trim) != "true"
-
-  rescue:
-    - name: Show podman ps -a for debugging
-      ansible.builtin.command: >
-        podman ps -a --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}\t{{ '{{' }}.Ports{{ '}}' }}"
-      register: podman_ps
-      changed_when: false
-      failed_when: false
-
-    - name: Fail with diagnostics
-      ansible.builtin.fail:
-        msg: |-
-          Pulp precheck failed (missing container or inspect failure).
-          Expected Pulp container name: {{ pulp_container_name }}
-
-          podman ps -a:
-          {{ podman_ps.stdout | default('podman ps output not available') }}
-
-- name: Verify Pulp HTTPS port 2225 is published
-  ansible.builtin.command: "podman port {{ pulp_container_name }} 2225"
-  register: pulp_port
-  changed_when: false
-  failed_when: false
-
-- name: Fail if Pulp HTTPS port 2225 is not published
-  ansible.builtin.fail:
-    msg: "Pulp is running but port 2225 is not published. podman port output={{ pulp_port.stdout | trim }}"
-  when: (pulp_port.stdout | trim) == ""
+        msg: "{{ build_stream_pulp_not_ready_msg }}"
+      when: >
+        (pulp_container_info.containers | length == 0) or
+        (pulp_container_info.containers[0].State.Status != "running")
 
 # -------------------------------------------------------------------
-# 5) Copy Pulp certificate from pulp container -> host persistent path (checksum-aware)
+# 3) Copy Pulp certificate from pulp container -> host persistent path (checksum-aware)
 # -------------------------------------------------------------------
 - name: Verify Pulp cert exists inside pulp container
-  ansible.builtin.command: "podman exec {{ pulp_container_name }} test -f {{ pulp_cert_src_path }}"
+  containers.podman.podman_container_exec:
+    name: "{{ pulp_container_name }}"
+    command:
+      - test
+      - -f
+      - "{{ pulp_cert_src_path }}"
+  register: pulp_cert_check
   changed_when: false
 
 - name: Ensure host directory for Pulp cert exists
   ansible.builtin.file:
     path: "{{ build_stream_pulp_cert_host_dir }}"
     state: directory
-    mode: "0755"
+    mode: "{{ build_stream_pulp_cert_host_dir_mode }}"
 
-- name: Get sha256 of cert inside pulp container
-  ansible.builtin.command: "podman exec {{ pulp_container_name }} sha256sum {{ pulp_cert_src_path }}"
+- name: Get pulp cert inside pulp container
+  containers.podman.podman_container_exec:
+    name: "{{ pulp_container_name }}"
+    command:
+      - sha256sum
+      - "{{ pulp_cert_src_path }}"
   register: pulp_cert_sha
   changed_when: false
 
-- name: Get sha256 of host cert if present
+- name: Get host pulp cert if present
   ansible.builtin.stat:
     path: "{{ build_stream_pulp_cert_host_path }}"
     checksum_algorithm: sha256
   register: host_cert_stat
 
 - name: Copy pulp cert to host if missing/changed
-  ansible.builtin.command: >
-    podman cp {{ pulp_container_name }}:{{ pulp_cert_src_path }} {{ build_stream_pulp_cert_host_path }}
+  containers.podman.podman_container_copy:
+    container: "{{ pulp_container_name }}"
+    src: "{{ pulp_cert_src_path }}"
+    dest: "{{ build_stream_pulp_cert_host_path }}"
+    force: true                 
   when: (not host_cert_stat.stat.exists) or
-        (host_cert_stat.stat.checksum != (pulp_cert_sha.stdout.split()[0]))
-  changed_when: true
+        (host_cert_stat.stat.checksum != pulp_cert_sha.stdout.split()[0])
 
 - name: Ensure host cert permissions
   ansible.builtin.file:
     path: "{{ build_stream_pulp_cert_host_path }}"
     owner: root
     group: root
-    mode: "0644"
+    mode: "{{ build_stream_pulp_cert_host_file_mode }}"
 
 # -------------------------------------------------------------------
-# 6) Deploy quadlet using template + restart via handlers
+# 4) Deploy quadlet using template + restart via handlers
 # -------------------------------------------------------------------
 - name: Ensure quadlet directory exists
   ansible.builtin.file:
     path: "{{ quadlet_dir }}"
     state: directory
-    mode: "0755"
+    mode: "{{ quadlet_dir_mode }}"
 
 - name: Deploy build_stream quadlet file from template
   ansible.builtin.template:
     src: "build_stream.j2"
     dest: "{{ build_stream_quadlet_path }}"
-    mode: "0644"
+    mode: "{{ build_stream_quadlet_file_mode }}"
   notify:
     - Reload systemd
     - Restart build_stream
@@ -205,27 +170,28 @@
     seconds: "{{ container_ready_wait_seconds | default(5) }}"
 
 # -------------------------------------------------------------------
-# 7) Validate HTTPS connectivity from inside build_stream
+# 5) Validate HTTPS connectivity from inside build_stream
 # -------------------------------------------------------------------
 - name: Test HTTPS connectivity from build_stream to Pulp (expect HTTP 200)
-  ansible.builtin.command: >
-    podman exec {{ build_stream_container_name }} sh -lc
-    "curl -sS -o /dev/null -w '%{http_code}\n'
-    --cacert {{ build_stream_pulp_cert_container_path }}
-    {{ pulp_base_url }}/pulp/api/v3/status/"
+  containers.podman.podman_container_exec:
+    name: "{{ build_stream_container_name }}"
+    command:
+      - sh
+      - -lc
+      - >
+        curl -sS -o /dev/null -w '%{http_code}\n'
+        --cacert {{ build_stream_pulp_cert_container_path }}
+        {{ pulp_base_url }}/pulp/api/v3/status/
   register: curl_status
   changed_when: false
 
 - name: Fail if HTTPS test is not 200
   ansible.builtin.fail:
-    msg: >-
-      HTTPS connectivity to Pulp failed from build_stream.
-      HTTP={{ curl_status.stdout | trim }}.
-      Since SAN contains DNS:localhost, ensure pulp_base_url is https://localhost:2225 (current={{ pulp_base_url }}).
+    msg: "{{ build_stream_https_failure_msg}}"
   when: (curl_status.stdout | trim) != "200"
 
 # -------------------------------------------------------------------
-# 7) Validate health API endpoint https://localhost:{{ build_stream_port }}/health"
+# 6) Validate health API endpoint https://localhost:{{ build_stream_port }}/health"
 # -------------------------------------------------------------------
 - name: Verify build_stream health endpoint (FastAPI)
   ansible.builtin.uri:

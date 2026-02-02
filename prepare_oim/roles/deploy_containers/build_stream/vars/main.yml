@@ -55,6 +55,8 @@ build_stream_ssl_file_mode: "0600"
 build_stream_pulp_cert_host_dir: "/etc/omnia/pulp/certs"
 build_stream_pulp_cert_host_path: "/etc/omnia/pulp/certs/pulp_webserver.crt"
 build_stream_pulp_cert_container_path: "/etc/pulp/certs/pulp_webserver.crt"
+build_stream_pulp_cert_host_dir_mode: "{{ build_stream_dir_mode }}"
+build_stream_pulp_cert_host_file_mode: "0644"
 
 # Cert inside pulp container (source)
 pulp_container_name: "pulp"
@@ -74,6 +76,7 @@ pulp_password: ""
 ###############################################################
 quadlet_dir: "/etc/containers/systemd"
 build_stream_quadlet_path: "{{ quadlet_dir }}/{{ build_stream_container_name }}.container"
+quadlet_dir_mode: "{{ build_stream_dir_mode }}"
 build_stream_quadlet_file_mode: "0644"
 
 # PostgreSQL configuration (from postgres role)
@@ -123,3 +126,15 @@ build_stream_container_failure_msg: |
   The deployment of the {{ build_stream_container_name }} container has failed.
   Please run utility/oim_cleanup.yml to clean up existing OIM resources.
   After cleanup, rerun the original playbook.
+
+build_stream_pulp_not_ready_msg: |
+  Pulp container '{{ pulp_container_name }}' is not ready.
+  Exists={{ (pulp_container_info.containers | length) > 0 }},
+  State={{ (pulp_container_info.containers[0].State.Status
+           if (pulp_container_info.containers | length) > 0 else 'missing') }}.
+  Run oim_cleanup and re-run prepare_oim.yml.
+
+build_stream_https_failure_msg: |
+  HTTPS connectivity to Pulp failed from build_stream.
+  HTTP={{ curl_status.stdout | trim }}.
+  Since SAN contains DNS:localhost, ensure pulp_base_url is https://localhost:2225 (current={{ pulp_base_url }}).
