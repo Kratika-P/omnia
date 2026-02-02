@@ -117,10 +117,3 @@ build_stream_container_failure_msg: |
   The deployment of the {{ build_stream_container_name }} container has failed.
   Please run utility/oim_cleanup.yml to clean up existing OIM resources.
   After cleanup, rerun the original playbook.
-
-# Build stream runtime
-build_stream_port: 443
-build_stream_health_endpoint: "https://localhost:{{ build_stream_port }}/health"
-health_check_retries: 10
-health_check_delay: 3
-health_check_status_code: 200
