@@ -99,7 +99,7 @@
   ansible.builtin.file:
     path: "{{ build_stream_pulp_cert_host_dir }}"
     state: directory
-    mode: "{{ build_stream_pulp_cert_host_dir_mode }}"
+    mode: "{{ build_stream_dir_mode }}"
 
 - name: Get pulp cert inside pulp container
   containers.podman.podman_container_exec:
@@ -139,7 +139,7 @@
   ansible.builtin.file:
     path: "{{ quadlet_dir }}"
     state: directory
-    mode: "{{ quadlet_dir_mode }}"
+    mode: "{{ build_stream_dir_mode }}"
 
 - name: Deploy build_stream quadlet file from template
   ansible.builtin.template:
@@ -149,11 +149,6 @@
   notify:
     - Reload systemd
     - Restart build_stream
-
-- name: Reset failed state (clears start-limit-hit)
-  ansible.builtin.command: "systemctl reset-failed {{ build_stream_service }}"
-  changed_when: false
-  failed_when: false
 
 - name: Enable and start build_stream service
   ansible.builtin.systemd_service:
@@ -187,7 +182,7 @@
 
 - name: Fail if HTTPS test is not 200
   ansible.builtin.fail:
-    msg: "{{ build_stream_https_failure_msg}}"
+    msg: "{{ build_stream_https_failure_msg }}"
   when: (curl_status.stdout | trim) != "200"
 
 # -------------------------------------------------------------------
