@@ -120,6 +120,9 @@ class VaultManager:
         self.vault_dir = self.base_dir / "vault"
         self.vault_file = self.vault_dir / "build_stream_oauth_credentials.yml"
         self.vault_pass_file = self.base_dir / ".vault_pass"
+        self.keys_dir = self.base_dir / "keys"
+        self.private_key_file = self.keys_dir / "jwt_private.pem"
+        self.public_key_file = self.keys_dir / "jwt_public.pem"
         self._hasher = PasswordHasher(
             time_cost=3,
             memory_cost=65536,
@@ -189,6 +192,44 @@ class VaultManager:
                 os.unlink(temp_path)
 
         logger.info("Vault setup complete")
+
+        # Generate JWT keys for token signing
+        self._generate_jwt_keys()
+
+    def _generate_jwt_keys(self) -> None:
+        """Generate RSA key pair for JWT signing in e2e tests."""
+        logger.info("Generating JWT keys for e2e tests...")
+        logger.info("  Keys directory: %s", self.keys_dir)
+
+        self.keys_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate RSA private key (2048-bit for faster tests)
+        subprocess.run(
+            [
+                "openssl", "genrsa",
+                "-out", str(self.private_key_file),
+                "2048",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        self.private_key_file.chmod(0o600)
+        logger.info("  Generated private key: %s", self.private_key_file)
+
+        # Extract public key
+        subprocess.run(
+            [
+                "openssl", "rsa",
+                "-in", str(self.private_key_file),
+                "-pubout",
+                "-out", str(self.public_key_file),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        self.public_key_file.chmod(0o644)
+        logger.info("  Generated public key: %s", self.public_key_file)
+        logger.info("JWT keys generated successfully")
 
     def cleanup(self) -> None:
         """Clean up vault files."""
@@ -317,6 +358,8 @@ class ServerManager:
             "ANSIBLE_VAULT_PASSWORD_FILE": str(self.vault_manager.vault_pass_file),
             "OAUTH_CLIENTS_VAULT_PATH": str(self.vault_manager.vault_file),
             "AUTH_CONFIG_VAULT_PATH": str(self.vault_manager.vault_file),
+            "JWT_PRIVATE_KEY_PATH": str(self.vault_manager.private_key_file),
+            "JWT_PUBLIC_KEY_PATH": str(self.vault_manager.public_key_file),
             "LOG_LEVEL": "DEBUG",
         })
         logger.info("    HOST=%s", self.host)
@@ -324,6 +367,8 @@ class ServerManager:
         logger.info("    ANSIBLE_VAULT_PASSWORD_FILE=%s", self.vault_manager.vault_pass_file)
         logger.info("    OAUTH_CLIENTS_VAULT_PATH=%s", self.vault_manager.vault_file)
         logger.info("    AUTH_CONFIG_VAULT_PATH=%s", self.vault_manager.vault_file)
+        logger.info("    JWT_PRIVATE_KEY_PATH=%s", self.vault_manager.private_key_file)
+        logger.info("    JWT_PUBLIC_KEY_PATH=%s", self.vault_manager.public_key_file)
         logger.info("    LOG_LEVEL=DEBUG")
 
         logger.info("  Starting uvicorn server...")

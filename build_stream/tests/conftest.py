@@ -75,6 +75,18 @@ def _get_mock_vault_client():
     return _MOCK_VAULT_CLIENT
 
 
+_MOCK_JWT_HANDLER = None
+
+
+def _get_mock_jwt_handler():
+    """Lazy import of MockJWTHandler."""
+    global _MOCK_JWT_HANDLER
+    if _MOCK_JWT_HANDLER is None:
+        from tests.mocks.mock_jwt_handler import MockJWTHandler  # noqa: PLC0415
+        _MOCK_JWT_HANDLER = MockJWTHandler
+    return _MOCK_JWT_HANDLER
+
+
 @pytest.fixture
 def mock_vault_client():
     """Create a fresh MockVaultClient instance.
@@ -115,11 +127,23 @@ def auth_service(mock_vault_client):  # noqa: W0621
 
 
 @pytest.fixture
-def test_client(mock_vault_client) -> Generator:
+def mock_jwt_handler():
+    """Create a fresh MockJWTHandler instance.
+
+    Returns:
+        MockJWTHandler for testing JWT operations.
+    """
+    MockJWTHandler = _get_mock_jwt_handler()
+    return MockJWTHandler()
+
+
+@pytest.fixture
+def test_client(mock_vault_client, mock_jwt_handler) -> Generator:  # noqa: W0621
     """Create a FastAPI TestClient with mocked dependencies.
 
     Args:
         mock_vault_client: Mock vault client fixture.
+        mock_jwt_handler: Mock JWT handler fixture.
 
     Yields:
         TestClient configured for testing.
@@ -130,7 +154,10 @@ def test_client(mock_vault_client) -> Generator:
     auth_service_class = _get_auth_service()
     auth_routes = _get_auth_routes()
 
-    test_auth_service = auth_service_class(vault_client=mock_vault_client)
+    test_auth_service = auth_service_class(
+        vault_client=mock_vault_client,
+        jwt_handler=mock_jwt_handler,
+    )
     original_service = auth_routes._auth_service  # noqa: W0212
 
     auth_routes._auth_service = test_auth_service
@@ -142,11 +169,12 @@ def test_client(mock_vault_client) -> Generator:
 
 
 @pytest.fixture
-def test_client_with_existing_client(mock_vault_with_client) -> Generator:
+def test_client_with_existing_client(mock_vault_with_client, mock_jwt_handler) -> Generator:  # noqa: W0621
     """Create a TestClient with a pre-registered client in vault.
 
     Args:
         mock_vault_with_client: Mock vault with existing client.
+        mock_jwt_handler: Mock JWT handler fixture.
 
     Yields:
         TestClient configured for testing max client scenarios.
@@ -157,7 +185,10 @@ def test_client_with_existing_client(mock_vault_with_client) -> Generator:
     auth_service_class = _get_auth_service()
     auth_routes = _get_auth_routes()
 
-    test_auth_service = auth_service_class(vault_client=mock_vault_with_client)
+    test_auth_service = auth_service_class(
+        vault_client=mock_vault_with_client,
+        jwt_handler=mock_jwt_handler,
+    )
     original_service = auth_routes._auth_service  # noqa: W0212
 
     auth_routes._auth_service = test_auth_service  # noqa: W0212
@@ -218,4 +249,20 @@ def minimal_registration_request() -> Dict:
     """
     return {
         "client_name": "minimal-client",
+    }
+
+
+@pytest.fixture
+def valid_token_request() -> Dict:
+    """Create a valid token request body template.
+
+    Note: client_id and client_secret must be filled in after registration.
+
+    Returns:
+        Dictionary with token request template.
+    """
+    return {
+        "grant_type": "client_credentials",
+        "client_id": None,
+        "client_secret": None,
     }
