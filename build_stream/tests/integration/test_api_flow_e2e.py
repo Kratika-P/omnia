@@ -296,6 +296,8 @@ class TestCompleteAPIFlow:
 
         Confirms that token requests with wrong credentials fail properly.
         """
+        from tests.integration.conftest import generate_test_client_secret
+        
         assert api_flow_context.has_client_credentials(), (
             "Client credentials not available. Run test_02_register_client first."
         )
@@ -306,7 +308,7 @@ class TestCompleteAPIFlow:
                 data={
                     "grant_type": "client_credentials",
                     "client_id": api_flow_context.client_id,
-                    "client_secret": "bld_s_wrong_secret_here_1234",
+                    "client_secret": generate_test_client_secret(),
                 },
             )
 
@@ -390,13 +392,15 @@ class TestAPIFlowErrorHandling:
         reset_vault,  # noqa: W0613 pylint: disable=unused-argument
     ):
         """Verify token request for unregistered client fails."""
+        from tests.integration.conftest import generate_test_client_secret
+        
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 "/api/v1/auth/token",
                 data={
                     "grant_type": "client_credentials",
                     "client_id": "bld_nonexistent_client_12345678",
-                    "client_secret": "bld_s_fake_secret_here_1234",
+                    "client_secret": generate_test_client_secret(),
                 },
             )
 
@@ -450,6 +454,8 @@ class TestAPIFlowSecurityValidation:
         reset_vault,  # noqa: W0613 pylint: disable=unused-argument
     ):
         """Verify client credential format validation."""
+        from tests.integration.conftest import generate_test_client_secret
+        
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             # Invalid client_id format
             response = client.post(
@@ -457,7 +463,7 @@ class TestAPIFlowSecurityValidation:
                 data={
                     "grant_type": "client_credentials",
                     "client_id": "invalid_format",
-                    "client_secret": "bld_s_valid_format_secret",
+                    "client_secret": generate_test_client_secret(),
                 },
             )
 

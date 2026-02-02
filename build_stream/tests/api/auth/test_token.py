@@ -187,12 +187,14 @@ class TestTokenEndpoint:
         registered_client: Dict,
     ):
         """Test token request with invalid client_secret."""
+        from tests.conftest import generate_test_client_secret
+        
         response = test_client.post(
             self.TOKEN_URL,
             data={
                 "grant_type": "client_credentials",
                 "client_id": registered_client["client_id"],
-                "client_secret": "bld_s_invalid_secret_here",
+                "client_secret": generate_test_client_secret(),
             },
         )
 

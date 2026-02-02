@@ -81,6 +81,25 @@ def generate_secure_test_password(length: int = 24) -> str:
     return ''.join(password)
 
 
+def generate_test_client_secret(length: int = 32) -> str:
+    """Generate a test client secret with proper bld_s_ prefix.
+
+    Args:
+        length: Total length of the secret including prefix (default: 32)
+
+    Returns:
+        Test client secret with bld_s_ prefix
+    """
+    if length < 8:
+        raise ValueError("Client secret length must be at least 8 characters")
+    
+    # Generate random part (subtract 6 for "bld_s_" prefix)
+    random_part_length = max(8, length - 6)
+    random_part = generate_secure_test_password(random_part_length)
+    
+    return f"bld_s_{random_part}"
+
+
 class IntegrationTestConfig:
     """Configuration for integration tests."""
 
