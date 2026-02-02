@@ -76,6 +76,24 @@ def generate_test_client_secret(length: int = 32) -> str:
     random_part = ''.join(password)
     return f"bld_s_{random_part}"
 
+
+def generate_invalid_client_id() -> str:
+    """Generate an invalid client ID for testing (missing bld_ prefix).
+
+    Returns:
+        Invalid client ID without proper prefix
+    """
+    return "invalid_client_id_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+
+
+def generate_invalid_client_secret() -> str:
+    """Generate an invalid client secret for testing (missing bld_s_ prefix).
+
+    Returns:
+        Invalid client secret without proper prefix
+    """
+    return "invalid_secret_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+
 # Lazy imports to avoid triggering FastAPI route registration
 # when running E2E tests that don't need these fixtures
 _APP = None

@@ -356,12 +356,14 @@ class TestTokenEndpointE2E:
         registered_client_e2e: Dict[str, str],
     ):
         """Test token request with invalid client_id format fails."""
+        from tests.integration.conftest import generate_invalid_client_id
+        
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 self.TOKEN_URL,
                 data={
                     "grant_type": "client_credentials",
-                    "client_id": "invalid_no_prefix",
+                    "client_id": generate_invalid_client_id(),
                     "client_secret": registered_client_e2e["client_secret"],
                 },
             )
@@ -374,13 +376,15 @@ class TestTokenEndpointE2E:
         registered_client_e2e: Dict[str, str],
     ):
         """Test token request with invalid client_secret format fails."""
+        from tests.integration.conftest import generate_invalid_client_secret
+        
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 self.TOKEN_URL,
                 data={
                     "grant_type": "client_credentials",
                     "client_id": registered_client_e2e["client_id"],
-                    "client_secret": "invalid_no_prefix",
+                    "client_secret": generate_invalid_client_secret(),
                 },
             )
 

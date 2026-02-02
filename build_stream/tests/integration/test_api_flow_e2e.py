@@ -454,7 +454,7 @@ class TestAPIFlowSecurityValidation:
         reset_vault,  # noqa: W0613 pylint: disable=unused-argument
     ):
         """Verify client credential format validation."""
-        from tests.integration.conftest import generate_test_client_secret
+        from tests.integration.conftest import generate_test_client_secret, generate_invalid_client_id
         
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             # Invalid client_id format
@@ -462,7 +462,7 @@ class TestAPIFlowSecurityValidation:
                 "/api/v1/auth/token",
                 data={
                     "grant_type": "client_credentials",
-                    "client_id": "invalid_format",
+                    "client_id": generate_invalid_client_id(),
                     "client_secret": generate_test_client_secret(),
                 },
             )
@@ -475,13 +475,15 @@ class TestAPIFlowSecurityValidation:
         reset_vault,  # noqa: W0613 pylint: disable=unused-argument
     ):
         """Verify client secret format validation."""
+        from tests.integration.conftest import generate_invalid_client_secret
+        
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 "/api/v1/auth/token",
                 data={
                     "grant_type": "client_credentials",
                     "client_id": "bld_valid_format_client_id",
-                    "client_secret": "invalid_format",
+                    "client_secret": generate_invalid_client_secret(),
                 },
             )
 
