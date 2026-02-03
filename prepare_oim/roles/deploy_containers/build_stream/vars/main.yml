@@ -62,8 +62,6 @@ pulp_container_name: "pulp"
 
 ###############################################################
 # Pulp server URL
-# SAN = DNS:localhost, DNS:pulp, IP:172.5.0.255
-# → so correct base URL is https://localhost:2225
 ###############################################################
 pulp_base_url: "https://localhost:2225"
 pulp_username: "admin"
