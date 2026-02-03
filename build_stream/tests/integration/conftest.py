@@ -14,6 +14,8 @@
 
 """Pytest fixtures for integration tests with real Ansible Vault."""
 
+# pylint: disable=redefined-outer-name,consider-using-with
+
 import base64
 import logging
 import os
@@ -31,7 +33,7 @@ from typing import Dict, Generator, Optional
 import httpx
 import pytest
 import yaml
-from argon2 import PasswordHasher, Type
+from argon2 import PasswordHasher, Type  # noqa: E0611 pylint: disable=no-name-in-module
 
 # Configure logging for integration tests
 logging.basicConfig(
@@ -79,6 +81,43 @@ def generate_secure_test_password(length: int = 24) -> str:
     return ''.join(password)
 
 
+def generate_test_client_secret(length: int = 32) -> str:
+    """Generate a test client secret with proper bld_s_ prefix.
+
+    Args:
+        length: Total length of the secret including prefix (default: 32)
+
+    Returns:
+        Test client secret with bld_s_ prefix
+    """
+    if length < 8:
+        raise ValueError("Client secret length must be at least 8 characters")
+    
+    # Generate random part (subtract 6 for "bld_s_" prefix)
+    random_part_length = max(8, length - 6)
+    random_part = generate_secure_test_password(random_part_length)
+    
+    return f"bld_s_{random_part}"
+
+
+def generate_invalid_client_id() -> str:
+    """Generate an invalid client ID for testing (missing bld_ prefix).
+
+    Returns:
+        Invalid client ID without proper prefix
+    """
+    return "invalid_client_id_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+
+
+def generate_invalid_client_secret() -> str:
+    """Generate an invalid client secret for testing (missing bld_s_ prefix).
+
+    Returns:
+        Invalid client secret without proper prefix
+    """
+    return "invalid_secret_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+
+
 class IntegrationTestConfig:
     """Configuration for integration tests."""
 
@@ -107,7 +146,7 @@ class IntegrationTestConfig:
         return generate_secure_test_password(24)
 
 
-class VaultManager:
+class VaultManager:  # noqa: R0902 pylint: disable=too-many-instance-attributes
     """Manages Ansible Vault setup and teardown for integration tests."""
 
     def __init__(self, base_dir: str):
@@ -120,6 +159,9 @@ class VaultManager:
         self.vault_dir = self.base_dir / "vault"
         self.vault_file = self.vault_dir / "build_stream_oauth_credentials.yml"
         self.vault_pass_file = self.base_dir / ".vault_pass"
+        self.keys_dir = self.base_dir / "keys"
+        self.private_key_file = self.keys_dir / "jwt_private.pem"
+        self.public_key_file = self.keys_dir / "jwt_public.pem"
         self._hasher = PasswordHasher(
             time_cost=3,
             memory_cost=65536,
@@ -190,6 +232,44 @@ class VaultManager:
 
         logger.info("Vault setup complete")
 
+        # Generate JWT keys for token signing
+        self._generate_jwt_keys()
+
+    def _generate_jwt_keys(self) -> None:
+        """Generate RSA key pair for JWT signing in e2e tests."""
+        logger.info("Generating JWT keys for e2e tests...")
+        logger.info("  Keys directory: %s", self.keys_dir)
+
+        self.keys_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate RSA private key (2048-bit for faster tests)
+        subprocess.run(
+            [
+                "openssl", "genrsa",
+                "-out", str(self.private_key_file),
+                "2048",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        self.private_key_file.chmod(0o600)
+        logger.info("  Generated private key: %s", self.private_key_file)
+
+        # Extract public key
+        subprocess.run(
+            [
+                "openssl", "rsa",
+                "-in", str(self.private_key_file),
+                "-pubout",
+                "-out", str(self.public_key_file),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        self.public_key_file.chmod(0o644)
+        logger.info("  Generated public key: %s", self.public_key_file)
+        logger.info("JWT keys generated successfully")
+
     def cleanup(self) -> None:
         """Clean up vault files."""
         logger.info("Cleaning up vault files at: %s", self.base_dir)
@@ -215,7 +295,7 @@ class ServerManager:
         "cryptography",
     ]
 
-    def __init__(
+    def __init__(  # noqa: R0913,R0917 pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         host: str,
         port: int,
@@ -317,6 +397,8 @@ class ServerManager:
             "ANSIBLE_VAULT_PASSWORD_FILE": str(self.vault_manager.vault_pass_file),
             "OAUTH_CLIENTS_VAULT_PATH": str(self.vault_manager.vault_file),
             "AUTH_CONFIG_VAULT_PATH": str(self.vault_manager.vault_file),
+            "JWT_PRIVATE_KEY_PATH": str(self.vault_manager.private_key_file),
+            "JWT_PUBLIC_KEY_PATH": str(self.vault_manager.public_key_file),
             "LOG_LEVEL": "DEBUG",
         })
         logger.info("    HOST=%s", self.host)
@@ -324,6 +406,8 @@ class ServerManager:
         logger.info("    ANSIBLE_VAULT_PASSWORD_FILE=%s", self.vault_manager.vault_pass_file)
         logger.info("    OAUTH_CLIENTS_VAULT_PATH=%s", self.vault_manager.vault_file)
         logger.info("    AUTH_CONFIG_VAULT_PATH=%s", self.vault_manager.vault_file)
+        logger.info("    JWT_PRIVATE_KEY_PATH=%s", self.vault_manager.private_key_file)
+        logger.info("    JWT_PUBLIC_KEY_PATH=%s", self.vault_manager.public_key_file)
         logger.info("    LOG_LEVEL=DEBUG")
 
         logger.info("  Starting uvicorn server...")
@@ -331,6 +415,7 @@ class ServerManager:
         logger.info("    Working directory: %s", self.project_dir)
 
         # Process needs to be managed separately for start/stop lifecycle
+        # Cannot use 'with' statement as process must persist after method returns
         self.process = subprocess.Popen(  # noqa: R1732
             [
                 self.python_path,

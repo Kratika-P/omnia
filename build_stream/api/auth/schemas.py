@@ -19,6 +19,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
+from fastapi import Form, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -142,40 +143,48 @@ class GrantType(str, Enum):
     CLIENT_CREDENTIALS = "client_credentials"
 
 
-class TokenRequest(BaseModel):  # pylint: disable=too-few-public-methods
+class TokenRequest:  # pylint: disable=too-few-public-methods
     """Request model for OAuth2 token endpoint (application/x-www-form-urlencoded)."""
 
-    grant_type: GrantType = Field(
-        ...,
-        description="OAuth2 grant type (must be 'client_credentials')",
-    )
-    client_id: Optional[str] = Field(
-        default=None,
-        description="Client identifier (prefix: bld_)",
-    )
-    client_secret: Optional[str] = Field(
-        default=None,
-        description="Client secret (prefix: bld_s_)",
-    )
-    scope: Optional[str] = Field(
-        default=None,
-        description="Space-separated list of requested scopes",
-    )
+    def __init__(
+        self,
+        grant_type: GrantType = Form(..., description="OAuth2 grant type"),
+        client_id: Optional[str] = Form(default=None, description="Client identifier"),
+        client_secret: Optional[str] = Form(default=None, description="Client secret"),
+        scope: Optional[str] = Form(default=None, description="Requested scopes"),
+    ):
+        """Initialize token request from form data."""
+        self.grant_type = grant_type
+        self.client_id = self._validate_client_id(client_id)
+        self.client_secret = self._validate_client_secret(client_secret)
+        self.scope = scope
 
-    @field_validator("client_id")
-    @classmethod
-    def validate_client_id(cls, v: Optional[str]) -> Optional[str]:
+    @staticmethod
+    def _validate_client_id(v: Optional[str]) -> Optional[str]:
         """Validate client_id format if provided."""
         if v is not None and not v.startswith("bld_"):
-            raise ValueError("client_id must start with 'bld_' prefix")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["body", "client_id"],
+                    "msg": "client_id must start with 'bld_' prefix",
+                }],
+            )
         return v
 
-    @field_validator("client_secret")
-    @classmethod
-    def validate_client_secret(cls, v: Optional[str]) -> Optional[str]:
+    @staticmethod
+    def _validate_client_secret(v: Optional[str]) -> Optional[str]:
         """Validate client_secret format if provided."""
         if v is not None and not v.startswith("bld_s_"):
-            raise ValueError("client_secret must start with 'bld_s_' prefix")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["body", "client_secret"],
+                    "msg": "client_secret must start with 'bld_s_' prefix",
+                }],
+            )
         return v
 
 

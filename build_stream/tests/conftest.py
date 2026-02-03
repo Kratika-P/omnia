@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared pytest fixtures for Build Stream API tests.
+"""Shared pytest fixtures for Build Stream API tests."""
 
-Note: This conftest is for mock-based unit/integration tests.
+# pylint: disable=redefined-outer-name,global-statement,import-outside-toplevel,protected-access
+
+"""Note: This conftest is for mock-based unit/integration tests.
 E2E integration tests use tests/integration/conftest.py which does not
 import the app directly (it runs the server as a subprocess).
 """
 
 import base64
+import secrets
+import string
 import sys
 from pathlib import Path
 from typing import Dict, Generator
@@ -30,6 +34,65 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def generate_test_client_secret(length: int = 32) -> str:
+    """Generate a test client secret with proper bld_s_ prefix.
+
+    Args:
+        length: Total length of the secret including prefix (default: 32)
+
+    Returns:
+        Test client secret with bld_s_ prefix
+    """
+    if length < 8:
+        raise ValueError("Client secret length must be at least 8 characters")
+    
+    # Generate random part (subtract 6 for "bld_s_" prefix)
+    random_part_length = max(8, length - 6)
+    
+    # Use secure random generation
+    lowercase = string.ascii_lowercase
+    uppercase = string.ascii_uppercase
+    digits = string.digits
+    special = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    
+    # Start with one of each required character type
+    password = [
+        secrets.choice(lowercase),
+        secrets.choice(uppercase),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    
+    # Fill remaining length
+    all_chars = lowercase + uppercase + digits + special
+    for _ in range(random_part_length - 4):
+        password.append(secrets.choice(all_chars))
+    
+    # Shuffle to avoid predictable pattern
+    secrets.SystemRandom().shuffle(password)
+    
+    random_part = ''.join(password)
+    return f"bld_s_{random_part}"
+
+
+def generate_invalid_client_id() -> str:
+    """Generate an invalid client ID for testing (missing bld_ prefix).
+
+    Returns:
+        Invalid client ID without proper prefix
+    """
+    return "invalid_client_id_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+
+
+def generate_invalid_client_secret() -> str:
+    """Generate an invalid client secret for testing (missing bld_s_ prefix).
+
+    Returns:
+        Invalid client secret without proper prefix
+    """
+    return "invalid_secret_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
 
 # Lazy imports to avoid triggering FastAPI route registration
 # when running E2E tests that don't need these fixtures
@@ -75,6 +138,18 @@ def _get_mock_vault_client():
     return _MOCK_VAULT_CLIENT
 
 
+_MOCK_JWT_HANDLER = None
+
+
+def _get_mock_jwt_handler():
+    """Lazy import of MockJWTHandler."""
+    global _MOCK_JWT_HANDLER
+    if _MOCK_JWT_HANDLER is None:
+        from tests.mocks.mock_jwt_handler import MockJWTHandler  # noqa: PLC0415
+        _MOCK_JWT_HANDLER = MockJWTHandler
+    return _MOCK_JWT_HANDLER
+
+
 @pytest.fixture
 def mock_vault_client():
     """Create a fresh MockVaultClient instance.
@@ -115,11 +190,23 @@ def auth_service(mock_vault_client):  # noqa: W0621
 
 
 @pytest.fixture
-def test_client(mock_vault_client) -> Generator:
+def mock_jwt_handler():
+    """Create a fresh MockJWTHandler instance.
+
+    Returns:
+        MockJWTHandler for testing JWT operations.
+    """
+    MockJWTHandler = _get_mock_jwt_handler()
+    return MockJWTHandler()
+
+
+@pytest.fixture
+def test_client(mock_vault_client, mock_jwt_handler) -> Generator:  # noqa: W0621
     """Create a FastAPI TestClient with mocked dependencies.
 
     Args:
         mock_vault_client: Mock vault client fixture.
+        mock_jwt_handler: Mock JWT handler fixture.
 
     Yields:
         TestClient configured for testing.
@@ -130,7 +217,10 @@ def test_client(mock_vault_client) -> Generator:
     auth_service_class = _get_auth_service()
     auth_routes = _get_auth_routes()
 
-    test_auth_service = auth_service_class(vault_client=mock_vault_client)
+    test_auth_service = auth_service_class(
+        vault_client=mock_vault_client,
+        jwt_handler=mock_jwt_handler,
+    )
     original_service = auth_routes._auth_service  # noqa: W0212
 
     auth_routes._auth_service = test_auth_service
@@ -142,11 +232,14 @@ def test_client(mock_vault_client) -> Generator:
 
 
 @pytest.fixture
-def test_client_with_existing_client(mock_vault_with_client) -> Generator:
+def test_client_with_existing_client(  # noqa: C0301,W0621
+        mock_vault_with_client, mock_jwt_handler
+    ) -> Generator:
     """Create a TestClient with a pre-registered client in vault.
 
     Args:
         mock_vault_with_client: Mock vault with existing client.
+        mock_jwt_handler: Mock JWT handler fixture.
 
     Yields:
         TestClient configured for testing max client scenarios.
@@ -157,7 +250,10 @@ def test_client_with_existing_client(mock_vault_with_client) -> Generator:
     auth_service_class = _get_auth_service()
     auth_routes = _get_auth_routes()
 
-    test_auth_service = auth_service_class(vault_client=mock_vault_with_client)
+    test_auth_service = auth_service_class(
+        vault_client=mock_vault_with_client,
+        jwt_handler=mock_jwt_handler,
+    )
     original_service = auth_routes._auth_service  # noqa: W0212
 
     auth_routes._auth_service = test_auth_service  # noqa: W0212
@@ -218,4 +314,20 @@ def minimal_registration_request() -> Dict:
     """
     return {
         "client_name": "minimal-client",
+    }
+
+
+@pytest.fixture
+def valid_token_request() -> Dict:
+    """Create a valid token request body template.
+
+    Note: client_id and client_secret must be filled in after registration.
+
+    Returns:
+        Dictionary with token request template.
+    """
+    return {
+        "grant_type": "client_credentials",
+        "client_id": None,
+        "client_secret": None,
     }

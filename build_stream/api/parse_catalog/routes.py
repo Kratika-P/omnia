@@ -15,9 +15,11 @@
 """FastAPI routes for ParseCatalog API."""
 
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from api.dependencies import require_catalog_read
 from .schemas import ErrorResponse, ParseCatalogResponse, ParseCatalogStatus
 from .service import (
     CatalogParseError,
@@ -34,7 +36,7 @@ _service = ParseCatalogService()
 
 
 @router.post(
-    "/{jobId}/stages/parse-catalog",
+    "/{job_id}/stages/parse-catalog",
     response_model=ParseCatalogResponse,
     status_code=status.HTTP_200_OK,
     summary="Parse a catalog file",
@@ -48,6 +50,14 @@ _service = ParseCatalogService()
             "description": "Invalid request (bad file format or JSON)",
             "model": ErrorResponse,
         },
+        401: {
+            "description": "Unauthorized (missing or invalid token)",
+            "model": ErrorResponse,
+        },
+        403: {
+            "description": "Forbidden (insufficient scope)",
+            "model": ErrorResponse,
+        },
         422: {
             "description": "Validation error",
             "model": ErrorResponse,
@@ -59,16 +69,20 @@ _service = ParseCatalogService()
     },
 )
 async def parse_catalog(
-    jobId: str,
+    job_id: str,
     file: UploadFile = File(..., description="The catalog JSON file to parse"),
+    token_data: Annotated[dict, Depends(require_catalog_read)] = None,  # pylint: disable=unused-argument
 ) -> ParseCatalogResponse:
     """Parse a catalog from an uploaded JSON file.
 
     This endpoint accepts a catalog JSON file, validates its format and content,
-    then processes it to generate the required output files.
+    then processes it to generate the required output files. Requires a valid
+    JWT token with 'catalog:read' scope.
 
     Args:
+        job_id: The job identifier for the parsing operation.
         file: The uploaded JSON file containing catalog data.
+        token_data: Validated token data from JWT (injected by dependency).
 
     Returns:
         ParseCatalogResponse with status and message.
@@ -76,7 +90,11 @@ async def parse_catalog(
     Raises:
         HTTPException: With appropriate status code on failure.
     """
-    logger.info("Received parse catalog request for file: %s", file.filename)
+    logger.info(
+    "Received parse catalog request for file: %s (job: %s)",
+    file.filename,
+    job_id,
+)
 
     try:
         contents = await file.read()
