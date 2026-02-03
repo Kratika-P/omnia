@@ -16,6 +16,7 @@
 ###############################################################
 # Build Stream Container Configuration
 ###############################################################
+core_container_name: "omnia_core"
 build_stream_container_name: "omnia_build_stream"
 
 # OIM metadata file path (read from omnia_core container)
@@ -24,7 +25,7 @@ oim_metadata_file: "/opt/omnia/.data/oim_metadata.yml"
 ###############################################################
 # Build Stream Image (Docker Hub)
 ###############################################################
-build_stream_dockerhub_registry: "docker.io/pritiparate"
+build_stream_dockerhub_registry: "docker.io/dellhpcomniaaisolution"
 build_stream_image_name: "{{ build_stream_dockerhub_registry }}/omnia_build_stream"
 build_stream_image_tag: "1.0"
 
@@ -52,14 +53,11 @@ build_stream_ssl_file_mode: "0600"
 # Pulp certificate configuration (host-mounted copy)
 ###############################################################
 # Cert that build_stream will verify against
-build_stream_pulp_cert_host_dir: "/etc/omnia/pulp/certs"
-build_stream_pulp_cert_host_path: "/etc/omnia/pulp/certs/pulp_webserver.crt"
-build_stream_pulp_cert_container_path: "/etc/pulp/certs/pulp_webserver.crt"
-build_stream_pulp_cert_host_file_mode: "0644"
+build_stream_pulp_cert_host_dir: "/etc/pulp/certs"
+build_stream_pulp_cert_dest: "/etc/pulp"
 
 # Cert inside pulp container (source)
 pulp_container_name: "pulp"
-pulp_cert_src_path: "/etc/pulp/certs/pulp_webserver.crt"
 
 ###############################################################
 # Pulp server URL
@@ -81,7 +79,6 @@ build_stream_quadlet_file_mode: "0644"
 postgres_user: "{{ hostvars['localhost']['postgres_user'] }}"
 postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
 postgres_db_name: "build_stream"
-
 
 ###############################################################
 ###############################################################
@@ -106,25 +103,6 @@ build_stream_firewall_port: "{{ build_stream_port }}/tcp"
 ###############################################################
 # User messages
 ###############################################################
-build_stream_deployment_success_msg: "omnia_build_stream container deployed successfully"
-
-build_stream_image_pull_success_msg:
-  - "Successfully pulled image from Docker Hub"
-  - "Image: {{ build_stream_image_name }}:{{ build_stream_image_tag }}"
-
-build_stream_deployment_status_msg:
-  - "{{ build_stream_deployment_success_msg }}"
-  - "Container: {{ build_stream_container_name }}"
-  - "Image: {{ build_stream_image_name }}:{{ build_stream_image_tag }}"
-  - "Pulp Server: {{ pulp_base_url }}"
-
-build_stream_container_success_msg: "The {{ build_stream_container_name }} container has been successfully deployed."
-
-build_stream_container_failure_msg: |
-  The deployment of the {{ build_stream_container_name }} container has failed.
-  Please run utility/oim_cleanup.yml to clean up existing OIM resources.
-  After cleanup, rerun the original playbook.
-
 build_stream_pulp_not_ready_msg: |
   Pulp container '{{ pulp_container_name }}' is not ready.
   Exists={{ (pulp_container_info.containers | length) > 0 }},

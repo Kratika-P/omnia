@@ -49,7 +49,7 @@
 # -------------------------------------------------------------------
 - name: Get metadata from omnia_core
   containers.podman.podman_container_exec:
-    name: "omnia_core"
+    name: "{{ core_container_name }}"
     command: cat {{ oim_metadata_file }}
   register: metadata_content
   changed_when: false
@@ -87,7 +87,7 @@
 # -------------------------------------------------------------------
 - name: Ensure host pulp cert directory exists
   ansible.builtin.file:
-    path: /etc/pulp/certs
+    path: "{{ build_stream_pulp_cert_host_dir }}"
     state: directory
     owner: root
     group: root
@@ -96,15 +96,15 @@
 - name: Copy entire pulp cert directory from Pulp container to host
   containers.podman.podman_container_copy:
     container: "{{ pulp_container_name }}"
-    src: "/etc/pulp/certs"
-    dest: "/etc/pulp/"
+    src: "{{ build_stream_pulp_cert_container_path }}"
+    dest: "{{ build_stream_pulp_cert_dest }}"
     from_container: true
     overwrite: true
   register: pulp_copy_dir
 
 - name: Ensure host cert directory permissions
   ansible.builtin.file:
-    path: /etc/pulp/certs
+    path: "{{ build_stream_pulp_cert_host_dir }}"
     owner: root
     group: root
     mode: "{{ build_stream_dir_mode }}"

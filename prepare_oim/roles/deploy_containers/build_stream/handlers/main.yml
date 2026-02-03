@@ -16,7 +16,7 @@
 # Reload systemd daemon on the OIM host
 - name: Reload systemd
   ansible.builtin.systemd:
-    daemon_reload: yes
+    daemon_reload: true
 
 # Restart Build Stream container
 # (Assumes systemd unit is created for the container)
@@ -24,4 +24,4 @@
   ansible.builtin.systemd:
     name: "{{ build_stream_service }}"
     state: restarted
-    enabled: yes
+    enabled: true
