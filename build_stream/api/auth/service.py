@@ -235,6 +235,7 @@ class AuthService:
             oauth_clients = self.vault_client.get_oauth_clients()
         except (VaultNotFoundError, VaultDecryptError):
             logger.error("Failed to load OAuth clients from vault")
+            # Ensure no exception details are exposed
             raise InvalidClientError("Client authentication failed") from None
 
         if client_id not in oauth_clients:
