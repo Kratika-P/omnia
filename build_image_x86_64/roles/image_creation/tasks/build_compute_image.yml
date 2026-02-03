@@ -15,7 +15,7 @@
 
 - name: Create x86_64 compute image log files
   ansible.builtin.file:
-    path: "{{ openchami_log_dir }}/{{ item.key }}_compute_image.log"
+    path: "{{ openchami_log_dir }}/{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id | default('') }}{% endif %}_compute_image.log"
     state: touch
     mode: "{{ dir_permissions_644 }}"
   loop: "{{ compute_images_dict | dict2items }}"
@@ -25,12 +25,16 @@
 - name: Render compute images templates
   ansible.builtin.template:
     src: "{{ openchami_compute_image_vars_template }}"
-    dest: "{{ openchami_dir }}/{{ item.key }}_compute_images.yaml"
+    dest: "{{ openchami_dir }}/{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id | default('') }}{% endif %}_compute_images.yaml"
     mode: "{{ dir_permissions_644 }}"
   vars:
     functional_group: "{{ item.value.functional_group }}"
     packages: "{{ item.value.packages }}"
-    rhel_base_compute_image_name: "{{ item.key }}"
+    build_stream_job_id: "{{ build_stream_job_id | default('') }}"
+    enable_build_stream: "{{ hostvars['localhost']['enable_build_stream'] | default(false) }}"
+    # Pre-compute image names to avoid undefined errors inside template
+    base_compute_image_name: "{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id | default('') }}{% endif %}"
+    rhel_base_compute_image_name: "rhel-{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id | default('') }}{% endif %}"
   loop: "{{ compute_images_dict | dict2items }}"
   loop_control:
     loop_var: item
@@ -40,9 +44,9 @@
     set -o pipefail
     ansible-playbook {{ openchami_clone_path }}/dell/podman-quadlets/image.yaml \
       -i {{ openchami_clone_path }}/dell/podman-quadlets/inventory -v \
-      --extra-vars '@{{ openchami_dir }}/{{ item.key }}_compute_images.yaml' \
+      --extra-vars '@{{ openchami_dir }}/{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id | default('') }}{% endif %}_compute_images.yaml' \
       --tags compute_image -v | \
-      /usr/bin/tee '{{ openchami_log_dir }}/{{ item.key }}_compute_image.log'
+      /usr/bin/tee '{{ openchami_log_dir }}/{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id | default('') }}{% endif %}_compute_image.log'
   async: 3600   # Set async timeout (e.g., 1 hour)
   poll: 0   # Non-blocking (continue the playbook without waiting for completion)
   loop: "{{ compute_images_dict | dict2items }}"
@@ -102,7 +106,9 @@
 
     - name: Add log file paths to message
       ansible.builtin.set_fact:
-        failure_msg_list: "{{ failure_msg_list + ['  - ' + openchami_log_dir + '/' + item + '_compute_image.log'] }}"
+        failure_msg_list: "{{ failure_msg_list + ['  - ' + openchami_log_dir + '/' + item + log_suffix + '_compute_image.log'] }}"
+      vars:
+        log_suffix: "{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (hostvars['localhost']['build_stream_job_id'] | default('') != '') %}-{{ hostvars['localhost']['build_stream_job_id'] }}{% endif %}"
       loop: "{{ failed_images | default([]) }}"
 
     - name: Display x86_64 compute image build failure details
@@ -116,7 +122,7 @@
   always:
     - name: Remove generated compute images templates
       ansible.builtin.file:
-        path: "{{ openchami_dir }}/{{ item.key }}_compute_images.yaml"
+        path: "{{ openchami_dir }}/{{ item.key }}{% if (hostvars['localhost']['enable_build_stream'] | default(false)) and (hostvars['localhost']['build_stream_job_id'] | default('') != '') %}-{{ hostvars['localhost']['build_stream_job_id'] }}{% endif %}_compute_images.yaml"
         state: absent
       loop: "{{ compute_images_dict | dict2items }}"
       loop_control:
