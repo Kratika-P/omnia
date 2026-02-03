@@ -65,6 +65,14 @@
     postgres_db_name: "{{ hostvars['localhost']['postgres_db_name'] }}"
   no_log: true
 
+- name: Set SELinux option for volume mounts
+  ansible.builtin.set_fact:
+    selinux_option: >-
+      {{ ':z'
+         if (share_option | trim != 'NFS' or nfs_type | trim != 'external')
+         else '' }}
+  changed_when: false
+
 # -------------------------------------------------------------------
 # 2) FAIL if Pulp container missing / not running
 # -------------------------------------------------------------------
@@ -187,7 +195,7 @@
     name: "{{ build_stream_container_name }}"
   register: bs_info
   retries: "{{ bs_container_wait_retries }}"
-  delay: "{{ b_container_wait_delay }}"
+  delay: "{{ bs_container_wait_delay }}"
   until:
     - bs_info.containers is defined
     - bs_info.containers | length > 0
