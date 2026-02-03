@@ -201,9 +201,9 @@ class CreateJobUseCase:
         """Compute request fingerprint for idempotency.
         Fingerprint includes only request payload, not auth-derived fields."""
 
-        request_body = {
-            "catalog_digest": command.catalog_digest,
-        }
+        request_body = {}
+        if command.catalog_digest:
+            request_body["catalog_digest"] = command.catalog_digest
         return FingerprintService.compute(request_body)
 
     def _create_initial_stages(self, job_id: JobId) -> List[Stage]:

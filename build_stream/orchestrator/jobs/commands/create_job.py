@@ -32,12 +32,12 @@ class CreateJobCommand:
 
     Attributes:
         client_id: Client who owns this job.
-        catalog_digest: SHA-256 digest of catalog used.
+        catalog_digest: Optional SHA-256 digest of catalog used.
         correlation_id: Request correlation identifier for tracing.
         idempotency_key: Client-supplied key for retry deduplication.
     """
 
     client_id: ClientId
-    catalog_digest: str
     correlation_id: CorrelationId
     idempotency_key: IdempotencyKey
+    catalog_digest: str | None = None

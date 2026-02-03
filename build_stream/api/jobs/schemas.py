@@ -22,11 +22,12 @@ from pydantic import BaseModel, Field, field_validator
 
 class CreateJobRequest(BaseModel):
     """Request payload for creating a job."""
-    catalog_uri: str = Field(
-        ...,
+
+    catalog_uri: Optional[str] = Field(
+        default=None,
         min_length=1,
         max_length=2048,
-        description="S3 URI to catalog file",
+        description="Optional catalog URI (ignored if absent)",
     )
     metadata: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -41,16 +42,16 @@ class CreateJobRequest(BaseModel):
 
     @field_validator("catalog_uri")
     @classmethod
-    def validate_catalog_uri(cls, v: str) -> str:
-        """Validate catalog URI format."""
-        if not v or not v.strip():
+    def validate_catalog_uri(cls, v: Optional[str]) -> Optional[str]:
+        """Validate catalog URI format when provided."""
+        if v is None:
+            return None
+        if not v.strip():
             raise ValueError("catalog_uri cannot be empty")
-
         if not v.startswith(("s3://", "http://", "https://", "file://")):
             raise ValueError(
                 "catalog_uri must be a valid URI (s3://, http://, https://, or file://)"
             )
-
         return v
 
 

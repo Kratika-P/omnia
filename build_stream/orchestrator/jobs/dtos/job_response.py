@@ -15,6 +15,7 @@
 """Job response DTO."""
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,7 @@ class JobResponse:
 
     job_id: str
     client_id: str
-    catalog_digest: str
+    catalog_digest: Optional[str]
     job_state: str
     created_at: str
     updated_at: str
