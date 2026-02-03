@@ -38,7 +38,7 @@ from .service import (
     RegistrationDisabledError,
     TokenCreationError,
 )
-from .vault_client import VaultError
+from api.vault_client import VaultError
 
 logger = logging.getLogger(__name__)
 

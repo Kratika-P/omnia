@@ -104,8 +104,8 @@ def verify_token(
             headers={"WWW-Authenticate": "Bearer"},
         ) from None
 
-    except JWTValidationError as e:
-        logger.warning("Token validation failed: %s", str(e))
+    except JWTValidationError:
+        logger.warning("Token validation failed: Invalid token format or content")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
