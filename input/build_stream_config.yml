@@ -27,4 +27,4 @@
 enable_build_stream: false
 
 # PostgreSQL configuration for build stream
-postgres_db_name: "build_stream"
+postgres_db_name: "build_stream_db"
