@@ -32,25 +32,22 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-# Debug mode flag - set via environment variable
-DEBUG_CLIENT_IDS = os.getenv("DEBUG_CLIENT_IDS", "false").lower() == "true"
-
 DEFAULT_SCOPES = ["catalog:read"]
 
 
 def _log_client_info(level: str, message: str, client_id: Optional[str] = None) -> None:
-    """Log client information securely based on debug mode.
+    """Log client information consistently for all environments.
     
     Args:
         level: Log level ('info', 'warning', 'error')
         message: Log message template
-        client_id: Client ID (only logged in debug mode)
+        client_id: Client ID (first 8 characters logged for identification)
     """
-    if DEBUG_CLIENT_IDS and client_id:
-        # Debug mode: include client ID
+    if client_id:
+        # Always log first 8 characters for identification
         log_message = f"{message}: {client_id[:8]}..."
     else:
-        # Production mode: generic message
+        # Generic message when no client context
         log_message = message
 
     log_func = getattr(logger, level)
@@ -234,7 +231,7 @@ class AuthService:
         try:
             oauth_clients = self.vault_client.get_oauth_clients()
         except (VaultNotFoundError, VaultDecryptError):
-            logger.error("Failed to load OAuth clients from vault")
+            _log_client_info("error", "Failed to load OAuth clients from vault")
             # Ensure no exception details are exposed
             raise InvalidClientError("Client authentication failed") from None
 
@@ -287,14 +284,11 @@ class AuthService:
             requested_scopes = requested_scope.split()
             for scope in requested_scopes:
                 if scope not in allowed_scopes:
-                    if DEBUG_CLIENT_IDS:
-                        logger.warning(
-                            "Client %s requested unauthorized scope: %s",
-                            client_id[:8] + "...",
-                            scope,
-                        )
-                    else:
-                        logger.warning("Client requested unauthorized scope: %s", scope)
+                    _log_client_info(
+                        "warning",
+                        f"Client requested unauthorized scope: {scope}",
+                        client_id
+                    )
                     raise InvalidScopeError(f"Scope '{scope}' is not allowed for this client")
             granted_scopes = requested_scopes
         else:
@@ -307,7 +301,7 @@ class AuthService:
                 scopes=granted_scopes,
             )
         except JWTCreationError:
-            logger.error("Failed to create access token")
+            _log_client_info("error", "Failed to create access token", client_id)
             raise TokenCreationError("Failed to create access token") from None
 
         _log_client_info("info", "Access token generated successfully", client_id)
