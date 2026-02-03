@@ -90,6 +90,8 @@ build_stream_service: "{{ build_stream_container_name }}.service"
 ###############################################################
 build_stream_health_endpoint: "https://localhost:{{ build_stream_port }}/health"
 container_ready_wait_seconds: 5
+bs_container_wait_retries: 30
+bs_container_wait_delay: 2
 health_check_retries: 5
 health_check_delay: 10
 health_check_status_code: 200

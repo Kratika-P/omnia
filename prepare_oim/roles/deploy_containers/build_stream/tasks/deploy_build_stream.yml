@@ -141,8 +141,8 @@
   containers.podman.podman_container_info:
     name: "{{ build_stream_container_name }}"
   register: bs_info
-  retries: 30
-  delay: 2
+  retries: "{{ bs_container_wait_retries }}"
+  delay: "{{ bs_container_wait_delay }}"
   until:
     - bs_info.containers is defined
     - bs_info.containers | length > 0
@@ -186,8 +186,8 @@
   containers.podman.podman_container_info:
     name: "{{ build_stream_container_name }}"
   register: bs_info
-  retries: 30
-  delay: 2
+  retries: "{{ bs_container_wait_retries }}"
+  delay: "{{ b_container_wait_delay }}"
   until:
     - bs_info.containers is defined
     - bs_info.containers | length > 0
