@@ -118,44 +118,97 @@
     mode: "{{ build_stream_dir_mode }}"
 
 # -------------------------------------------------------------------
-# 4) Deploy quadlet using template + restart via handlers
+# 4) Pull container image
 # -------------------------------------------------------------------
-- name: Ensure quadlet directory exists
+- name: Pull omnia_build_stream image from Docker Hub
+  containers.podman.podman_image:
+    name: "{{ build_stream_image_name }}"
+    tag: "{{ build_stream_image_tag }}"
+    state: present
+  register: image_pull_result
+
+- name: Display image pull result
+  ansible.builtin.debug:
+    msg: "{{ build_stream_image_pull_success_msg }}"
+    verbosity: 2
+  when: image_pull_result is succeeded
+
+  # Generate SSL certificates
+- name: Check if SSL certificates already exist
+  ansible.builtin.stat:
+    path: "{{ build_stream_ssl_cert }}"
+  register: ssl_cert_stat
+
+- name: Create SSL certificate directory
   ansible.builtin.file:
-    path: "{{ quadlet_dir }}"
+    path: "{{ build_stream_ssl_dir }}"
     state: directory
     mode: "{{ build_stream_dir_mode }}"
+  when: not ssl_cert_stat.stat.exists
 
-- name: Deploy build_stream quadlet file from template
-  ansible.builtin.template:
-    src: "build_stream.j2"
-    dest: "{{ build_stream_quadlet_path }}"
-    mode: "{{ build_stream_quadlet_file_mode }}"
-  notify:
-    - Reload systemd
-    - Restart build_stream
+- name: Generate self-signed SSL certificate
+  ansible.builtin.command: |
+    openssl req -x509 -newkey rsa:4096 -nodes -days {{ build_stream_ssl_days }}
+    -keyout {{ build_stream_ssl_key }}
+    -out {{ build_stream_ssl_cert }}
+    -subj "/C=US/ST=State/L=City/O=Omnia/CN={{ ansible_hostname }}"
+    -addext "subjectAltName=DNS:{{ ansible_hostname }},DNS:localhost,IP:{{ ansible_default_ipv4.address }}"
+  when: not ssl_cert_stat.stat.exists
+  changed_when: true
 
-- name: Enable and start build_stream service
-  ansible.builtin.systemd_service:
-    name: "{{ build_stream_service }}"
-    enabled: true
-    state: started
+- name: Set permissions on SSL certificates
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "{{ build_stream_ssl_file_mode }}"
+  loop:
+    - "{{ build_stream_ssl_cert }}"
+    - "{{ build_stream_ssl_key }}"
+# -------------------------------------------------------------------
+# 4) Deploy quadlet using template + restart via handlers
+# -------------------------------------------------------------------
+- name: Deploy build_stream container and check deployment status
+  block:
+    - name: Ensure quadlet directory exists
+      ansible.builtin.file:
+        path: "{{ quadlet_dir }}"
+        state: directory
+        mode: "{{ build_stream_dir_mode }}"
 
-# Ensure restart happens before validation
-- name: Apply systemd reload/restart now
-  ansible.builtin.meta: flush_handlers
+    - name: Deploy build_stream quadlet file from template
+      ansible.builtin.template:
+        src: "build_stream.j2"
+        dest: "{{ build_stream_quadlet_path }}"
+        mode: "{{ build_stream_quadlet_file_mode }}"
+      notify:
+        - Reload systemd
+        - Restart build_stream
 
-- name: Wait until omnia_build_stream container exists and is running
-  containers.podman.podman_container_info:
-    name: "{{ build_stream_container_name }}"
-  register: bs_info
-  retries: "{{ bs_container_wait_retries }}"
-  delay: "{{ bs_container_wait_delay }}"
-  until:
-    - bs_info.containers is defined
-    - bs_info.containers | length > 0
-    - bs_info.containers[0].State is defined
-    - bs_info.containers[0].State.Running | bool
+    - name: Enable and start build_stream service
+      ansible.builtin.systemd_service:
+        name: "{{ build_stream_service }}"
+        enabled: true
+      state: started
+
+    # Ensure restart happens before validation
+    - name: Apply systemd reload/restart now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait until omnia_build_stream container exists and is running
+      containers.podman.podman_container_info:
+        name: "{{ build_stream_container_name }}"
+      register: bs_info
+      retries: "{{ bs_container_wait_retries }}"
+      delay: "{{ bs_container_wait_delay }}"
+      until:
+        - bs_info.containers is defined
+        - bs_info.containers | length > 0
+        - bs_info.containers[0].State is defined
+        - bs_info.containers[0].State.Running | bool
+  
+  rescue:
+    - name: Build_stream container deployment failed
+      ansible.builtin.fail:
+        msg: "{{ build_stream_container_failure_msg }}"
 
 # -------------------------------------------------------------------
 # 5) Validate HTTPS connectivity from inside build_stream

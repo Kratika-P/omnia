@@ -104,6 +104,15 @@ build_stream_firewall_port: "{{ build_stream_port }}/tcp"
 ###############################################################
 # User messages
 ###############################################################
+build_stream_image_pull_success_msg:
+  - "Successfully pulled image from Docker Hub"
+  - "Image: {{ build_stream_image_name }}:{{ build_stream_image_tag }}"
+
+build_stream_container_failure_msg: |
+  The deployment of the {{ build_stream_container_name }} container has failed. To resolve this issue,
+  please run the utility/oim_cleanup.yml playbook to clean up any existing OIM resources.
+  After the cleanup, you can re-run the original playbook to deploy the {{ build_stream_container_name }} container successfully.
+
 build_stream_pulp_not_ready_msg: |
   Pulp container '{{ pulp_container_name }}' is not ready.
   Exists={{ (pulp_container_info.containers | length) > 0 }},
