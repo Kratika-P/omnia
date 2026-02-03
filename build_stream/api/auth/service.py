@@ -22,7 +22,8 @@ from typing import List, Optional
 
 from api.auth.jwt_handler import JWTHandler, JWTCreationError
 from api.auth.password_handler import generate_credentials, verify_password
-from api.vault_client import VaultClient, VaultDecryptError, VaultNotFoundError, VaultError
+from api.logging_utils import log_secure_info
+from api.vault_client import VaultClient, VaultDecryptError, VaultNotFoundError
 from core.exceptions import (
     ClientDisabledError,
     InvalidClientError,
@@ -33,25 +34,6 @@ from core.exceptions import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_SCOPES = ["catalog:read"]
-
-
-def _log_client_info(level: str, message: str, client_id: Optional[str] = None) -> None:
-    """Log client information consistently for all environments.
-    
-    Args:
-        level: Log level ('info', 'warning', 'error')
-        message: Log message template
-        client_id: Client ID (first 8 characters logged for identification)
-    """
-    if client_id:
-        # Always log first 8 characters for identification
-        log_message = f"{message}: {client_id[:8]}..."
-    else:
-        # Generic message when no client context
-        log_message = message
-
-    log_func = getattr(logger, level)
-    log_func(log_message)
 
 
 class AuthenticationError(Exception):
@@ -196,10 +178,7 @@ class AuthService:
             "is_active": True,
         }
 
-        try:
-            self.vault_client.save_oauth_client(client_id, client_data)
-        except VaultError:
-            raise
+        self.vault_client.save_oauth_client(client_id, client_data)
 
         return RegisteredClient(
             client_id=client_id,
@@ -231,26 +210,26 @@ class AuthService:
         try:
             oauth_clients = self.vault_client.get_oauth_clients()
         except (VaultNotFoundError, VaultDecryptError):
-            _log_client_info("error", "Failed to load OAuth clients from vault")
+            log_secure_info("error", "Failed to load OAuth clients from vault")
             # Ensure no exception details are exposed
             raise InvalidClientError("Client authentication failed") from None
 
         if client_id not in oauth_clients:
-            _log_client_info("warning", "Unknown client_id attempted authentication", client_id)
+            log_secure_info("warning", "Unknown client_id attempted authentication", client_id)
             raise InvalidClientError("Client authentication failed")
 
         client_data = oauth_clients[client_id]
 
         if not client_data.get("is_active", False):
-            _log_client_info("warning", "Disabled client attempted token request", client_id)
+            log_secure_info("warning", "Disabled client attempted token request", client_id)
             raise ClientDisabledError("Client account is disabled")
 
         stored_hash = client_data.get("client_secret_hash")
         if not stored_hash or not verify_password(client_secret, stored_hash):
-            _log_client_info("warning", "Invalid client secret provided", client_id)
+            log_secure_info("warning", "Invalid client secret provided", client_id)
             raise InvalidClientError("Client authentication failed")
 
-        _log_client_info("info", "Client credentials verified successfully", client_id)
+        log_secure_info("info", "Client credentials verified successfully", client_id)
         return client_data
 
     def generate_token(
@@ -284,7 +263,7 @@ class AuthService:
             requested_scopes = requested_scope.split()
             for scope in requested_scopes:
                 if scope not in allowed_scopes:
-                    _log_client_info(
+                    log_secure_info(
                         "warning",
                         f"Client requested unauthorized scope: {scope}",
                         client_id
@@ -301,10 +280,10 @@ class AuthService:
                 scopes=granted_scopes,
             )
         except JWTCreationError:
-            _log_client_info("error", "Failed to create access token", client_id)
+            log_secure_info("error", "Failed to create access token", client_id)
             raise TokenCreationError("Failed to create access token") from None
 
-        _log_client_info("info", "Access token generated successfully", client_id)
+        log_secure_info("info", "Access token generated successfully", client_id)
 
         return TokenResult(
             access_token=access_token,

@@ -134,7 +134,7 @@ class JWTHandler:
                 raise JWTCreationError(
                     f"JWT private key not found: {self.config.private_key_path}"
                 ) from None
-            except IOError as e:
+            except IOError:
                 logger.error("Failed to read JWT private key")
                 raise JWTCreationError("Failed to read JWT private key") from None
         return self._private_key
@@ -157,7 +157,7 @@ class JWTHandler:
                 raise JWTValidationError(
                     f"JWT public key not found: {self.config.public_key_path}"
                 ) from None
-            except IOError as e:
+            except IOError:
                 logger.error("Failed to read JWT public key")
                 raise JWTValidationError("Failed to read JWT public key") from None
         return self._public_key
@@ -214,7 +214,7 @@ class JWTHandler:
             )
             logger.info("Access token created for client: %s", client_id[:8] + "...")
             return token, int(expires_delta.total_seconds())
-        except Exception as e:
+        except Exception:
             logger.error("Failed to create access token")
             raise JWTCreationError("Failed to create access token") from None
 
@@ -253,15 +253,15 @@ class JWTHandler:
         except ExpiredSignatureError:
             logger.warning("Token has expired")
             raise JWTExpiredError("Token has expired") from None
-        except (InvalidAudienceError, InvalidIssuerError) as e:
+        except (InvalidAudienceError, InvalidIssuerError):
             logger.warning("Invalid token claims")
             raise JWTValidationError("Invalid token claims") from None
         except InvalidSignatureError:
             logger.warning("Invalid token signature")
             raise JWTInvalidSignatureError("Invalid token signature") from None
-        except DecodeError as e:
-                logger.warning("Invalid token format")
-                raise JWTValidationError("Invalid token format") from None
-        except Exception as e:
-                logger.error("Unexpected error validating token")
-                raise JWTValidationError("Token validation failed") from None
+        except DecodeError:
+            logger.warning("Invalid token format")
+            raise JWTValidationError("Invalid token format") from None
+        except Exception:
+            logger.error("Unexpected error validating token")
+            raise JWTValidationError("Token validation failed") from None

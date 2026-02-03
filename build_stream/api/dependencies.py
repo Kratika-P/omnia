@@ -26,6 +26,7 @@ from api.auth.jwt_handler import (
     JWTInvalidSignatureError,
     JWTValidationError,
 )
+from api.logging_utils import log_secure_info
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ def verify_token(
 
     try:
         token_data = jwt_handler.validate_token(credentials.credentials)
-        logger.info("Token validated successfully for client: %s", token_data.client_id[:8] + "...")
+        log_secure_info("info", "Token validated successfully", token_data.client_id)
 
         return {
             "client_id": token_data.client_id,
