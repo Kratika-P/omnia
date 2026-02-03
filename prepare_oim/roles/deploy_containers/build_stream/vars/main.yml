@@ -77,7 +77,7 @@ build_stream_quadlet_file_mode: "0644"
 # PostgreSQL configuration (from postgres role)
 postgres_user: "{{ hostvars['localhost']['postgres_user'] }}"
 postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
-postgres_db_name: "build_stream"
+postgres_db_name: "{{ hostvars['localhost']['postgres_db_name'] | default('build_stream_db') }}"
 
 ###############################################################
 ###############################################################
