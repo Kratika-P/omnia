@@ -25,3 +25,6 @@
 # Accepted values: boolean values - (true or false) or(yes or no)
 # Default: false
 enable_build_stream: false
+
+# PostgreSQL configuration for build stream
+postgres_db_name: "postgres"
