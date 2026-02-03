@@ -20,6 +20,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
+from api.vault_client import VaultError
+
 from .schemas import (
     AuthErrorResponse,
     ClientRegistrationRequest,
@@ -38,7 +40,6 @@ from .service import (
     RegistrationDisabledError,
     TokenCreationError,
 )
-from .vault_client import VaultError
 
 logger = logging.getLogger(__name__)
 

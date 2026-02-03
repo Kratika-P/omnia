@@ -22,8 +22,6 @@ import the app directly (it runs the server as a subprocess).
 """
 
 import base64
-import secrets
-import string
 import sys
 from pathlib import Path
 from typing import Dict, Generator
@@ -34,65 +32,6 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-
-def generate_test_client_secret(length: int = 32) -> str:
-    """Generate a test client secret with proper bld_s_ prefix.
-
-    Args:
-        length: Total length of the secret including prefix (default: 32)
-
-    Returns:
-        Test client secret with bld_s_ prefix
-    """
-    if length < 8:
-        raise ValueError("Client secret length must be at least 8 characters")
-    
-    # Generate random part (subtract 6 for "bld_s_" prefix)
-    random_part_length = max(8, length - 6)
-    
-    # Use secure random generation
-    lowercase = string.ascii_lowercase
-    uppercase = string.ascii_uppercase
-    digits = string.digits
-    special = "!@#$%^&*()_+-=[]{}|;:,.<>?"
-    
-    # Start with one of each required character type
-    password = [
-        secrets.choice(lowercase),
-        secrets.choice(uppercase),
-        secrets.choice(digits),
-        secrets.choice(special),
-    ]
-    
-    # Fill remaining length
-    all_chars = lowercase + uppercase + digits + special
-    for _ in range(random_part_length - 4):
-        password.append(secrets.choice(all_chars))
-    
-    # Shuffle to avoid predictable pattern
-    secrets.SystemRandom().shuffle(password)
-    
-    random_part = ''.join(password)
-    return f"bld_s_{random_part}"
-
-
-def generate_invalid_client_id() -> str:
-    """Generate an invalid client ID for testing (missing bld_ prefix).
-
-    Returns:
-        Invalid client ID without proper prefix
-    """
-    return "invalid_client_id_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
-
-
-def generate_invalid_client_secret() -> str:
-    """Generate an invalid client secret for testing (missing bld_s_ prefix).
-
-    Returns:
-        Invalid client secret without proper prefix
-    """
-    return "invalid_secret_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
 
 # Lazy imports to avoid triggering FastAPI route registration
 # when running E2E tests that don't need these fixtures
@@ -331,3 +270,30 @@ def valid_token_request() -> Dict:
         "client_id": None,
         "client_secret": None,
     }
+
+
+def generate_test_client_secret() -> str:
+    """Generate a test client secret that is different from the valid one.
+    
+    Returns:
+        Invalid client secret string for testing (valid format, wrong value).
+    """
+    return "bld_s_invalid_test_secret_12345"
+
+
+def generate_invalid_client_id() -> str:
+    """Generate an invalid client ID for testing.
+    
+    Returns:
+        Invalid client ID string (contains invalid characters).
+    """
+    return "invalid@client#id"
+
+
+def generate_invalid_client_secret() -> str:
+    """Generate an invalid client secret for testing.
+    
+    Returns:
+        Invalid client secret string (too short).
+    """
+    return "short"

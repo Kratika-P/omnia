@@ -14,9 +14,9 @@
 
 """End-to-end integration tests for complete API workflow.
 
-These tests validate the complete API workflow from client registration
-through token generation and subsequent API calls. This test suite is
-designed to be extended as new APIs are added.
+These tests validate the complete OAuth2 authentication workflow from client registration
+through token generation and validation. This test suite focuses on authentication
+and authorization mechanisms, providing comprehensive coverage of the auth API.
 
 Usage:
     pytest tests/integration/test_api_flow_e2e.py -v -m e2e
@@ -28,9 +28,28 @@ Requirements:
 
 Test Flow:
     1. Health check - Verify server is running
-    2. Client Registration - Register a new OAuth client
+    2. Client Registration - Register a new OAuth client with proper scopes
     3. Token Generation - Obtain access token using client credentials
-    4. (Future) Protected API calls using the access token
+    4. Token Validation - Verify JWT structure, uniqueness, and scope enforcement
+    5. Error Handling - Test various failure scenarios and security validations
+    6. Security Validation - Verify proper security measures are enforced
+
+Test Classes:
+    - TestCompleteAPIFlow: Main workflow tests (happy path scenarios)
+    - TestAPIFlowErrorHandling: Error scenario testing
+    - TestAPIFlowSecurityValidation: Security measure validation
+
+Key Features Tested:
+    - OAuth2 client registration with Basic Auth
+    - JWT token generation with client_credentials grant
+    - Scope-based authorization (catalog:read, catalog:write)
+    - Token uniqueness and validation
+    - Error handling and security measures
+    - Client credential format validation
+    - Maximum client limits enforcement
+
+Note: This test suite focuses specifically on authentication and authorization.
+Protected API endpoints (like parse_catalog) are tested separately when implemented.
 """
 
 # pylint: disable=redefined-outer-name
@@ -102,15 +121,21 @@ def api_flow_context():
 @pytest.mark.e2e
 @pytest.mark.integration
 class TestCompleteAPIFlow:
-    """End-to-end test suite for complete API workflow.
+    """End-to-end test suite for complete OAuth2 authentication workflow.
 
-    Tests are ordered to follow the natural API flow:
-    1. Health check
-    2. Client registration
-    3. Token generation
-    4. (Future) Protected API calls
+    Tests are ordered to follow the natural authentication flow:
+    1. Health check - Verify server is running
+    2. Client registration - Register OAuth client with scopes
+    3. Token generation - Obtain JWT access token
+    4. Token validation - Verify token structure and scopes
+    5. Scope enforcement - Test subset and unauthorized scope requests
+    6. Security validation - Test invalid credentials and token uniqueness
 
     Each test builds on the previous, storing state in the shared context.
+    This covers the complete authentication and authorization workflow.
+
+    Note: Protected API endpoints are not tested here - they are implemented
+    separately when the actual endpoints are available.
     """
 
     def test_01_health_check(
@@ -351,9 +376,16 @@ class TestCompleteAPIFlow:
 @pytest.mark.e2e
 @pytest.mark.integration
 class TestAPIFlowErrorHandling:
-    """Test error handling across the API flow.
+    """Test error handling across the OAuth2 authentication flow.
 
-    These tests verify proper error responses for various failure scenarios.
+    These tests verify proper error responses for various failure scenarios:
+    - Registration without/with invalid authentication
+    - Token requests for unregistered clients
+    - Invalid grant types and credentials
+    - Format validation for client credentials
+
+    Each test ensures that error responses are appropriate and secure,
+    without exposing sensitive information.
     """
 
     def test_register_without_auth_fails(
@@ -443,9 +475,16 @@ class TestAPIFlowErrorHandling:
 @pytest.mark.e2e
 @pytest.mark.integration
 class TestAPIFlowSecurityValidation:
-    """Security validation tests for the API flow.
+    """Security validation tests for the OAuth2 authentication flow.
 
-    These tests verify security measures are properly enforced.
+    These tests verify that security measures are properly enforced:
+    - Client credential format validation
+    - Maximum client limits enforcement
+    - Proper error handling without information disclosure
+    - Token security and uniqueness validation
+
+    These tests ensure the authentication system follows security best practices
+    and does not expose sensitive information in error responses.
     """
 
     def test_client_credentials_format_validation(
@@ -454,8 +493,10 @@ class TestAPIFlowSecurityValidation:
         reset_vault,  # noqa: W0613 pylint: disable=unused-argument
     ):
         """Verify client credential format validation."""
-        from tests.integration.conftest import generate_test_client_secret, generate_invalid_client_id
-        
+        from tests.integration.conftest import (
+            generate_test_client_secret,
+            generate_invalid_client_id
+        )
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             # Invalid client_id format
             response = client.post(
@@ -476,7 +517,6 @@ class TestAPIFlowSecurityValidation:
     ):
         """Verify client secret format validation."""
         from tests.integration.conftest import generate_invalid_client_secret
-        
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 "/api/v1/auth/token",

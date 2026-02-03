@@ -117,7 +117,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
                 timeout=30,
             )
             return result.stdout
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             logger.error("Vault command failed: %s", command)
             if command == "view":
                 raise VaultDecryptError("Failed to decrypt vault") from None
@@ -143,7 +143,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
         output = self._run_vault_command("view", vault_path)
         try:
             return yaml.safe_load(output) or {}
-        except yaml.YAMLError as e:
+        except yaml.YAMLError:
             logger.error("Failed to parse vault YAML")
             raise VaultDecryptError("Invalid vault content format") from None
 
@@ -187,7 +187,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
                 "--encrypt-vault-id",
                 "default",
             ]
-            result = subprocess.run(
+            subprocess.run(
                 encrypt_cmd,
                 check=True,
                 capture_output=True,

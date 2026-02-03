@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Authentication service for OAuth2 client registration and token generation."""
+"""Authentication service for OAuth2 client management."""
 
 import logging
 import os
@@ -20,9 +20,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from .jwt_handler import JWTCreationError, JWTHandler
-from .password_handler import generate_credentials, verify_password
-from .vault_client import VaultClient, VaultDecryptError, VaultError, VaultNotFoundError
+from api.auth.jwt_handler import JWTHandler, JWTCreationError
+from api.auth.password_handler import generate_credentials, verify_password
+from api.logging_utils import log_secure_info
+from api.vault_client import VaultClient, VaultDecryptError, VaultNotFoundError
+from core.exceptions import (
+    ClientDisabledError,
+    InvalidClientError,
+    InvalidScopeError,
+    TokenCreationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +50,6 @@ class MaxClientsReachedError(Exception):
 
 class RegistrationDisabledError(Exception):
     """Exception raised when registration is disabled or misconfigured."""
-
-
-class InvalidClientError(Exception):
-    """Exception raised when client credentials are invalid."""
-
-
-class ClientDisabledError(Exception):
-    """Exception raised when client account is disabled."""
-
-
-class InvalidScopeError(Exception):
-    """Exception raised when requested scope is not allowed."""
-
-
-class TokenCreationError(Exception):
-    """Exception raised when token creation fails."""
 
 
 @dataclass
@@ -187,10 +178,7 @@ class AuthService:
             "is_active": True,
         }
 
-        try:
-            self.vault_client.save_oauth_client(client_id, client_data)
-        except VaultError:
-            raise
+        self.vault_client.save_oauth_client(client_id, client_data)
 
         return RegisteredClient(
             client_id=client_id,
@@ -222,25 +210,26 @@ class AuthService:
         try:
             oauth_clients = self.vault_client.get_oauth_clients()
         except (VaultNotFoundError, VaultDecryptError):
-            logger.error("Failed to load OAuth clients from vault")
+            log_secure_info("error", "Failed to load OAuth clients from vault")
+            # Ensure no exception details are exposed
             raise InvalidClientError("Client authentication failed") from None
 
         if client_id not in oauth_clients:
-            logger.warning("Unknown client_id attempted: %s", client_id[:8] + "...")
+            log_secure_info("warning", "Unknown client_id attempted authentication", client_id)
             raise InvalidClientError("Client authentication failed")
 
         client_data = oauth_clients[client_id]
 
         if not client_data.get("is_active", False):
-            logger.warning("Disabled client attempted token request: %s", client_id[:8] + "...")
+            log_secure_info("warning", "Disabled client attempted token request", client_id)
             raise ClientDisabledError("Client account is disabled")
 
         stored_hash = client_data.get("client_secret_hash")
         if not stored_hash or not verify_password(client_secret, stored_hash):
-            logger.warning("Invalid client secret for: %s", client_id[:8] + "...")
+            log_secure_info("warning", "Invalid client secret provided", client_id)
             raise InvalidClientError("Client authentication failed")
 
-        logger.info("Client credentials verified: %s", client_id[:8] + "...")
+        log_secure_info("info", "Client credentials verified successfully", client_id)
         return client_data
 
     def generate_token(
@@ -274,10 +263,10 @@ class AuthService:
             requested_scopes = requested_scope.split()
             for scope in requested_scopes:
                 if scope not in allowed_scopes:
-                    logger.warning(
-                        "Client %s requested unauthorized scope: %s",
-                        client_id[:8] + "...",
-                        scope,
+                    log_secure_info(
+                        "warning",
+                        f"Client requested unauthorized scope: {scope}",
+                        client_id
                     )
                     raise InvalidScopeError(f"Scope '{scope}' is not allowed for this client")
             granted_scopes = requested_scopes
@@ -290,11 +279,11 @@ class AuthService:
                 client_name=client_name,
                 scopes=granted_scopes,
             )
-        except JWTCreationError as e:
-            logger.error("Failed to create access token")
+        except JWTCreationError:
+            log_secure_info("error", "Failed to create access token", client_id)
             raise TokenCreationError("Failed to create access token") from None
 
-        logger.info("Token generated for client: %s", client_id[:8] + "...")
+        log_secure_info("info", "Access token generated successfully", client_id)
 
         return TokenResult(
             access_token=access_token,
