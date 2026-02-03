@@ -17,8 +17,8 @@
 
 from typing import Dict, List, Optional
 
-from core.jobs.entities import Job, Stage, IdempotencyRecord, AuditEvent
-from core.jobs.value_objects import JobId, IdempotencyKey, StageName
+from build_stream.core.jobs.entities import Job, Stage, IdempotencyRecord, AuditEvent
+from build_stream.core.jobs.value_objects import JobId, IdempotencyKey, StageName
 
 class InMemoryJobRepository:
     def __init__(self) -> None:

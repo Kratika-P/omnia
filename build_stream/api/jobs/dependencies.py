@@ -16,46 +16,33 @@
 
 from typing import Optional
 
-from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Header, HTTPException, status
 
+from build_stream import main
 from build_stream.core.jobs.value_objects import ClientId, CorrelationId
-from build_stream.container import Container
 from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
 from build_stream.infra.repositories import InMemoryJobRepository, InMemoryStageRepository
 from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
 
 
-@inject
-def get_id_generator(
-    generator: JobUUIDGenerator = Depends(Provide[Container.job_id_generator]),
-) -> JobUUIDGenerator:
+def get_id_generator() -> JobUUIDGenerator:
     """Provide job ID generator."""
-    return generator
+    return main.container.job_id_generator()
 
 
-@inject
-def get_create_job_use_case(
-    use_case: CreateJobUseCase = Depends(Provide[Container.create_job_use_case]),
-) -> CreateJobUseCase:
+def get_create_job_use_case() -> CreateJobUseCase:
     """Provide create job use case."""
-    return use_case
+    return main.container.create_job_use_case()
 
 
-@inject
-def get_job_repo(
-    repo: InMemoryJobRepository = Depends(Provide[Container.job_repository]),
-) -> InMemoryJobRepository:
+def get_job_repo() -> InMemoryJobRepository:
     """Provide job repository."""
-    return repo
+    return main.container.job_repository()
 
 
-@inject
-def get_stage_repo(
-    repo: InMemoryStageRepository = Depends(Provide[Container.stage_repository]),
-) -> InMemoryStageRepository:
+def get_stage_repo() -> InMemoryStageRepository:
     """Provide stage repository."""
-    return repo
+    return main.container.stage_repository()
 
 
 def get_client_id(
@@ -88,16 +75,15 @@ def get_client_id(
         ) from e
 
 
-@inject
 def get_correlation_id(
     x_correlation_id: Optional[str] = Header(
         default=None,
         alias="X-Correlation-Id",
         description="Request tracing ID",
     ),
-    generator: UUIDv4Generator = Depends(Provide[Container.uuid_generator]),
 ) -> CorrelationId:
     """Return provided correlation ID or generate one."""
+    generator = main.container.uuid_generator()
     if x_correlation_id:
         try:
             correlation_id = CorrelationId(x_correlation_id)

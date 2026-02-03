@@ -40,8 +40,8 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     wiring_config = containers.WiringConfiguration(
         modules=[
-            "api.jobs.routes",
-            "api.jobs.dependencies",
+            "build_stream.api.jobs.routes",
+            "build_stream.api.jobs.dependencies",
         ]
     )
 
@@ -78,8 +78,8 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     wiring_config = containers.WiringConfiguration(
         modules=[
-            "api.jobs.routes",
-            "api.jobs.dependencies",
+            "build_stream.api.jobs.routes",
+            "build_stream.api.jobs.dependencies",
         ]
     )
 

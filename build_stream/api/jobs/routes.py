@@ -32,12 +32,14 @@ from build_stream.core.jobs.value_objects import (
 )
 from build_stream.orchestrator.jobs.commands import CreateJobCommand
 from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
+from build_stream.infra.repositories import InMemoryJobRepository, InMemoryStageRepository
 
 from .dependencies import (
     get_client_id,
     get_correlation_id,
     get_create_job_use_case,
     get_idempotency_key,
+    get_job_repo,
     get_stage_repo,
 )
 from .schemas import (
@@ -190,19 +192,18 @@ async def get_job(
             ).model_dump(),
         ) from e
 
-    from .dependencies import get_job_repo, get_stage_repo  # pylint: disable=import-outside-toplevel,redefined-outer-name
-    job_repo_instance = get_job_repo()
-    stage_repo_instance = get_stage_repo()
+    job_repo = get_job_repo()
+    stage_repo = get_stage_repo()
 
     try:
-        job = job_repo_instance.find_by_id(validated_job_id)  # pylint: disable=no-member
+        job = job_repo.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None or job.tombstoned:
             raise JobNotFoundError(job_id, correlation_id.value)
 
         if job.client_id != client_id:
             raise JobNotFoundError(job_id, correlation_id.value)
 
-        stages_entities = stage_repo_instance.find_all_by_job(validated_job_id)  # pylint: disable=no-member
+        stages_entities = stage_repo.find_all_by_job(validated_job_id)  # pylint: disable=no-member
         stages = [
             StageResponse(
                 stage_name=str(s.stage_name),

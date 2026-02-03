@@ -28,8 +28,8 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.router import api_router
-from container import Container
+from build_stream.api.router import api_router
+from build_stream.container import Container
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -39,8 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 container = Container()
-container.wire(modules=["api.jobs.routes", "api.jobs.dependencies"])
-
+container.wire(modules=["build_stream.api.jobs.routes", "build_stream.api.jobs.dependencies"])
 logger.info("Using container: %s", container.__class__.__name__)
 
 app = FastAPI(
@@ -51,6 +50,9 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+# Attach container to app so dependency_injector Provide dependencies resolve
+app.container = container
 
 app.add_middleware(
     CORSMiddleware,

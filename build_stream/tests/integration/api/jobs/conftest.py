@@ -31,8 +31,8 @@ def client():
     return TestClient(app)
 
 
-@pytest.fixture
-def uuid_generator():
+@pytest.fixture(name="uuid_generator")
+def uuid_generator_fixture():
     """UUID generator for test fixtures."""
     return UUIDv4Generator()
 
