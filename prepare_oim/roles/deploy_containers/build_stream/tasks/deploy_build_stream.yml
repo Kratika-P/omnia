@@ -222,7 +222,7 @@
           - "{{ pulp_base_url }}/pulp/api/v3/status/"
       changed_when: false
 
-    - name: Test HTTPS from build_stream to Pulp (exec)
+    - name: Test HTTPS from build_stream to Pulp
       containers.podman.podman_container_exec:
         name: "{{ build_stream_container_name }}"
         argv: "{{ curl_cmd }}"
