@@ -55,7 +55,6 @@ build_stream_ssl_file_mode: "0600"
 build_stream_pulp_cert_host_dir: "/etc/omnia/pulp/certs"
 build_stream_pulp_cert_host_path: "/etc/omnia/pulp/certs/pulp_webserver.crt"
 build_stream_pulp_cert_container_path: "/etc/pulp/certs/pulp_webserver.crt"
-build_stream_pulp_cert_host_dir_mode: "{{ build_stream_dir_mode }}"
 build_stream_pulp_cert_host_file_mode: "0644"
 
 # Cert inside pulp container (source)
@@ -76,7 +75,6 @@ pulp_password: ""
 ###############################################################
 quadlet_dir: "/etc/containers/systemd"
 build_stream_quadlet_path: "{{ quadlet_dir }}/{{ build_stream_container_name }}.container"
-quadlet_dir_mode: "{{ build_stream_dir_mode }}"
 build_stream_quadlet_file_mode: "0644"
 
 # PostgreSQL configuration (from postgres role)

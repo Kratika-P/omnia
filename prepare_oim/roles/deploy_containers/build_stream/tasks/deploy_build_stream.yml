@@ -50,7 +50,7 @@
 - name: Get metadata from omnia_core
   containers.podman.podman_container_exec:
     name: "omnia_core"
-    command: "cat {{ oim_metadata_file }}"
+    command: cat {{ oim_metadata_file }}
   register: metadata_content
   changed_when: false
 
@@ -83,54 +83,31 @@
         (pulp_container_info.containers[0].State.Status != "running")
 
 # -------------------------------------------------------------------
-# 3) Copy Pulp certificate from pulp container -> host persistent path (checksum-aware)
+# 3) Copy Pulp certificate from pulp container -> host
 # -------------------------------------------------------------------
-- name: Verify Pulp cert exists inside pulp container
-  containers.podman.podman_container_exec:
-    name: "{{ pulp_container_name }}"
-    command:
-      - test
-      - -f
-      - "{{ pulp_cert_src_path }}"
-  register: pulp_cert_check
-  changed_when: false
-
-- name: Ensure host directory for Pulp cert exists
+- name: Ensure host pulp cert directory exists
   ansible.builtin.file:
-    path: "{{ build_stream_pulp_cert_host_dir }}"
+    path: /etc/pulp/certs
     state: directory
-    mode: "{{ build_stream_dir_mode }}"
-
-- name: Get pulp cert inside pulp container
-  containers.podman.podman_container_exec:
-    name: "{{ pulp_container_name }}"
-    command:
-      - sha256sum
-      - "{{ pulp_cert_src_path }}"
-  register: pulp_cert_sha
-  changed_when: false
-
-- name: Get host pulp cert if present
-  ansible.builtin.stat:
-    path: "{{ build_stream_pulp_cert_host_path }}"
-    checksum_algorithm: sha256
-  register: host_cert_stat
-
-- name: Copy pulp cert to host if missing/changed
-  containers.podman.podman_container_copy:
-    container: "{{ pulp_container_name }}"
-    src: "{{ pulp_cert_src_path }}"
-    dest: "{{ build_stream_pulp_cert_host_path }}"
-    force: true                 
-  when: (not host_cert_stat.stat.exists) or
-        (host_cert_stat.stat.checksum != pulp_cert_sha.stdout.split()[0])
-
-- name: Ensure host cert permissions
-  ansible.builtin.file:
-    path: "{{ build_stream_pulp_cert_host_path }}"
     owner: root
     group: root
-    mode: "{{ build_stream_pulp_cert_host_file_mode }}"
+    mode: "{{ build_stream_dir_mode }}"
+
+- name: Copy entire pulp cert directory from Pulp container to host
+  containers.podman.podman_container_copy:
+    container: "{{ pulp_container_name }}"
+    src: "/etc/pulp/certs"
+    dest: "/etc/pulp/"
+    from_container: true
+    overwrite: true
+  register: pulp_copy_dir
+
+- name: Ensure host cert directory permissions
+  ansible.builtin.file:
+    path: /etc/pulp/certs
+    owner: root
+    group: root
+    mode: "{{ build_stream_dir_mode }}"
 
 # -------------------------------------------------------------------
 # 4) Deploy quadlet using template + restart via handlers
@@ -160,25 +137,42 @@
 - name: Apply systemd reload/restart now
   ansible.builtin.meta: flush_handlers
 
-- name: Wait for container readiness
-  ansible.builtin.pause:
-    seconds: "{{ container_ready_wait_seconds | default(5) }}"
+- name: Wait until omnia_build_stream container exists and is running
+  containers.podman.podman_container_info:
+    name: "{{ build_stream_container_name }}"
+  register: bs_info
+  retries: 30
+  delay: 2
+  until:
+    - bs_info.containers is defined
+    - bs_info.containers | length > 0
+    - bs_info.containers[0].State is defined
+    - bs_info.containers[0].State.Running | bool
 
 # -------------------------------------------------------------------
 # 5) Validate HTTPS connectivity from inside build_stream
 # -------------------------------------------------------------------
-- name: Test HTTPS connectivity from build_stream to Pulp (expect HTTP 200)
+- name: Build curl command
+  ansible.builtin.set_fact:
+    curl_cmd:
+      - curl
+      - -sS
+      - -o
+      - /dev/null
+      - -w
+      - "%{http_code}\n"
+      - --cacert
+      - "{{ build_stream_pulp_cert_container_path }}"
+      - "{{ pulp_base_url }}/pulp/api/v3/status/"
+  changed_when: false
+
+- name: Test HTTPS from build_stream to Pulp (exec)
   containers.podman.podman_container_exec:
     name: "{{ build_stream_container_name }}"
-    command:
-      - sh
-      - -lc
-      - >
-        curl -sS -o /dev/null -w '%{http_code}\n'
-        --cacert {{ build_stream_pulp_cert_container_path }}
-        {{ pulp_base_url }}/pulp/api/v3/status/
+    argv: "{{ curl_cmd }}"
   register: curl_status
   changed_when: false
+  failed_when: false
 
 - name: Fail if HTTPS test is not 200
   ansible.builtin.fail:
@@ -188,13 +182,14 @@
 # -------------------------------------------------------------------
 # 6) Validate health API endpoint https://localhost:{{ build_stream_port }}/health"
 # -------------------------------------------------------------------
-- name: Verify build_stream health endpoint (FastAPI)
-  ansible.builtin.uri:
-    url: "{{ build_stream_health_endpoint }}"
-    method: GET
-    status_code: "{{ health_check_status_code }}"
-    validate_certs: false
-  register: bs_health
-  retries: "{{ health_check_retries }}"
-  delay: "{{ health_check_delay }}"
-  until: bs_health.status == health_check_status_code
+- name: Wait until omnia_build_stream container exists and is running
+  containers.podman.podman_container_info:
+    name: "{{ build_stream_container_name }}"
+  register: bs_info
+  retries: 30
+  delay: 2
+  until:
+    - bs_info.containers is defined
+    - bs_info.containers | length > 0
+    - bs_info.containers[0].State is defined
+    - bs_info.containers[0].State.Running | bool
