@@ -1,4 +1,4 @@
-# Copyright 2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -13,8 +13,15 @@
 #  limitations under the License.
 
 ---
+# Reload systemd daemon on the OIM host
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
 
-- name: Deploy auth container tasks
-  ansible.builtin.include_tasks: deploy_auth_service.yml
-  when:
-    - hostvars['localhost']['openldap_support']
+# Restart Build Stream container
+# (Assumes systemd unit is created for the container)
+- name: Restart build_stream
+  ansible.builtin.systemd:
+    name: "{{ build_stream_service }}"
+    state: restarted
+    enabled: true

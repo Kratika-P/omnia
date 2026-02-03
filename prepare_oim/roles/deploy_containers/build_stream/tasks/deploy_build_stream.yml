@@ -13,16 +13,18 @@
 #  limitations under the License.
 
 ---
-
-# Check and remove existing build_stream container if running
+# -------------------------------------------------------------------
+# 0) Stop/disable existing build_stream systemd service and remove container
+# -------------------------------------------------------------------
 - name: Check if omnia_build_stream service exists
-  ansible.builtin.systemd:
+  ansible.builtin.systemd_service:
     name: "{{ build_stream_container_name }}.service"
   register: build_stream_service_status
   failed_when: false
+  changed_when: false
 
-- name: Stop omnia_build_stream service if running
-  ansible.builtin.systemd:
+- name: Stop and disable omnia_build_stream service if present
+  ansible.builtin.systemd_service:
     name: "{{ build_stream_container_name }}.service"
     state: stopped
     enabled: false
@@ -34,17 +36,20 @@
     name: "{{ build_stream_container_name }}"
   register: existing_container_info
   failed_when: false
+  changed_when: false
 
-- name: Remove existing omnia_build_stream container
+- name: Remove existing omnia_build_stream container if present
   containers.podman.podman_container:
     name: "{{ build_stream_container_name }}"
     state: absent
   when: existing_container_info.containers | length > 0
 
-# Get metadata and configuration
+# -------------------------------------------------------------------
+# 1) Get metadata/config from omnia_core
+# -------------------------------------------------------------------
 - name: Get metadata from omnia_core
   containers.podman.podman_container_exec:
-    name: omnia_core
+    name: "{{ core_container_name }}"
     command: cat {{ oim_metadata_file }}
   register: metadata_content
   changed_when: false
@@ -54,7 +59,6 @@
     omnia_path: "{{ metadata_content.stdout | regex_search('oim_shared_path:\\s*(\\S+)', '\\1') | first }}"
     share_option: "{{ metadata_content.stdout | regex_search('omnia_share_option:\\s*(\\S+)', '\\1') | first | default('') }}"
     nfs_type: "{{ metadata_content.stdout | regex_search('nfs_type:\\s*(\\S+)', '\\1') | first | default('') }}"
-    pulp_server_ip: "{{ hostvars['localhost']['admin_nic_ip'] }}"
     pulp_password: "{{ hostvars['localhost']['pulp_password'] }}"
     postgres_user: "{{ hostvars['localhost']['postgres_user'] }}"
     postgres_password: "{{ hostvars['localhost']['postgres_password'] }}"
@@ -63,127 +67,137 @@
 
 - name: Set SELinux option for volume mounts
   ansible.builtin.set_fact:
-    selinux_option: "{{ ':z' if (share_option != 'NFS' or nfs_type | default('') != 'external') else '' }}"
+    selinux_option: >-
+      {{ ':z'
+         if (share_option | trim != 'NFS' or nfs_type | trim != 'external')
+         else '' }}
+  changed_when: false
 
-- name: Set Pulp base URL
-  ansible.builtin.set_fact:
-    pulp_base_url: "https://{{ pulp_server_ip }}:2225"
-
-# Pull container image
-- name: Pull omnia_build_stream image from Docker Hub
-  containers.podman.podman_image:
-    name: "{{ build_stream_image_name }}"
-    tag: "{{ build_stream_image_tag }}"
-    state: present
-  register: image_pull_result
-
-- name: Display image pull result
-  ansible.builtin.debug:
-    msg: "{{ build_stream_image_pull_success_msg }}"
-    verbosity: 2
-  when: image_pull_result is succeeded
-
-# Create required directories
-- name: Create log directory for omnia_build_stream
-  ansible.builtin.file:
-    path: "{{ build_stream_log_dir }}"
-    state: directory
-    mode: "{{ build_stream_dir_mode }}"
-
-- name: Create SSL certificate directory
-  ansible.builtin.file:
-    path: "{{ build_stream_ssl_dir }}"
-    state: directory
-    mode: "{{ build_stream_dir_mode }}"
-
-# Generate SSL certificates
-- name: Check if SSL certificates already exist
-  ansible.builtin.stat:
-    path: "{{ build_stream_ssl_cert }}"
-  register: ssl_cert_stat
-
-- name: Generate self-signed SSL certificate
-  ansible.builtin.command: |
-    openssl req -x509 -newkey rsa:4096 -nodes -days {{ build_stream_ssl_days }}
-    -keyout {{ build_stream_ssl_key }}
-    -out {{ build_stream_ssl_cert }}
-    -subj "/C=US/ST=State/L=City/O=Omnia/CN={{ ansible_hostname }}"
-    -addext "subjectAltName=DNS:{{ ansible_hostname }},DNS:localhost,IP:{{ ansible_default_ipv4.address }}"
-  when: not ssl_cert_stat.stat.exists
-  changed_when: true
-
-- name: Set permissions on SSL certificates
-  ansible.builtin.file:
-    path: "{{ item }}"
-    mode: "{{ build_stream_ssl_file_mode }}"
-  loop:
-    - "{{ build_stream_ssl_cert }}"
-    - "{{ build_stream_ssl_key }}"
-
-# Deploy container using Quadlet and check deployment status
-- name: Deploy build_stream container and check deployment status
+# -------------------------------------------------------------------
+# 2) FAIL if Pulp container missing / not running
+# -------------------------------------------------------------------
+- name: Precheck - fail if Pulp container is missing or not running
   block:
-    - name: Create Quadlet service file
-      ansible.builtin.template:
-        src: build_stream.j2
-        dest: "{{ build_stream_quadlet_path }}"
-        mode: "{{ build_stream_quadlet_file_mode }}"
-      register: quadlet_out
-
-    - name: Reload systemd if Quadlet changed
-      ansible.builtin.systemd_service:
-        daemon_reload: true
-      when: quadlet_out.changed # noqa: no-handler
-
-    - name: Enable and start build_stream service
-      ansible.builtin.systemd_service:
-        name: "{{ build_stream_container_name }}.service"
-        enabled: true
-        state: started
-
-    # TODO: Uncomment when API server is implemented
-    # - name: Wait for container to be ready
-    #   ansible.builtin.pause:
-    #     seconds: "{{ container_ready_wait_seconds }}"
-    #
-    # - name: Verify API endpoint health
-    #   ansible.builtin.uri:
-    #     url: "{{ build_stream_health_endpoint }}"
-    #     method: GET
-    #     return_content: true
-    #     status_code: "{{ health_check_status_code }}"
-    #     validate_certs: false
-    #   register: health_check
-    #   retries: "{{ health_check_retries }}"
-    #   delay: "{{ health_check_delay }}"
-    #   until: health_check.status == health_check_status_code
-
-    - name: Configure firewall
-      ansible.builtin.systemd:
-        name: firewalld
-        state: started
-        enabled: true
-
-    - name: Open build_stream port in firewall
-      ansible.posix.firewalld:
-        port: "{{ build_stream_firewall_port }}"
-        permanent: true
-        state: enabled
-        immediate: true
-
-    - name: Check if build_stream container is running after deployment
+    - name: Ensure pulp container exists
       containers.podman.podman_container_info:
-        name: "{{ build_stream_container_name }}"
-      register: build_stream_container_status
+        name: "{{ pulp_container_name }}"
+      register: pulp_container_info
 
-    - name: Notify user of build_stream container deployment status
-      ansible.builtin.debug:
-        msg: "{{ build_stream_container_success_msg }}"
-      when:
-        - build_stream_container_status.containers | length > 0
-        - build_stream_container_status.containers[0].State.Status == 'running'
-
-  rescue:
-    - name: Build_stream container deployment failed
+    - name: Fail if Pulp container is missing OR not running
       ansible.builtin.fail:
-        msg: "{{ build_stream_container_failure_msg }}"
+        msg: "{{ build_stream_pulp_not_ready_msg }}"
+      when: >
+        (pulp_container_info.containers | length == 0) or
+        (pulp_container_info.containers[0].State.Status != "running")
+
+# -------------------------------------------------------------------
+# 3) Copy Pulp certificate from pulp container -> host
+# -------------------------------------------------------------------
+- name: Ensure host pulp cert directory exists
+  ansible.builtin.file:
+    path: "{{ build_stream_pulp_cert_host_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ build_stream_dir_mode }}"
+
+- name: Copy entire pulp cert directory from Pulp container to host
+  containers.podman.podman_container_copy:
+    container: "{{ pulp_container_name }}"
+    src: "{{ build_stream_pulp_cert_host_dir }}"
+    dest: "{{ build_stream_pulp_cert_dest }}"
+    from_container: true
+    overwrite: true
+  register: pulp_copy_dir
+
+- name: Ensure host cert directory permissions
+  ansible.builtin.file:
+    path: "{{ build_stream_pulp_cert_host_dir }}"
+    owner: root
+    group: root
+    mode: "{{ build_stream_dir_mode }}"
+
+# -------------------------------------------------------------------
+# 4) Deploy quadlet using template + restart via handlers
+# -------------------------------------------------------------------
+- name: Ensure quadlet directory exists
+  ansible.builtin.file:
+    path: "{{ quadlet_dir }}"
+    state: directory
+    mode: "{{ build_stream_dir_mode }}"
+
+- name: Deploy build_stream quadlet file from template
+  ansible.builtin.template:
+    src: "build_stream.j2"
+    dest: "{{ build_stream_quadlet_path }}"
+    mode: "{{ build_stream_quadlet_file_mode }}"
+  notify:
+    - Reload systemd
+    - Restart build_stream
+
+- name: Enable and start build_stream service
+  ansible.builtin.systemd_service:
+    name: "{{ build_stream_service }}"
+    enabled: true
+    state: started
+
+# Ensure restart happens before validation
+- name: Apply systemd reload/restart now
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait until omnia_build_stream container exists and is running
+  containers.podman.podman_container_info:
+    name: "{{ build_stream_container_name }}"
+  register: bs_info
+  retries: "{{ bs_container_wait_retries }}"
+  delay: "{{ bs_container_wait_delay }}"
+  until:
+    - bs_info.containers is defined
+    - bs_info.containers | length > 0
+    - bs_info.containers[0].State is defined
+    - bs_info.containers[0].State.Running | bool
+
+# -------------------------------------------------------------------
+# 5) Validate HTTPS connectivity from inside build_stream
+# -------------------------------------------------------------------
+- name: Build curl command
+  ansible.builtin.set_fact:
+    curl_cmd:
+      - curl
+      - -sS
+      - -o
+      - /dev/null
+      - -w
+      - "%{http_code}\n"
+      - --cacert
+      - "{{ build_stream_pulp_cert_container_path }}"
+      - "{{ pulp_base_url }}/pulp/api/v3/status/"
+  changed_when: false
+
+- name: Test HTTPS from build_stream to Pulp (exec)
+  containers.podman.podman_container_exec:
+    name: "{{ build_stream_container_name }}"
+    argv: "{{ curl_cmd }}"
+  register: curl_status
+  changed_when: false
+  failed_when: false
+
+- name: Fail if HTTPS test is not 200
+  ansible.builtin.fail:
+    msg: "{{ build_stream_https_failure_msg }}"
+  when: (curl_status.stdout | trim) != "200"
+
+# -------------------------------------------------------------------
+# 6) Validate health API endpoint https://localhost:{{ build_stream_port }}/health"
+# -------------------------------------------------------------------
+- name: Wait until omnia_build_stream container exists and is running
+  containers.podman.podman_container_info:
+    name: "{{ build_stream_container_name }}"
+  register: bs_info
+  retries: "{{ bs_container_wait_retries }}"
+  delay: "{{ bs_container_wait_delay }}"
+  until:
+    - bs_info.containers is defined
+    - bs_info.containers | length > 0
+    - bs_info.containers[0].State is defined
+    - bs_info.containers[0].State.Running | bool
