@@ -31,6 +31,15 @@
     build_stream_service: "omnia_build_stream.service"
   when: hostvars['localhost']['enable_build_stream'] | default(false) | bool
 
+- name: Initialize build_stream service variable
+  ansible.builtin.set_fact:
+    bs_postgres_service: ""
+
+- name: Set build_stream service if enabled
+  ansible.builtin.set_fact:
+    bs_postgres_service: "postgres.service"
+  when: hostvars['localhost']['enable_build_stream'] | default(false) | bool
+
 - name: Start network manager services
   ansible.builtin.systemd:
     name: "{{ item }}"
