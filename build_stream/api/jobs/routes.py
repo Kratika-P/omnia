@@ -32,7 +32,6 @@ from build_stream.core.jobs.value_objects import (
 )
 from build_stream.orchestrator.jobs.commands import CreateJobCommand
 from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
-from build_stream.infra.repositories import InMemoryJobRepository, InMemoryStageRepository
 
 from .dependencies import (
     get_client_id,
@@ -135,7 +134,7 @@ async def create_job(
         )
 
     except IdempotencyConflictError as e:
-        logger.warning("Idempotency conflict: %s", e.message)
+        logger.warning("Idempotency conflict occurred")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_response(
@@ -321,7 +320,7 @@ async def delete_job(
         ) from e
 
     except InvalidStateTransitionError as e:
-        logger.warning("Invalid state transition: %s", e.message)
+        logger.warning("Invalid state transition occurred")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
