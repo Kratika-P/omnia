@@ -18,7 +18,7 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, status
 
-from build_stream import main
+from build_stream.container import container
 from build_stream.core.jobs.value_objects import ClientId, CorrelationId
 from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
 from build_stream.infra.repositories import InMemoryJobRepository, InMemoryStageRepository
@@ -27,22 +27,22 @@ from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
 
 def get_id_generator() -> JobUUIDGenerator:
     """Provide job ID generator."""
-    return main.container.job_id_generator()
+    return container.job_id_generator()
 
 
 def get_create_job_use_case() -> CreateJobUseCase:
     """Provide create job use case."""
-    return main.container.create_job_use_case()
+    return container.create_job_use_case()
 
 
 def get_job_repo() -> InMemoryJobRepository:
     """Provide job repository."""
-    return main.container.job_repository()
+    return container.job_repository()
 
 
 def get_stage_repo() -> InMemoryStageRepository:
     """Provide stage repository."""
-    return main.container.stage_repository()
+    return container.stage_repository()
 
 
 def get_client_id(
@@ -83,7 +83,7 @@ def get_correlation_id(
     ),
 ) -> CorrelationId:
     """Return provided correlation ID or generate one."""
-    generator = main.container.uuid_generator()
+    generator = container.uuid_generator()
     if x_correlation_id:
         try:
             correlation_id = CorrelationId(x_correlation_id)

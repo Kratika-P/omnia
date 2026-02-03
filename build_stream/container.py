@@ -140,3 +140,8 @@ def get_container_class():
 
 
 Container = get_container_class()
+
+# Singleton container instance shared across app and dependencies
+container = Container()
+
+__all__ = ["Container", "container", "get_container_class"]
