@@ -15,7 +15,7 @@
 ---
 
 # PostgreSQL Container Configuration
-postgres_container_name: "build_stream_postgres"
+postgres_container_name: "omnia_postgres"
 
 # OIM metadata file path
 oim_metadata_file: "/opt/omnia/.data/oim_metadata.yml"

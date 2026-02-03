@@ -14,7 +14,7 @@
 
 ---
 
-- name: Deploy build_stream_postgres container
+- name: Deploy omnia_postgres container
   ansible.builtin.include_tasks: deploy_postgres.yml
   tags:
     - postgres
