@@ -31,9 +31,10 @@ class Job:
 
     Attributes:
         job_id: Unique job identifier.
-        client_id: Client who owns this job.
+        client_id: Client who owns this job (from auth).
+        request_client_id: Client ID from request payload.
         job_state: Current lifecycle state.
-        catalog_digest: SHA-256 digest of catalog used.
+        client_name: Optional client name.
         created_at: Job creation timestamp.
         updated_at: Last modification timestamp.
         version: Optimistic locking version.
@@ -42,7 +43,8 @@ class Job:
 
     job_id: JobId
     client_id: ClientId
-    catalog_digest: str
+    request_client_id: str
+    client_name: Optional[str] = None
     job_state: JobState = JobState.CREATED
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

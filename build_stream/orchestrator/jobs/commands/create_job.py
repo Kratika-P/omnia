@@ -31,13 +31,15 @@ class CreateJobCommand:
     All validation is performed in the use case layer.
 
     Attributes:
-        client_id: Client who owns this job.
-        catalog_digest: SHA-256 digest of catalog used.
+        client_id: Client who owns this job (from auth).
+        request_client_id: Client ID from request payload.
+        client_name: Optional client name.
         correlation_id: Request correlation identifier for tracing.
         idempotency_key: Client-supplied key for retry deduplication.
     """
 
     client_id: ClientId
-    catalog_digest: str
+    request_client_id: str
     correlation_id: CorrelationId
     idempotency_key: IdempotencyKey
+    client_name: str | None = None

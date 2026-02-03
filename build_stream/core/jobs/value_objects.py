@@ -17,6 +17,7 @@
 All value objects are immutable and defined by their values, not identity.
 """
 
+import uuid
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -25,31 +26,32 @@ from typing import ClassVar
 
 @dataclass(frozen=True)
 class JobId:
-    """UUID v7 identifier for a job.
+    """UUID identifier for a job.
 
     Attributes:
-        value: String representation of UUID v7.
+        value: String representation of UUID.
 
     Raises:
-        ValueError: If value does not match UUID v7 pattern or exceeds length.
+        ValueError: If value does not match UUID format or exceeds length.
     """
 
     value: str
 
-    UUID_V7_PATTERN: ClassVar[str] = (
-        r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-    )
-    MAX_LENGTH: ClassVar[int] = 36  # UUID v7 standard length
+    MAX_LENGTH: ClassVar[int] = 36  # UUID standard length
 
     def __post_init__(self) -> None:
-        """Validate UUID v7 format and length."""
+        """Validate UUID format and length."""
         if len(self.value) > self.MAX_LENGTH:
             raise ValueError(
                 f"JobId length cannot exceed {self.MAX_LENGTH} characters, "
                 f"got {len(self.value)}"
             )
-        if not re.match(self.UUID_V7_PATTERN, self.value.lower()):
-            raise ValueError(f"Invalid UUID v7 format: {self.value}")
+        try:
+            uuid_obj = uuid.UUID(self.value)
+        except Exception as exc:
+            raise ValueError(f"Invalid UUID format: {self.value}") from exc
+        # normalize representation
+        object.__setattr__(self, "value", str(uuid_obj))
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -58,31 +60,31 @@ class JobId:
 
 @dataclass(frozen=True)
 class CorrelationId:
-    """UUID v7 identifier for request tracing.
+    """UUID identifier for request tracing.
 
     Attributes:
-        value: String representation of UUID v7.
+        value: String representation of UUID.
 
     Raises:
-        ValueError: If value does not match UUID v7 pattern or exceeds length.
+        ValueError: If value does not match UUID format or exceeds length.
     """
 
     value: str
 
-    UUID_V7_PATTERN: ClassVar[str] = (
-        r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-    )
-    MAX_LENGTH: ClassVar[int] = 36  # UUID v7 standard length
+    MAX_LENGTH: ClassVar[int] = 36  # UUID standard length
 
     def __post_init__(self) -> None:
-        """Validate UUID v7 format and length."""
+        """Validate UUID format and length."""
         if len(self.value) > self.MAX_LENGTH:
             raise ValueError(
                 f"CorrelationId length cannot exceed {self.MAX_LENGTH} characters, "
                 f"got {len(self.value)}"
             )
-        if not re.match(self.UUID_V7_PATTERN, self.value.lower()):
-            raise ValueError(f"Invalid UUID v7 format: {self.value}")
+        try:
+            uuid_obj = uuid.UUID(self.value)
+        except Exception as exc:
+            raise ValueError(f"Invalid UUID format: {self.value}") from exc
+        object.__setattr__(self, "value", str(uuid_obj))
 
     def __str__(self) -> str:
         """Return string representation."""

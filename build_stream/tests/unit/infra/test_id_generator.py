@@ -12,40 +12,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for UUIDv7Generator infrastructure component."""
+"""Unit tests for infrastructure ID generators."""
 
-import re
+import uuid
 
-from build_stream.infra.id_generator import UUIDv7Generator
+from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
 
 
-class TestUUIDv7Generator:
-    """Tests covering UUIDv7Generator behavior."""
+class TestJobUUIDGenerator:
+    """Tests covering JobUUIDGenerator behavior (UUID v4 under the hood)."""
 
     def test_generate_returns_valid_job_id(self) -> None:
         """Generator should produce a JobId string of expected length."""
-        generator = UUIDv7Generator()
+        generator = JobUUIDGenerator()
 
         job_id = generator.generate()
 
         assert isinstance(job_id.value, str)
         assert len(job_id.value) == 36
-
-    def test_generate_returns_uuid_v7_format(self) -> None:
-        """Generated JobId must conform to UUID v7 format."""
-        generator = UUIDv7Generator()
-
-        job_id = generator.generate()
-
-        assert re.match(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-            job_id.value.lower(),
-        )
+        # Ensure it parses as a UUID (version-agnostic acceptance)
+        uuid_obj = uuid.UUID(job_id.value)
+        assert isinstance(uuid_obj, uuid.UUID)
 
     def test_generate_is_unique(self) -> None:
         """Generator should yield unique IDs over multiple invocations."""
-        generator = UUIDv7Generator()
+        generator = JobUUIDGenerator()
 
         generated = {generator.generate().value for _ in range(50)}
 
         assert len(generated) == 50
+
+
+class TestUUIDv4Generator:  # pylint: disable=R0903
+    """Tests covering generic UUIDv4Generator."""
+
+    def test_generate_returns_uuid_instance(self) -> None:
+        """Ensure generator returns a UUID4 instance."""
+        generator = UUIDv4Generator()
+
+        value = generator.generate()
+
+        assert isinstance(value, uuid.UUID)
+        assert value.version == 4

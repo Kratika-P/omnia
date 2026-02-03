@@ -32,7 +32,8 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
-            catalog_digest="abc123",
+            request_client_id="req-client-123",
+            client_name="abc123",
         )
         assert job.job_state == JobState.CREATED
         assert job.version == 1
@@ -43,7 +44,8 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
-            catalog_digest="abc123",
+            request_client_id="req-client-123",
+            client_name="abc123",
         )
         job.start()
         assert job.job_state == JobState.IN_PROGRESS
@@ -54,8 +56,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.IN_PROGRESS,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         with pytest.raises(InvalidStateTransitionError):
             job.start()
@@ -65,8 +68,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.IN_PROGRESS,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         job.complete()
         assert job.job_state == JobState.COMPLETED
@@ -77,7 +81,8 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
-            catalog_digest="abc123",
+            request_client_id="req-client-123",
+            client_name="abc123",
         )
         with pytest.raises(InvalidStateTransitionError):
             job.complete()
@@ -87,8 +92,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.IN_PROGRESS,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         job.fail()
         assert job.job_state == JobState.FAILED
@@ -99,7 +105,8 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
-            catalog_digest="abc123",
+            request_client_id="req-client-123",
+            client_name="abc123",
         )
         job.cancel()
         assert job.job_state == JobState.CANCELLED
@@ -110,8 +117,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.IN_PROGRESS,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         job.cancel()
         assert job.job_state == JobState.CANCELLED
@@ -121,8 +129,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.COMPLETED,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         with pytest.raises(TerminalStateViolationError):
             job.start()
@@ -138,8 +147,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.COMPLETED,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         job.tombstone()
         assert job.tombstoned is True
@@ -150,8 +160,9 @@ class TestJob:
         job = Job(
             job_id=JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"),
             client_id=ClientId("client-1"),
+            request_client_id="req-client-123",
             job_state=JobState.COMPLETED,
-            catalog_digest="abc123",
+            client_name="abc123",
         )
         assert job.is_completed() is True
         assert job.is_failed() is False

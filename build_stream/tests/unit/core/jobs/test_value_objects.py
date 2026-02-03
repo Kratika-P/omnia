@@ -14,6 +14,8 @@
 
 """Unit tests for Job domain value objects."""
 
+import uuid
+
 import pytest
 
 from build_stream.core.jobs.value_objects import (
@@ -32,29 +34,32 @@ from build_stream.core.jobs.value_objects import (
 class TestJobId:
     """Tests for JobId value object."""
 
-    def test_valid_uuid_v7(self):
-        """Valid UUID v7 should be accepted."""
-        job_id = JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11")
-        assert job_id.value == "018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"
+    @staticmethod
+    def _uuid_str() -> str:
+        """Generate a UUID string for tests (version-agnostic)."""
+        return str(uuid.uuid4())
 
-    def test_valid_uuid_v7_uppercase(self):
-        """UUID v7 with uppercase letters should be accepted."""
-        job_id = JobId("018F3C4C-6A2E-7B2A-9C2A-3D8D2C4B9A11")
-        assert job_id.value == "018F3C4C-6A2E-7B2A-9C2A-3D8D2C4B9A11"
+    def test_valid_uuid_any_version(self):
+        """Any valid UUID (e.g., v4) should be accepted."""
+        raw = self._uuid_str()
+        job_id = JobId(raw)
+        assert job_id.value == raw
 
-    def test_invalid_uuid_v4(self):
-        """UUID v4 should be rejected (version digit is 4, not 7)."""
-        with pytest.raises(ValueError, match="Invalid UUID v7 format"):
-            JobId("550e8400-e29b-41d4-a716-446655440000")
+    def test_uuid_is_normalized_lowercase(self):
+        """Uppercase UUID strings are normalized to canonical lowercase."""
+        raw = self._uuid_str()
+        upper_raw = raw.upper()
+        job_id = JobId(upper_raw)
+        assert job_id.value == raw.lower()
 
     def test_invalid_uuid_format(self):
         """Malformed UUID should be rejected."""
-        with pytest.raises(ValueError, match="Invalid UUID v7 format"):
+        with pytest.raises(ValueError, match="Invalid UUID format"):
             JobId("not-a-uuid")
 
     def test_empty_string(self):
         """Empty string should be rejected."""
-        with pytest.raises(ValueError, match="Invalid UUID v7 format"):
+        with pytest.raises(ValueError, match="Invalid UUID format"):
             JobId("")
 
     def test_exceeds_maximum_length(self):
@@ -64,33 +69,41 @@ class TestJobId:
 
     def test_immutability(self):
         """JobId should be immutable (frozen dataclass)."""
-        job_id = JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11")
+        job_id = JobId(self._uuid_str())
         with pytest.raises(AttributeError):
             job_id.value = "018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"
 
     def test_str_representation(self):
         """String representation should return value."""
-        job_id = JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11")
-        assert str(job_id) == "018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"
+        raw = self._uuid_str()
+        job_id = JobId(raw)
+        assert str(job_id) == raw
 
     def test_equality(self):
         """Two JobIds with same value should be equal."""
-        job_id1 = JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11")
-        job_id2 = JobId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11")
+        raw = self._uuid_str()
+        job_id1 = JobId(raw)
+        job_id2 = JobId(raw.upper())
         assert job_id1 == job_id2
 
 
 class TestCorrelationId:
     """Tests for CorrelationId value object."""
 
-    def test_valid_uuid_v7(self):
-        """Valid UUID v7 should be accepted."""
-        corr_id = CorrelationId("018f3c4b-2d9e-7d1a-8a2b-111111111111")
-        assert corr_id.value == "018f3c4b-2d9e-7d1a-8a2b-111111111111"
+    @staticmethod
+    def _uuid_str() -> str:
+        """Generate a UUID string for tests (version-agnostic)."""
+        return str(uuid.uuid4())
+
+    def test_valid_uuid_any_version(self):
+        """Any valid UUID (e.g., v4) should be accepted."""
+        raw = self._uuid_str()
+        corr_id = CorrelationId(raw)
+        assert corr_id.value == raw
 
     def test_invalid_uuid_format(self):
         """Invalid UUID format should be rejected."""
-        with pytest.raises(ValueError, match="Invalid UUID v7 format"):
+        with pytest.raises(ValueError, match="Invalid UUID format"):
             CorrelationId("invalid-correlation-id")
 
     def test_exceeds_maximum_length(self):
@@ -100,7 +113,7 @@ class TestCorrelationId:
 
     def test_immutability(self):
         """CorrelationId should be immutable."""
-        corr_id = CorrelationId("018f3c4b-2d9e-7d1a-8a2b-111111111111")
+        corr_id = CorrelationId(self._uuid_str())
         with pytest.raises(AttributeError):
             corr_id.value = "018f3c4b-2d9e-7d1a-8a2b-222222222222"
 
