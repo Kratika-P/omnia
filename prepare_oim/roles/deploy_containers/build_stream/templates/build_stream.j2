@@ -42,7 +42,7 @@ Environment=DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }
 Volume={{ omnia_path }}/omnia:/opt/omnia{{ selinux_option }}
 Volume={{ build_stream_log_dir }}:/var/log/omnia_build_stream{{ selinux_option }}
 Volume={{ build_stream_ssl_dir }}:/etc/ssl/omnia:ro{{ selinux_option }}
-Volume={{ build_stream_pulp_cert_host_dir }}:{{ build_stream_pulp_cert_host_dir }}:ro,z
+Volume={{ build_stream_pulp_cert_host_dir }}:{{ build_stream_pulp_cert_host_dir }}:ro,{{ selinux_option }}
 
 [Service]
 Restart=always
