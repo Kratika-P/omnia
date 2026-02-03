@@ -16,80 +16,84 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Populate service facts
+- name: Populate service facts for omnia_postgres
   ansible.builtin.service_facts:
 
-- name: Select only the omnia_build_stream service name
+- name: Select omnia_postgres service units
   ansible.builtin.set_fact:
-    build_stream_services: "{{ ansible_facts['services'].keys() | select('match', '^omnia_build_stream') | list }}"
+    postgres_services: >-
+      {{ ansible_facts['services'].keys()
+         | select('match', '^' + postgres_container_name)
+         | list }}
 
-- name: Stop all matching omnia_build_stream services
+- name: Stop omnia_postgres services
   ansible.builtin.systemd_service:
     name: "{{ item }}"
     state: stopped
-  loop: "{{ build_stream_services }}"
+  loop: "{{ postgres_services }}"
   when:
     - item in ansible_facts.services
     - ansible_facts.services[item].state == 'running'
 
-- name: Get omnia_build_stream container files
+- name: Locate omnia_postgres Quadlet files
   ansible.builtin.find:
     paths: "{{ quadlet_dir }}"
-    patterns: 'omnia_build_stream*'
+    patterns: "{{ postgres_container_name }}*"
     file_type: file
-  register: found_files
+  register: postgres_quadlets
 
-- name: Get the list of omnia build_stream paths
+- name: Track omnia_postgres Quadlet paths
   ansible.builtin.set_fact:
-    build_stream_quad_path_list: "{{ found_files.files | map(attribute='path') | list }}"
+    postgres_quadlet_paths: "{{ postgres_quadlets.files | map(attribute='path') | list }}"
 
-- name: Remove omnia_build_stream systemd unit files
+- name: Remove omnia_postgres systemd unit files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
-  loop: "{{ build_stream_quad_path_list }}"
+  loop: "{{ postgres_quadlet_paths }}"
+  when: postgres_quadlet_paths | length > 0
 
-- name: Reload systemd daemon
+- name: Reload systemd daemon after removing omnia_postgres units
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Get info about omnia_build_stream container
+- name: Gather omnia_postgres container info
   containers.podman.podman_container_info:
-    name: "{{ build_stream_container_name }}"
-  register: podinfo
+    name: "{{ postgres_container_name }}"
+  register: postgres_info
   failed_when: false
 
-- name: Stop build_stream container only if it exists
+- name: Stop omnia_postgres container if present
   containers.podman.podman_container:
-    name: "{{ build_stream_container_name }}"
+    name: "{{ postgres_container_name }}"
     state: stopped
-  when: podinfo.containers | length > 0
+  when: postgres_info.containers | length > 0
 
-- name: Remove omnia_build_stream containers
+- name: Remove omnia_postgres container
   containers.podman.podman_container:
-    name: "{{ build_stream_container_name }}"
+    name: "{{ postgres_container_name }}"
     state: absent
     force_delete: true
-  when: podinfo.containers | length > 0
+  when: postgres_info.containers | length > 0
 
-- name: Remove build_stream cleanup directories
+- name: Remove omnia_postgres cleanup directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
     force: true
-  register: directory_deletion
-  until: directory_deletion is not failed
+  loop: "{{ postgres_cleanup_directory }}"
+  register: postgres_directory_deletion
+  until: postgres_directory_deletion is not failed
   retries: "{{ max_retries }}"
-  loop: "{{ build_stream_cleanup_directory }}"
 
-- name: Check if target file exists
+- name: Check if omnia.target exists before cleaning postgres service entries
   ansible.builtin.stat:
     path: "{{ omnia_target }}"
-  register: p
+  register: omnia_target_stat
 
-- name: Remove all omnia_build_stream services from omnia.target
+- name: Remove omnia_postgres service from omnia.target
   ansible.builtin.replace:
     path: "{{ omnia_target }}"
-    regexp: "{{ build_stream_container_name }}.service"
+    regexp: "{{ postgres_container_name }}.service"
     replace: ''
-  when: p.stat.exists
+  when: omnia_target_stat.stat.exists
