@@ -96,7 +96,7 @@
 - name: Copy entire pulp cert directory from Pulp container to host
   containers.podman.podman_container_copy:
     container: "{{ pulp_container_name }}"
-    src: "{{ build_stream_pulp_cert_container_path }}"
+    src: "{{ build_stream_pulp_cert_host_dir }}"
     dest: "{{ build_stream_pulp_cert_dest }}"
     from_container: true
     overwrite: true
