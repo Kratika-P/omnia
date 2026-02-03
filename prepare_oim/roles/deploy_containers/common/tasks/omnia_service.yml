@@ -37,7 +37,7 @@
 
 - name: Set build_stream service if enabled
   ansible.builtin.set_fact:
-    omnia_postgres_service: "build_stream_postgres.service"
+    omnia_postgres_service: "omnia_postgres.service"
   when: hostvars['localhost']['enable_build_stream'] | default(false) | bool
 
 - name: Start network manager services
