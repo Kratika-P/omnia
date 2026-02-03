@@ -142,7 +142,8 @@ class CreateJobUseCase:
         return Job(
             job_id=job_id,
             client_id=command.client_id,
-            catalog_digest=command.catalog_digest,
+            request_client_id=command.request_client_id,
+            client_name=command.client_name,
         )
 
     def _save_job_and_stages(self, job: Job, stages: List[Stage]) -> None:
@@ -183,7 +184,7 @@ class CreateJobUseCase:
             client_id=command.client_id,
             timestamp=self._now_utc(),
             details={
-                "catalog_digest": command.catalog_digest,
+                "client_name": command.client_name,
                 "stage_count": len(stages),
             },
         )
@@ -202,8 +203,8 @@ class CreateJobUseCase:
         Fingerprint includes only request payload, not auth-derived fields."""
 
         request_body = {}
-        if command.catalog_digest:
-            request_body["catalog_digest"] = command.catalog_digest
+        if command.client_name:
+            request_body["client_name"] = command.client_name
         return FingerprintService.compute(request_body)
 
     def _create_initial_stages(self, job_id: JobId) -> List[Stage]:

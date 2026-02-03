@@ -103,7 +103,8 @@ async def create_job(
     try:
         command = CreateJobCommand(
             client_id=client_id,
-            catalog_digest=request.catalog_uri,
+            request_client_id=request.client_id,
+            client_name=request.client_name,
             correlation_id=correlation_id,
             idempotency_key=IdempotencyKey(idempotency_key),
         )

@@ -39,7 +39,8 @@ class JobResponse:
 
     job_id: str
     client_id: str
-    catalog_digest: Optional[str]
+    request_client_id: str
+    client_name: Optional[str]
     job_state: str
     created_at: str
     updated_at: str
@@ -61,7 +62,8 @@ class JobResponse:
         return JobResponse(
             job_id=str(job.job_id),
             client_id=str(job.client_id),
-            catalog_digest=job.catalog_digest,
+            request_client_id=job.request_client_id,
+            client_name=job.client_name,
             job_state=job.job_state.value,
             created_at=job.created_at.isoformat(),
             updated_at=job.updated_at.isoformat(),

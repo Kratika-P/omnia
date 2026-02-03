@@ -15,7 +15,7 @@
 import pytest
 from pydantic import ValidationError
 
-from api.jobs.schemas import (
+from build_stream.api.jobs.schemas import (
     CreateJobRequest,
     CreateJobResponse,
     GetJobResponse,
@@ -27,50 +27,76 @@ from api.jobs.schemas import (
 class TestCreateJobRequest:
     
     def test_valid_request_with_required_fields(self):
-        data = {"catalog_uri": "s3://bucket/catalog.json"}
+        data = {"client_id": "client-123", "client_name": "test-client"}
         
         request = CreateJobRequest(**data)
         
-        assert request.catalog_uri == "s3://bucket/catalog.json"
+        assert request.client_id == "client-123"
+        assert request.client_name == "test-client"
         assert request.metadata is None
     
     def test_valid_request_with_metadata(self):
         data = {
-            "catalog_uri": "s3://bucket/catalog.json",
+            "client_id": "client-123",
+            "client_name": "test-client",
             "metadata": {"description": "Test", "tags": ["test"]}
         }
         
         request = CreateJobRequest(**data)
         
-        assert request.catalog_uri == "s3://bucket/catalog.json"
+        assert request.client_id == "client-123"
+        assert request.client_name == "test-client"
         assert request.metadata == {"description": "Test", "tags": ["test"]}
     
-    def test_missing_catalog_uri_raises_validation_error(self):
-        data = {}
+    def test_missing_client_id_raises_validation_error(self):
+        data = {"client_name": "test-client"}
+
+        with pytest.raises(ValidationError) as exc_info:
+            CreateJobRequest(**data)
+
+        errors = exc_info.value.errors()
+        assert any(e["loc"] == ("client_id",) for e in errors)
+
+    def test_missing_client_name_is_allowed(self):
+        data = {"client_id": "client-123"}
+
+        request = CreateJobRequest(**data)
+
+        assert request.client_id == "client-123"
+        assert request.client_name is None
+    
+    def test_empty_client_id_raises_validation_error(self):
+        data = {"client_id": ""}
         
         with pytest.raises(ValidationError) as exc_info:
             CreateJobRequest(**data)
         
         errors = exc_info.value.errors()
-        assert any(e["loc"] == ("catalog_uri",) for e in errors)
-    
-    def test_empty_catalog_uri_raises_validation_error(self):
-        data = {"catalog_uri": ""}
+        assert any(e["loc"] == ("client_id",) for e in errors)
+
+    def test_empty_client_name_raises_validation_error(self):
+        data = {"client_id": "client-123", "client_name": ""}
         
         with pytest.raises(ValidationError) as exc_info:
             CreateJobRequest(**data)
         
         errors = exc_info.value.errors()
-        assert any(e["loc"] == ("catalog_uri",) for e in errors)
+        assert any(e["loc"] == ("client_name",) for e in errors)
     
-    def test_catalog_uri_max_length_validation(self):
-        data = {"catalog_uri": "s3://" + "a" * 2048}
+    def test_client_id_max_length_validation(self):
+        data = {"client_id": "a" * 256}
+        
+        with pytest.raises(ValidationError):
+            CreateJobRequest(**data)
+
+    def test_client_name_max_length_validation(self):
+        data = {"client_id": "client-123", "client_name": "a" * 256}
         
         with pytest.raises(ValidationError):
             CreateJobRequest(**data)
     
     def test_metadata_can_be_none(self):
-        data = {"catalog_uri": "s3://bucket/catalog.json", "metadata": None}
+        data = {"client_id": "client-123", "client_name": "test-client", "metadata": None}
         
         request = CreateJobRequest(**data)
         

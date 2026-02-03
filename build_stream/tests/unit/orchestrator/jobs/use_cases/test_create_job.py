@@ -74,14 +74,15 @@ class TestCreateJobUseCase:
         )
         command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
         response = use_case.execute(command)
         assert response.job_id == "018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a11"
         assert response.client_id == "client-1"
-        assert response.catalog_digest == "abc123def456"
+        assert response.client_name == "abc123def456"
         assert response.job_state == JobState.CREATED.value
         assert response.version == 1
         assert response.tombstoned is False
@@ -107,7 +108,8 @@ class TestCreateJobUseCase:
         )
         command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
@@ -139,7 +141,8 @@ class TestCreateJobUseCase:
         )
         command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
@@ -177,7 +180,8 @@ class TestCreateJobUseCase:
         )
         command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
@@ -209,7 +213,8 @@ class TestCreateJobUseCase:
         )
         command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
@@ -243,7 +248,8 @@ class TestCreateJobUseCase:
         )
         command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
@@ -281,13 +287,15 @@ class TestCreateJobUseCase:
         )
         first_command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
         second_command = CreateJobCommand(
             client_id=ClientId("client-2"),
-            catalog_digest="different-digest",
+            request_client_id="req-client-456",
+            client_name="different-digest",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a14"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
@@ -320,13 +328,15 @@ class TestCreateJobUseCase:
         )
         first_command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a12"),
             idempotency_key=IdempotencyKey("idem-key-1"),
         )
         second_command = CreateJobCommand(
             client_id=ClientId("client-1"),
-            catalog_digest="abc123def456",
+            request_client_id="req-client-123",
+            client_name="abc123def456",
             correlation_id=CorrelationId("018f3c4c-6a2e-7b2a-9c2a-3d8d2c4b9a13"),
             idempotency_key=IdempotencyKey("idem-key-2"),
         )

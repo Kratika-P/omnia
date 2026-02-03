@@ -18,7 +18,7 @@ import pytest
 class TestGetJobSuccess:
     
     def test_get_existing_job_returns_200(self, client, auth_headers):
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=auth_headers)
         assert create_response.status_code == 201
         job_id = create_response.json()["job_id"]
@@ -37,7 +37,7 @@ class TestGetJobSuccess:
         assert "stages" in data
     
     def test_get_job_returns_all_stages(self, client, auth_headers):
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=auth_headers)
         job_id = create_response.json()["job_id"]
         
@@ -52,7 +52,7 @@ class TestGetJobSuccess:
         assert len(stages) == 9
     
     def test_get_job_returns_correlation_id(self, client, auth_headers, unique_correlation_id):
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=auth_headers)
         job_id = create_response.json()["job_id"]
         
@@ -121,7 +121,7 @@ class TestGetJobClientIsolation:
             "X-Correlation-Id": unique_correlation_id,
             "Idempotency-Key": unique_idempotency_key,
         }
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=create_headers)
         assert create_response.status_code == 201
         job_id = create_response.json()["job_id"]

@@ -18,7 +18,7 @@ import pytest
 class TestDeleteJobSuccess:
     
     def test_delete_existing_job_returns_204(self, client, auth_headers):
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=auth_headers)
         assert create_response.status_code == 201
         job_id = create_response.json()["job_id"]
@@ -33,7 +33,7 @@ class TestDeleteJobSuccess:
         assert delete_response.content == b""
     
     def test_delete_job_is_idempotent(self, client, auth_headers):
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=auth_headers)
         job_id = create_response.json()["job_id"]
         
@@ -49,7 +49,7 @@ class TestDeleteJobSuccess:
         assert delete_response2.status_code in [204, 404, 410]
     
     def test_deleted_job_not_retrievable(self, client, auth_headers):
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=auth_headers)
         job_id = create_response.json()["job_id"]
         
@@ -120,7 +120,7 @@ class TestDeleteJobClientIsolation:
             "X-Correlation-Id": unique_correlation_id,
             "Idempotency-Key": unique_idempotency_key,
         }
-        create_payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        create_payload = {"client_id": "client-123", "client_name": "test-client"}
         create_response = client.post("/api/v1/jobs", json=create_payload, headers=create_headers)
         assert create_response.status_code == 201
         job_id = create_response.json()["job_id"]

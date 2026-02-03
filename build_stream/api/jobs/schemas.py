@@ -23,11 +23,17 @@ from pydantic import BaseModel, Field, field_validator
 class CreateJobRequest(BaseModel):
     """Request payload for creating a job."""
 
-    catalog_uri: Optional[str] = Field(
+    client_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Client identifier",
+    )
+    client_name: Optional[str] = Field(
         default=None,
         min_length=1,
-        max_length=2048,
-        description="Optional catalog URI (ignored if absent)",
+        max_length=255,
+        description="Optional client name",
     )
     metadata: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -40,19 +46,23 @@ class CreateJobRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    @field_validator("catalog_uri")
+    @field_validator("client_id")
     @classmethod
-    def validate_catalog_uri(cls, v: Optional[str]) -> Optional[str]:
-        """Validate catalog URI format when provided."""
+    def validate_client_id(cls, v: str) -> str:
+        """Validate client_id."""
+        if not v.strip():
+            raise ValueError("client_id cannot be empty")
+        return v.strip()
+
+    @field_validator("client_name")
+    @classmethod
+    def validate_client_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate client name when provided."""
         if v is None:
             return None
         if not v.strip():
-            raise ValueError("catalog_uri cannot be empty")
-        if not v.startswith(("s3://", "http://", "https://", "file://")):
-            raise ValueError(
-                "catalog_uri must be a valid URI (s3://, http://, https://, or file://)"
-            )
-        return v
+            raise ValueError("client_name cannot be empty")
+        return v.strip()
 
 
 class StageResponse(BaseModel):

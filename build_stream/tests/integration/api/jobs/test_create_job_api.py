@@ -22,7 +22,8 @@ class TestCreateJobSuccess:
 
     def test_create_job_returns_201_with_valid_request(self, client, auth_headers):
         payload = {
-            "catalog_uri": "s3://test-bucket/catalog.json",
+            "client_id": "client-123",
+            "client_name": "test-client",
             "metadata": {"description": "Test job creation"},
         }
 
@@ -37,7 +38,7 @@ class TestCreateJobSuccess:
         assert "stages" in data
 
     def test_create_job_returns_valid_uuid(self, client, auth_headers):
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
@@ -49,7 +50,7 @@ class TestCreateJobSuccess:
         assert str(parsed) == job_id.lower()
 
     def test_create_job_returns_created_state(self, client, auth_headers):
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
@@ -57,7 +58,7 @@ class TestCreateJobSuccess:
         assert response.json()["job_state"] == "CREATED"
 
     def test_create_job_creates_all_nine_stages(self, client, auth_headers):
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
@@ -81,7 +82,7 @@ class TestCreateJobSuccess:
         assert stage_names == expected_stages
 
     def test_create_job_all_stages_pending(self, client, auth_headers):
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
@@ -103,7 +104,7 @@ class TestCreateJobSuccess:
             "X-Correlation-Id": unique_correlation_id,
             "Idempotency-Key": unique_idempotency_key,
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=headers)
 
@@ -122,7 +123,7 @@ class TestCreateJobIdempotency:
             "X-Correlation-Id": unique_correlation_id,
             "Idempotency-Key": unique_idempotency_key,
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response1 = client.post("/api/v1/jobs", json=payload, headers=headers)
         assert response1.status_code == 201
@@ -137,7 +138,7 @@ class TestCreateJobIdempotency:
     def test_idempotency_with_different_correlation_id(
         self, client, unique_idempotency_key
     ):
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         headers1 = {
             "Authorization": "Bearer test-client-123",
@@ -168,11 +169,11 @@ class TestCreateJobIdempotency:
     #         "Idempotency-Key": unique_idempotency_key,
     #     }
     #
-    #     payload1 = {"catalog_uri": "s3://test-bucket/catalog1.json"}
+    #     payload1 = {"client_name": "client-one"}
     #     response1 = client.post("/api/v1/jobs", json=payload1, headers=headers)
     #     assert response1.status_code == 201
     #
-    #     payload2 = {"catalog_uri": "s3://test-bucket/catalog2.json"}
+    #     payload2 = {"client_name": "client-two"}
     #     response2 = client.post("/api/v1/jobs", json=payload2, headers=headers)
     #     assert response2.status_code == 409
     #
@@ -183,25 +184,49 @@ class TestCreateJobIdempotency:
 class TestCreateJobValidation:
     """Validation scenarios for create job."""
 
-    def test_missing_catalog_uri_returns_422(self, client, auth_headers):
-        """Missing catalog URI should fail validation."""
-        payload = {}
+    def test_missing_client_id_returns_422(self, client, auth_headers):
+        """Missing client_id is required and should fail validation."""
+        payload = {"client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
-    def test_empty_catalog_uri_returns_400(self, client, auth_headers):
-        """Empty catalog URI should be rejected."""
-        payload = {"catalog_uri": ""}
+    def test_missing_client_name_is_allowed(self, client, auth_headers):
+        """Missing client_name is allowed (field is optional)."""
+        payload = {"client_id": "client-123"}
+
+        response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
+
+        assert response.status_code in [200, 201]
+
+    def test_empty_client_id_returns_422(self, client, auth_headers):
+        """Empty client_id should be rejected."""
+        payload = {"client_id": ""}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
         assert response.status_code in [400, 422]
 
-    def test_invalid_catalog_uri_format(self, client, auth_headers):
-        """Bad URI format should be rejected."""
-        payload = {"catalog_uri": "not-a-valid-uri"}
+    def test_empty_client_name_returns_400(self, client, auth_headers):
+        """Empty client_name should be rejected."""
+        payload = {"client_id": "client-123", "client_name": ""}
+
+        response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
+
+        assert response.status_code in [400, 422]
+
+    def test_client_id_whitespace_only_returns_422(self, client, auth_headers):
+        """Whitespace-only client_id should be rejected."""
+        payload = {"client_id": "   "}
+
+        response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
+
+        assert response.status_code in [400, 422]
+
+    def test_client_name_whitespace_only_returns_400(self, client, auth_headers):
+        """Whitespace-only client_name should be rejected."""
+        payload = {"client_id": "client-123", "client_name": "   "}
 
         response = client.post("/api/v1/jobs", json=payload, headers=auth_headers)
 
@@ -217,7 +242,7 @@ class TestCreateJobAuthentication:
             "X-Correlation-Id": "019bf590-1234-7890-abcd-ef1234567890",
             "Idempotency-Key": unique_idempotency_key,
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=headers)
 
@@ -232,7 +257,7 @@ class TestCreateJobAuthentication:
             "X-Correlation-Id": "019bf590-1234-7890-abcd-ef1234567890",
             "Idempotency-Key": unique_idempotency_key,
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=headers)
 
@@ -245,7 +270,7 @@ class TestCreateJobAuthentication:
             "X-Correlation-Id": "019bf590-1234-7890-abcd-ef1234567890",
             "Idempotency-Key": unique_idempotency_key,
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=headers)
 
@@ -261,7 +286,7 @@ class TestCreateJobHeaders:
             "Authorization": "Bearer test-client-123",
             "X-Correlation-Id": "019bf590-1234-7890-abcd-ef1234567890",
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=headers)
 
@@ -275,7 +300,7 @@ class TestCreateJobHeaders:
             "Authorization": "Bearer test-client-123",
             "Idempotency-Key": unique_idempotency_key,
         }
-        payload = {"catalog_uri": "s3://test-bucket/catalog.json"}
+        payload = {"client_id": "client-123", "client_name": "test-client"}
 
         response = client.post("/api/v1/jobs", json=payload, headers=headers)
 
