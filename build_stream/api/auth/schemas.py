@@ -164,7 +164,7 @@ class TokenRequest:  # pylint: disable=too-few-public-methods
         """Validate client_id format if provided."""
         if v is not None and not v.startswith("bld_"):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=[{
                     "type": "value_error",
                     "loc": ["body", "client_id"],
@@ -178,7 +178,7 @@ class TokenRequest:  # pylint: disable=too-few-public-methods
         """Validate client_secret format if provided."""
         if v is not None and not v.startswith("bld_s_"):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=[{
                     "type": "value_error",
                     "loc": ["body", "client_secret"],
