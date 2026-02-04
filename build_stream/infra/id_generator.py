@@ -16,9 +16,9 @@
 
 import uuid
 
-from build_stream.core.jobs.exceptions import JobDomainError
-from build_stream.core.jobs.repositories import JobIdGenerator, UUIDGenerator
-from build_stream.core.jobs.value_objects import JobId
+from core.jobs.exceptions import JobDomainError
+from core.jobs.repositories import JobIdGenerator, UUIDGenerator
+from core.jobs.value_objects import JobId
 
 
 class JobUUIDGenerator(JobIdGenerator):  # pylint: disable=R0903

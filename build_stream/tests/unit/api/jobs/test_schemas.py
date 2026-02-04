@@ -19,7 +19,7 @@
 import pytest
 from pydantic import ValidationError
 
-from build_stream.api.jobs.schemas import (
+from api.jobs.schemas import (
     CreateJobRequest,
     CreateJobResponse,
     GetJobResponse,

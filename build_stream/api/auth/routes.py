@@ -20,15 +20,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from api.vault_client import VaultError
-
-from .schemas import (
-    AuthErrorResponse,
-    ClientRegistrationRequest,
-    ClientRegistrationResponse,
-    TokenRequest,
-    TokenResponse,
-)
 from .service import (
     AuthenticationError,
     AuthService,
@@ -40,6 +31,14 @@ from .service import (
     RegistrationDisabledError,
     TokenCreationError,
 )
+from .schemas import (
+    AuthErrorResponse,
+    ClientRegistrationRequest,
+    ClientRegistrationResponse,
+    TokenRequest,
+    TokenResponse,
+)
+from api.vault_client import VaultError
 
 logger = logging.getLogger(__name__)
 
@@ -47,16 +46,21 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 security = HTTPBasic()
 
-_auth_service = AuthService()
+
+def get_auth_service() -> AuthService:
+    """Provide AuthService instance for dependency injection."""
+    return AuthService()
 
 
 def _verify_basic_auth(
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> HTTPBasicCredentials:
     """Verify Basic Authentication credentials for registration.
 
     Args:
         credentials: HTTP Basic Auth credentials from request.
+        auth_service: AuthService instance.
 
     Returns:
         Validated credentials.
@@ -65,28 +69,38 @@ def _verify_basic_auth(
         HTTPException: If authentication fails.
     """
     try:
-        _auth_service.verify_registration_credentials(
+        auth_service.verify_registration_credentials(
             credentials.username,
             credentials.password,
         )
         return credentials
-    except AuthenticationError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "invalid_credentials",
-                "error_description": "Invalid Basic Auth credentials",
-            },
-            headers={"WWW-Authenticate": "Basic"},
-        ) from None
-    except RegistrationDisabledError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "error": "service_unavailable",
-                "error_description": "Registration service is not available",
-            },
-        ) from None
+    except Exception as e:
+        # Check if it's a specific exception type
+        if type(e).__name__ == 'AuthenticationError':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "invalid_credentials",
+                    "error_description": "Invalid Basic Auth credentials",
+                },
+                headers={"WWW-Authenticate": "Basic"},
+            ) from None
+        elif type(e).__name__ == 'RegistrationDisabledError':
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error": "service_unavailable",
+                    "error_description": "Registration service is not available",
+                },
+            ) from None
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "server_error",
+                    "error_description": "An unexpected error occurred",
+                },
+            ) from None
 
 
 @router.post(
@@ -134,6 +148,7 @@ def _verify_basic_auth(
 async def register_client(
     request: ClientRegistrationRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(_verify_basic_auth)],  # pylint: disable=unused-argument
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> ClientRegistrationResponse:
     """Register a new OAuth client.
 
@@ -146,6 +161,7 @@ async def register_client(
     Args:
         request: Client registration request containing client_name and optional fields.
         credentials: Validated Basic Auth credentials (injected by dependency).
+        auth_service: AuthService instance (injected by dependency).
 
     Returns:
         ClientRegistrationResponse with client_id and client_secret.
@@ -156,7 +172,7 @@ async def register_client(
     logger.info("Client registration request received")
 
     try:
-        registered_client = _auth_service.register_client(
+        registered_client = auth_service.register_client(
             client_name=request.client_name,
             description=request.description,
             allowed_scopes=request.allowed_scopes,
@@ -173,45 +189,44 @@ async def register_client(
             expires_at=registered_client.expires_at,
         )
 
-    except ClientExistsError:
-        logger.warning("Client registration failed - client exists")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": "client_exists",
-                "error_description": "Client name already registered",
-            },
-        ) from None
-
-    except MaxClientsReachedError:
-        logger.warning("Client registration failed - max clients reached")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": "max_clients_reached",
-                "error_description": "Maximum number of clients (1) already registered"
-            },
-        ) from None
-
-    except VaultError:
-        logger.error("Client registration failed - vault error for: %s", request.client_name)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "server_error",
-                "error_description": "Failed to store client credentials",
-            },
-        ) from None
-
-    except Exception:
-        logger.exception("Unexpected error during client registration: %s", request.client_name)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "server_error",
-                "error_description": "An unexpected error occurred",
-            },
-        ) from None
+    except Exception as e:
+        # Check if it's a specific exception type
+        if type(e).__name__ == 'MaxClientsReachedError':
+            logger.warning("Client registration failed - max clients reached: %s", str(e))
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "max_clients_reached",
+                    "error_description": "Maximum number of clients (1) already registered"
+                },
+            ) from None
+        elif type(e).__name__ == 'ClientExistsError':
+            logger.warning("Client registration failed - client exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "client_exists",
+                    "error_description": "Client name already registered",
+                },
+            ) from None
+        elif isinstance(e, VaultError):
+            logger.error("Client registration failed - vault error for: %s", request.client_name)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "server_error",
+                    "error_description": "Failed to store client credentials",
+                },
+            ) from None
+        else:
+            logger.exception("Unexpected error during client registration: %s - Exception type: %s", request.client_name, type(e).__name__)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "server_error",
+                    "error_description": "An unexpected error occurred",
+                },
+            ) from None
 
 
 @router.post(
@@ -246,6 +261,7 @@ async def register_client(
 )
 async def request_token(
     request: Annotated[TokenRequest, Depends()],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> TokenResponse:
     """Request an OAuth2 access token.
 
@@ -255,6 +271,7 @@ async def request_token(
 
     Args:
         request: Token request containing grant_type, client_id, client_secret, and optional scope.
+        auth_service: AuthService instance (injected by dependency).
 
     Returns:
         TokenResponse with access_token, token_type, expires_in, and scope.
@@ -275,7 +292,7 @@ async def request_token(
         )
 
     try:
-        token_result = _auth_service.generate_token(
+        token_result = auth_service.generate_token(
             client_id=request.client_id,
             client_secret=request.client_secret,
             requested_scope=request.scope,

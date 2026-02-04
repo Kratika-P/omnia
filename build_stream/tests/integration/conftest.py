@@ -293,6 +293,7 @@ class ServerManager:
         "jsonschema",
         "ansible",
         "cryptography",
+        "dependency-injector",
     ]
 
     def __init__(  # noqa: R0913,R0917 pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -400,6 +401,7 @@ class ServerManager:
             "JWT_PRIVATE_KEY_PATH": str(self.vault_manager.private_key_file),
             "JWT_PUBLIC_KEY_PATH": str(self.vault_manager.public_key_file),
             "LOG_LEVEL": "DEBUG",
+            "PYTHONPATH": str(self.project_dir),
         })
         logger.info("    HOST=%s", self.host)
         logger.info("    PORT=%s", self.port)
@@ -409,6 +411,7 @@ class ServerManager:
         logger.info("    JWT_PRIVATE_KEY_PATH=%s", self.vault_manager.private_key_file)
         logger.info("    JWT_PUBLIC_KEY_PATH=%s", self.vault_manager.public_key_file)
         logger.info("    LOG_LEVEL=DEBUG")
+        logger.info("    PYTHONPATH=%s", self.project_dir)
 
         logger.info("  Starting uvicorn server...")
         logger.info("    Python: %s", self.python_path)

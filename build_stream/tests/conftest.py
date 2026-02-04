@@ -151,23 +151,24 @@ def test_client(mock_vault_client, mock_jwt_handler) -> Generator:  # noqa: W062
         TestClient configured for testing.
     """
     from fastapi.testclient import TestClient  # noqa: PLC0415
+    from api.auth.routes import get_auth_service  # noqa: PLC0415
 
     app = _get_app()
     auth_service_class = _get_auth_service()
-    auth_routes = _get_auth_routes()
 
     test_auth_service = auth_service_class(
         vault_client=mock_vault_client,
         jwt_handler=mock_jwt_handler,
     )
-    original_service = auth_routes._auth_service  # noqa: W0212
 
-    auth_routes._auth_service = test_auth_service
+    # Override the dependency injection
+    app.dependency_overrides[get_auth_service] = lambda: test_auth_service
 
     with TestClient(app) as client:
         yield client
 
-    auth_routes._auth_service = original_service
+    # Clean up dependency overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -184,23 +185,24 @@ def test_client_with_existing_client(  # noqa: C0301,W0621
         TestClient configured for testing max client scenarios.
     """
     from fastapi.testclient import TestClient  # noqa: PLC0415
+    from api.auth.routes import get_auth_service  # noqa: PLC0415
 
     app = _get_app()
     auth_service_class = _get_auth_service()
-    auth_routes = _get_auth_routes()
 
     test_auth_service = auth_service_class(
         vault_client=mock_vault_with_client,
         jwt_handler=mock_jwt_handler,
     )
-    original_service = auth_routes._auth_service  # noqa: W0212
 
-    auth_routes._auth_service = test_auth_service  # noqa: W0212
+    # Override the dependency injection
+    app.dependency_overrides[get_auth_service] = lambda: test_auth_service
 
     with TestClient(app) as client:
         yield client
 
-    auth_routes._auth_service = original_service  # noqa: W0212
+    # Clean up dependency overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
