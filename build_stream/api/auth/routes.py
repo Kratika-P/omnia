@@ -20,9 +20,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
+from api.vault_client import VaultError
+from .schemas import (
+    AuthErrorResponse,
+    ClientRegistrationRequest,
+    ClientRegistrationResponse,
+    TokenRequest,
+    TokenResponse,
+)
 from .service import (
-    AuthenticationError,
     AuthService,
+    AuthenticationError,
     ClientDisabledError,
     ClientExistsError,
     InvalidClientError,
@@ -31,14 +39,6 @@ from .service import (
     RegistrationDisabledError,
     TokenCreationError,
 )
-from .schemas import (
-    AuthErrorResponse,
-    ClientRegistrationRequest,
-    ClientRegistrationResponse,
-    TokenRequest,
-    TokenResponse,
-)
-from api.vault_client import VaultError
 
 logger = logging.getLogger(__name__)
 
@@ -74,33 +74,32 @@ def _verify_basic_auth(
             credentials.password,
         )
         return credentials
-    except Exception as e:
-        # Check if it's a specific exception type
-        if type(e).__name__ == 'AuthenticationError':
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_credentials",
-                    "error_description": "Invalid Basic Auth credentials",
-                },
-                headers={"WWW-Authenticate": "Basic"},
-            ) from None
-        elif type(e).__name__ == 'RegistrationDisabledError':
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "error": "service_unavailable",
-                    "error_description": "Registration service is not available",
-                },
-            ) from None
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": "server_error",
-                    "error_description": "An unexpected error occurred",
-                },
-            ) from None
+    except AuthenticationError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "invalid_credentials",
+                "error_description": "Invalid Basic Auth credentials",
+            },
+            headers={"WWW-Authenticate": "Basic"},
+        ) from None
+    except RegistrationDisabledError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "service_unavailable",
+                "error_description": "Registration service is not available",
+            },
+        ) from None
+    except Exception:
+        logger.exception("Unexpected error during authentication")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "server_error",
+                "error_description": "An unexpected error occurred",
+            },
+        ) from None
 
 
 @router.post(
@@ -189,44 +188,46 @@ async def register_client(
             expires_at=registered_client.expires_at,
         )
 
+    except MaxClientsReachedError as e:
+        logger.warning("Client registration failed - max clients reached: %s", str(e))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "max_clients_reached",
+                "error_description": "Maximum number of clients (1) already registered"
+            },
+        ) from None
+    except ClientExistsError:
+        logger.warning("Client registration failed - client exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "client_exists",
+                "error_description": "Client with this name already exists",
+            },
+        ) from None
+    except VaultError:
+        logger.error("Client registration failed - vault error for: %s", request.client_name)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "server_error",
+                "error_description": "Failed to store client credentials",
+            },
+        ) from None
     except Exception as e:
-        # Check if it's a specific exception type
-        if type(e).__name__ == 'MaxClientsReachedError':
-            logger.warning("Client registration failed - max clients reached: %s", str(e))
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": "max_clients_reached",
-                    "error_description": "Maximum number of clients (1) already registered"
-                },
-            ) from None
-        elif type(e).__name__ == 'ClientExistsError':
-            logger.warning("Client registration failed - client exists")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": "client_exists",
-                    "error_description": "Client name already registered",
-                },
-            ) from None
-        elif isinstance(e, VaultError):
-            logger.error("Client registration failed - vault error for: %s", request.client_name)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": "server_error",
-                    "error_description": "Failed to store client credentials",
-                },
-            ) from None
-        else:
-            logger.exception("Unexpected error during client registration: %s - Exception type: %s", request.client_name, type(e).__name__)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": "server_error",
-                    "error_description": "An unexpected error occurred",
-                },
-            ) from None
+        logger.exception(
+            "Unexpected error during client registration: %s - Exception type: %s",
+            request.client_name,
+            type(e).__name__
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "server_error",
+                "error_description": "An unexpected error occurred",
+            },
+        ) from None
 
 
 @router.post(

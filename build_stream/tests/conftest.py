@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared pytest fixtures for Build Stream API tests."""
+"""Shared pytest fixtures for Build Stream API tests.
 
-# pylint: disable=redefined-outer-name,global-statement,import-outside-toplevel,protected-access
-
-"""Note: This conftest is for mock-based unit/integration tests.
+Note: This conftest is for mock-based unit/integration tests.
 E2E integration tests use tests/integration/conftest.py which does not
 import the app directly (it runs the server as a subprocess).
 """
+
+# pylint: disable=redefined-outer-name,global-statement,import-outside-toplevel,protected-access
 
 import base64
 import sys
@@ -96,8 +96,8 @@ def mock_vault_client():
     Returns:
         MockVaultClient with default test credentials.
     """
-    MockVaultClient = _get_mock_vault_client()
-    return MockVaultClient()
+    mock_vault_client = _get_mock_vault_client()
+    return mock_vault_client()
 
 
 @pytest.fixture
@@ -135,8 +135,8 @@ def mock_jwt_handler():
     Returns:
         MockJWTHandler for testing JWT operations.
     """
-    MockJWTHandler = _get_mock_jwt_handler()
-    return MockJWTHandler()
+    mock_jwt_handler = _get_mock_jwt_handler()
+    return mock_jwt_handler()
 
 
 @pytest.fixture
