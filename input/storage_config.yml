@@ -12,11 +12,37 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 ---
-
 # ***********************************************************************
 # DO NOT REMOVE OR COMMENT OUT ANY LINES IN THIS FILE.
 # SIMPLY APPEND THE REQUIRED VALUES AGAINST THE PARAMETER OF YOUR CHOICE.
 # ***********************************************************************
+
+# -----------------------------Powervault-------------------------------------------
+# powervault_config
+# ip: ipv4
+# A list of PowerVault controller IP addresses used for iSCSI target discovery and login.
+# In this configuration, a single controller portal is provided.
+
+# port:
+# Defines the TCP port for the iSCSI target service.
+# Port 3260 is the standard port for iSCSI communication.
+
+# isci_initiators:
+# Specifies the InitiatorName used by the host when connecting to the iSCSI target.
+# This IQN uniquely identifies the host to the storage array.
+
+# volume_id:
+# This is the unique WWN/identifier for the
+# specific volume that should be used for persistent storage.
+# The script uses this value during multipath scanning to select the correct mapped device
+
+#powervault_config:
+#  ip:
+#    - 172.1.2.3
+#  port: 3260
+#  isci_initiators: iqn.initiator.com.example:7d7d7d7d7d7
+#  volume_id: 00c0ff4343f1f1f1001c8c4e6901000000
+
 
 # -----------------------------NFS------------------------------------------------
 
@@ -50,3 +76,4 @@ nfs_client_params:
     client_share_path: /share_omnia_k8s
     client_mount_options: "nosuid,rw,sync,hard,intr"
     nfs_name: nfs_k8s
+    

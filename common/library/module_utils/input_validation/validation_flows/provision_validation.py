@@ -21,6 +21,7 @@ import re
 import itertools
 import csv
 import yaml
+import ipaddress
 from ansible.module_utils.input_validation.common_utils import validation_utils
 from ansible.module_utils.input_validation.common_utils import config
 from ansible.module_utils.input_validation.common_utils import en_us_validation_msg
@@ -744,6 +745,54 @@ def validate_network_spec(
         )
         return errors
 
+    # Extract admin and IB parameters for cross-validation
+    admin_netmask_bits = None
+    admin_primary_ip = None
+    ib_netmask_bits = None
+    ib_subnet = None
+    ib_present = False
+
+    for network in data["Networks"]:
+        if "admin_network" in network and isinstance(network["admin_network"], dict):
+            admin_net = network["admin_network"]
+            admin_netmask_bits = admin_net.get("netmask_bits", admin_netmask_bits)
+            admin_primary_ip = admin_net.get("primary_oim_admin_ip", admin_primary_ip)
+
+        if "ib_network" in network and isinstance(network["ib_network"], dict):
+            ib_net = network["ib_network"]
+            # Consider IB network present only when config is non-empty
+            if ib_net:
+                ib_present = True
+                ib_netmask_bits = ib_net.get("netmask_bits", ib_netmask_bits)
+                ib_subnet = ib_net.get("subnet", ib_subnet)
+
+    # If IB network is configured and both netmask bits are available, they must match
+    if ib_present and ib_netmask_bits and admin_netmask_bits and ib_netmask_bits != admin_netmask_bits:
+        errors.append(
+            create_error_msg(
+                "ib_network.netmask_bits",
+                ib_netmask_bits,
+                en_us_validation_msg.IB_NETMASK_BITS_MISMATCH_MSG,
+            )
+        )
+
+    # If IB subnet and admin primary IP are available, ensure IB subnet is not in admin range
+    if ib_present and ib_subnet and admin_primary_ip and admin_netmask_bits:
+        try:
+            admin_network = ipaddress.IPv4Network(f"{admin_primary_ip}/{admin_netmask_bits}", strict=False)
+            ib_ip = ipaddress.IPv4Address(ib_subnet)
+            if ib_ip in admin_network:
+                errors.append(
+                    create_error_msg(
+                        "ib_network.subnet",
+                        ib_subnet,
+                        en_us_validation_msg.IB_SUBNET_IN_ADMIN_RANGE_MSG,
+                    )
+                )
+        except ValueError:
+            # If IPs/netmask are invalid, rely on existing validations to report issues
+            pass
+
     for network in data["Networks"]:
         errors.extend(_validate_admin_network(network))
 
@@ -941,3 +990,4 @@ def _validate_ip_ranges(dynamic_range, network_type, netmask_bits):
             )
 
     return errors
+

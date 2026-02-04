@@ -1,4 +1,4 @@
-# Copyright 2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -13,21 +13,20 @@
 #  limitations under the License.
 ---
 
-- name: Fetch x86_64 default_packages.json software packages
+- name: Fetch x86_64 default_packages.json and additional_packages.json software packages
   when: fg_x86_64
   block:
-    - name: Load default_packages.json
-      ansible.builtin.include_vars:
-        file: "{{ default_json_path }}"
-        name: default_package_json
+    - name: Collect base image RPM packages (default + additional + admin_debug)
+      base_image_package_collector:
+        default_json_path: "{{ default_json_path }}"
+        additional_json_path: "{{ additional_json_path | default('') }}"
+        admin_debug_json_path: "{{ admin_debug_json_path | default('') }}"
+        software_config_path: "{{ software_config_file_path }}"
+      register: base_image_output
 
-    - name: Extract rpm packages
+    - name: Set x86_64_base_image_packages
       ansible.builtin.set_fact:
-        x86_64_base_image_packages: >-
-          {{ default_package_json.default_packages.cluster
-            | selectattr('type', 'equalto', 'rpm')
-            | map(attribute='package')
-            | list }}
+        x86_64_base_image_packages: "{{ base_image_output.base_image_packages }}"
 
     - name: Debug package x86_64_base_image_packages
       ansible.builtin.debug:
@@ -39,6 +38,7 @@
         functional_groups_file: "{{ functional_groups_file_path }}"
         software_config_file: "{{ software_config_file_path }}"
         input_project_dir: "{{ input_project_dir }}"
+        additional_json_path: "{{ additional_json_path }}"
       register: compute_images_output
 
     - name: Save packages for x86_64 keys in compute_images_dict

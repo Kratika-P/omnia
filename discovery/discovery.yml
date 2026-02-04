@@ -75,6 +75,18 @@
         name: discovery_validations
         tasks_from: validate_oim_timezone.yml
 
+- name: Build cluster host lists from PXE mapping
+  hosts: localhost
+  connection: local
+  roles:
+    - passwordless_ssh
+
+- name: Configure OIM SSH from cluster host lists
+  hosts: oim
+  connection: ssh
+  roles:
+    - passwordless_ssh
+
 - name: Validate discovery parameters
   hosts: oim
   connection: ssh
@@ -102,6 +114,11 @@
       ansible.builtin.include_role:
         name: configure_ochami
         tasks_from: discover_mapping_nodes.yml
+
+    - name: Read nodes.yaml and derive Omnia node facts
+      ansible.builtin.include_role:
+        name: passwordless_ssh
+        tasks_from: read_nodes_yaml.yml
   roles:
     - nfs_client
     - k8s_config
