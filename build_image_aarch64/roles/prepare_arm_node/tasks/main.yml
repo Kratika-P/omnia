@@ -167,7 +167,7 @@
 
 - name: Build full Podman image path
   ansible.builtin.set_fact:
-    pulp_aarch_image: "{{ hostvars['localhost']['oim_pxe_ip'] }}:2225/dellhpcomniaaisolution/image-build-aarch64:latest"
+    pulp_aarch_image: "{{ hostvars['localhost']['oim_pxe_ip'] }}:2225/dellhpcomniaaisolution/image-build-aarch64:1.1"
 
 - name: Pull aarch64 image using Podman
   ansible.builtin.command:

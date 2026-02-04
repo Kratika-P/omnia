@@ -49,6 +49,36 @@
           ]
         },
         "minItems": 1
+      },
+      "powervault_config": {
+        "required": ["ip", "isci_initiators", "volume_id"],
+        "properties": {
+          "ip": {
+            "description": "List of target controller IP addresses",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "format": "ipv4"
+            },
+            "uniqueItems": true
+          },
+
+          "port": {
+            "description": "TCP port for iSCSI (default 3260)",
+            "type": "integer"
+          },
+
+          "isci_initiators": {
+            "description": "iSCSI initiator IQN",
+            "type": "string"
+          },
+
+          "volume_id": {
+            "description": "Volume identifier (hex string)",
+            "type": "string"
+          }
+        }
       }
     },
     "required": [

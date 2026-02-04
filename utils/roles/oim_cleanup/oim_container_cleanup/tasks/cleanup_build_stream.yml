@@ -34,7 +34,7 @@
 
 - name: Get omnia_build_stream container files
   ansible.builtin.find:
-    paths: "/etc/containers/systemd/"
+    paths: "{{ quadlet_dir }}"
     patterns: 'omnia_build_stream*'
     file_type: file
   register: found_files

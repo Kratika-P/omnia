@@ -16,8 +16,10 @@
 
 import re
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
+from fastapi import Form, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -130,6 +132,91 @@ class AuthErrorResponse(BaseModel):  # pylint: disable=too-few-public-methods
                     "error": "client_exists",
                     "error_description": "Client name already registered",
                 },
+            ]
+        }
+    }
+
+
+class GrantType(str, Enum):
+    """Supported OAuth2 grant types."""
+
+    CLIENT_CREDENTIALS = "client_credentials"
+
+
+class TokenRequest:  # pylint: disable=too-few-public-methods
+    """Request model for OAuth2 token endpoint (application/x-www-form-urlencoded)."""
+
+    def __init__(
+        self,
+        grant_type: GrantType = Form(..., description="OAuth2 grant type"),
+        client_id: Optional[str] = Form(default=None, description="Client identifier"),
+        client_secret: Optional[str] = Form(default=None, description="Client secret"),
+        scope: Optional[str] = Form(default=None, description="Requested scopes"),
+    ):
+        """Initialize token request from form data."""
+        self.grant_type = grant_type
+        self.client_id = self._validate_client_id(client_id)
+        self.client_secret = self._validate_client_secret(client_secret)
+        self.scope = scope
+
+    @staticmethod
+    def _validate_client_id(v: Optional[str]) -> Optional[str]:
+        """Validate client_id format if provided."""
+        if v is not None and not v.startswith("bld_"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["body", "client_id"],
+                    "msg": "client_id must start with 'bld_' prefix",
+                }],
+            )
+        return v
+
+    @staticmethod
+    def _validate_client_secret(v: Optional[str]) -> Optional[str]:
+        """Validate client_secret format if provided."""
+        if v is not None and not v.startswith("bld_s_"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["body", "client_secret"],
+                    "msg": "client_secret must start with 'bld_s_' prefix",
+                }],
+            )
+        return v
+
+
+class TokenResponse(BaseModel):  # pylint: disable=too-few-public-methods
+    """Response model for successful token generation (RFC 6749 compliant)."""
+
+    access_token: str = Field(
+        ...,
+        description="JWT access token",
+    )
+    token_type: str = Field(
+        default="Bearer",
+        description="Token type (always 'Bearer')",
+    )
+    expires_in: int = Field(
+        ...,
+        description="Token lifetime in seconds",
+    )
+    scope: str = Field(
+        ...,
+        description="Granted scopes (space-separated)",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "scope": "catalog:read catalog:write",
+                }
             ]
         }
     }

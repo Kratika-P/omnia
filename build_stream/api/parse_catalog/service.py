@@ -21,7 +21,7 @@ import tempfile
 from dataclasses import dataclass
 from typing import Optional
 
-from core.catalog.generator import generate_root_json_from_catalog
+from build_stream.core.catalog.generator import generate_root_json_from_catalog
 
 logger = logging.getLogger(__name__)
 

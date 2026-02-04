@@ -47,6 +47,10 @@
   ansible.builtin.import_tasks: cleanup_build_stream.yml
   tags: build_stream
 
+- name: Cleanup omnia_postgres container
+  ansible.builtin.import_tasks: cleanup_omnia_postgres.yml
+  tags: postgres
+
 - name: Cleanup common configuration
   ansible.builtin.import_tasks: cleanup_common.yml
   tags: common

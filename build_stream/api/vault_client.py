@@ -117,7 +117,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
                 timeout=30,
             )
             return result.stdout
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             logger.error("Vault command failed: %s", command)
             if command == "view":
                 raise VaultDecryptError("Failed to decrypt vault") from None
@@ -143,7 +143,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
         output = self._run_vault_command("view", vault_path)
         try:
             return yaml.safe_load(output) or {}
-        except yaml.YAMLError as e:
+        except yaml.YAMLError:
             logger.error("Failed to parse vault YAML")
             raise VaultDecryptError("Invalid vault content format") from None
 
@@ -187,7 +187,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
                 "--encrypt-vault-id",
                 "default",
             ]
-            result = subprocess.run(
+            subprocess.run(
                 encrypt_cmd,
                 check=True,
                 capture_output=True,
@@ -205,12 +205,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
             os.chmod(vault_path, 0o600)
             logger.debug("Vault written successfully")
 
-        except subprocess.CalledProcessError as e:
-            logger.error(
-                "Failed to encrypt vault. Return code: %d, stderr: %s",
-                e.returncode,
-                e.stderr,
-            )
+        except subprocess.CalledProcessError:
             raise VaultEncryptError("Failed to encrypt vault") from None
         except subprocess.TimeoutExpired:
             logger.error("Vault encryption timed out")
@@ -272,7 +267,7 @@ class VaultClient:  # pylint: disable=too-few-public-methods
         existing_data["oauth_clients"][client_id] = client_data
 
         self.write_vault(self.oauth_clients_vault_path, existing_data)
-        logger.info("OAuth client saved: %s", client_id)
+        logger.info("OAuth client saved: %s", client_id[:8] + "...")
 
     def get_active_client_count(self) -> int:
         """Get the count of active registered clients.
