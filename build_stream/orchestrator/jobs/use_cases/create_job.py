@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pylint: disable=too-many-arguments,too-many-positional-arguments,too-few-public-methods
+
 """CreateJob use case implementation."""
 
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from build_stream.core.jobs.entities import Job, Stage, IdempotencyRecord, AuditEvent
-from build_stream.core.jobs.exceptions import (
+from core.jobs.entities import Job, Stage, IdempotencyRecord, AuditEvent
+from core.jobs.exceptions import (
     JobAlreadyExistsError,
     IdempotencyConflictError,
 )
-from build_stream.core.jobs.repositories import (
+from core.jobs.repositories import (
     JobRepository,
     StageRepository,
     IdempotencyRepository,
@@ -30,8 +32,8 @@ from build_stream.core.jobs.repositories import (
     JobIdGenerator,
     UUIDGenerator,
 )
-from build_stream.core.jobs.services import FingerprintService
-from build_stream.core.jobs.value_objects import JobId, StageName, StageType, RequestFingerprint
+from core.jobs.services import FingerprintService
+from core.jobs.value_objects import JobId, StageName, StageType, RequestFingerprint
 
 from ..commands import CreateJobCommand
 from ..dtos import JobResponse
