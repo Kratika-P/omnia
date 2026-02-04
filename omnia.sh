@@ -30,7 +30,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 YELLOW='\033[0;33m'
-omnia_release=2.0.0.0
+omnia_release=2.1.0.0
 
 core_container_status=false
 omnia_path=""
@@ -925,9 +925,10 @@ start_container_session() {
 }
 
 show_help() {
-    echo "Usage: $0 [--install | --uninstall | --help]"
+    echo "Usage: $0 [--install | --uninstall | --version | --help]"
     echo "  -i, --install     Install and start the Omnia core container"
     echo "  -u, --uninstall   Uninstall the Omnia core container and clean up configuration"
+    echo "  -v, --version     Display Omnia version information"
     echo "  -h, --help        More information about usage"
 }
 
@@ -1110,6 +1111,34 @@ install_omnia_core() {
     fi
 }
 
+# Check if Omnia core container is running
+check_container_status() {
+    # Check if the Omnia core container is running
+    if ! podman ps --format '{{.Names}}' | grep -qw "omnia_core"; then
+        echo -e "${RED}ERROR: Omnia core container is not running.${NC}"
+        exit 1
+    fi
+}
+
+# Function to display version information
+display_version() {
+    # Check if metadata file exists and Omnia core container is running
+    check_container_status
+    
+    # Fetch the metadata from the oim_metadata.yml file in the container
+    echo -e "${GREEN} Fetching metadata from omnia_core container...${NC}"
+    core_config=$(podman exec omnia_core /bin/bash -c 'cat /opt/omnia/.data/oim_metadata.yml')
+    
+    # Extract Omnia version from metadata file
+    omnia_version=$(echo "$core_config" | grep "omnia_version:" | cut -d':' -f2 | tr -d ' \t\n\r')
+    
+    # Display version information
+    echo "Omnia version: $omnia_version"
+    
+    # Return exit code 0 on success
+    exit 0
+}
+
 # Main function to check if omnia_core container is already running.
 # If yes, ask the user if they want to enter the container or reinstall.
 # If no, set it up.
@@ -1120,6 +1149,9 @@ main() {
             ;;
         --uninstall|-u)
             cleanup_omnia_core
+            ;;
+        --version|-v)
+            display_version
             ;;
         --help|-h|"")
             show_help

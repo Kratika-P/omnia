@@ -126,9 +126,8 @@
         - mkdir -p /var/log/slurm /var/run/slurm /var/spool /var/lib/slurm /etc/slurm/epilog.d /etc/munge /cert /var/log/track /var/lib/packages /hpc_tools/container_images /hpc_tools/scripts
         - echo "{{ cloud_init_nfs_path }}/cert  /cert   nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/log/slurm  /var/log/slurm   nfs defaults,_netdev 0 0" >> /etc/fstab
-        - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool      /var/spool       nfs defaults,_netdev 0 0" >> /etc/fstab
+        - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool/slurmd      /var/spool/slurmd       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/etc/slurm/epilog.d     /etc/slurm/epilog.d      nfs defaults,_netdev 0 0" >> /etc/fstab
-        - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool      /var/spool       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/etc/munge      /etc/munge       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ trackfile_nfs_path }}    /var/log/track       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path}}/hpc_tools/container_images  /hpc_tools/container_images   nfs defaults,_netdev 0 0" >> /etc/fstab
@@ -153,6 +152,7 @@
         - chmod {{ file_mode_755 }} /var/log/slurm /var/run/slurm /var/spool /var/lib/slurm
         - chmod {{ file_mode_400 }} /etc/munge/munge.key
         - chmod {{ file_mode_755 }} /etc/slurm/epilog.d/
+        - chmod {{ file_mode_755 }} /etc/slurm/epilog.d/logout_user.sh
         - mkdir -p /var/spool/slurmd
         - chmod {{ file_mode_755 }} /var/spool/slurmd
         - chown -R {{ slurm_user }}:{{ slurm_user }} /var/spool/slurmd

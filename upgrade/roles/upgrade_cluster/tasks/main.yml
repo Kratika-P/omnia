@@ -12,19 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ---
-- name: Merge the default and custom slurm conf
-  slurm_conf:
-    op: merge
-    conf_sources:
-      - "{{ slurm_config_path }}/{{ item.0 }}/etc/slurm/{{ item.1 }}.conf"
-      - "{{ configs_input.get(item.1, {}) }}" # Either map or file path
-    conf_name: "{{ item.1 }}"
-  register: merged_conf
-  # debugger: always
 
-- name: Write merged .conf
-  ansible.builtin.copy:
-    content: "{{ merged_conf.ini_lines | join('\n') }}\n"
-    dest: "{{ slurm_config_path }}/{{ item.0 }}/etc/slurm/{{ item.1 }}.conf"
-    mode: "{{ conf_file_mode }}"
-    remote_src: "{{ copy_from_oim }}"
+- name: Include import input parameters
+  ansible.builtin.include_role:
+    name: import_input_parameters

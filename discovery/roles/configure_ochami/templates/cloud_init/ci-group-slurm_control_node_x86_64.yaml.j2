@@ -307,10 +307,10 @@
           content: |
             SELECT VERSION();
             SHOW DATABASES;
-
-            CREATE DATABASE slurm_acct_db;
-            CREATE USER 'slurm'@'%' IDENTIFIED BY '{{ hostvars['localhost']['slurm_db_password'] }}';
-            GRANT ALL PRIVILEGES ON slurm_acct_db.* TO 'slurm'@'%';
+            CREATE DATABASE IF NOT EXISTS {{ apply_config['slurmdbd']['StorageLoc'] }};
+            CREATE USER IF NOT EXISTS '{{ apply_config['slurmdbd']['SlurmUser'] }}'@'%' IDENTIFIED BY '{{ hostvars['localhost']['slurm_db_password'] }}';
+            ALTER USER '{{ apply_config['slurmdbd']['SlurmUser'] }}'@'%' IDENTIFIED BY '{{ hostvars['localhost']['slurm_db_password'] }}';
+            GRANT ALL PRIVILEGES ON {{ apply_config['slurmdbd']['StorageLoc'] }}.* TO '{{ apply_config['slurmdbd']['SlurmUser'] }}'@'%';
             FLUSH PRIVILEGES;
 
         - path: /root/omnia_slurm_scripts/00_munge_setup.sh
@@ -405,7 +405,7 @@
                 echo "${value:-$default}"
             }
             #dir StateSaveLocation
-            StateSaveLocation=$(get_value_slurm_conf "StateSaveLocation" "/var/spool")
+            StateSaveLocation=$(get_value_slurm_conf "StateSaveLocation" "/var/spool/slurmctld")
             mkdir -pv $StateSaveLocation
             chown -v "$SLURM_USER:$SLURM_GROUP" $StateSaveLocation
             chmod -v 0744 $StateSaveLocation
@@ -477,7 +477,7 @@
          - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/log/slurm  /var/log/slurm   nfs defaults,_netdev 0 0" >> /etc/fstab
 {% if powervault_config is not defined %}
          - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/lib/mysql  /var/lib/mysql   nfs defaults,_netdev 0 0" >> /etc/fstab
-         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool      /var/spool       nfs defaults,_netdev 0 0" >> /etc/fstab
+         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool/slurmctld     /var/spool/slurmctld      nfs defaults,_netdev 0 0" >> /etc/fstab
 {% endif %}
          - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/etc/munge      /etc/munge       nfs defaults,_netdev 0 0" >> /etc/fstab
          - echo "{{ trackfile_nfs_path }}    /var/log/track       nfs defaults,_netdev 0 0" >> /etc/fstab

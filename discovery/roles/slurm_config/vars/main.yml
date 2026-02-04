@@ -22,24 +22,17 @@ conf_files: # Must match this MASTER list
   - cgroup
   - gres
 copy_from_oim: false
+common_dir:
+  - /etc/munge
 ctld_dir:
   - /etc/slurm
+db_dir:
   - /etc/my.cnf.d
   - /var/lib/mysql
   - /var/log/mariadb
-  - /var/log/slurm
-  - /var/spool
-  - /etc/munge
-
 cmpt_dir:
-  - /var/log/slurm
-  - /var/spool
-  - /var/lib/slurm
   - /etc/slurm/epilog.d
-  - /etc/munge
 
-login_dir:
-  - /etc/munge
 gpu_slurm_conf:
   GresTypes: gpu
   SelectType: select/cons_tres
@@ -82,9 +75,9 @@ mariadb: mariadb
 mysql: mysql
 root_user: root
 root_group: root
-plugin_slurm_dir: "usr/lib64/slurm"
+plugin_slurm_dir: "/usr/lib64/slurm"
 munge_key_cmd: "dd if=/dev/urandom bs=1 count=1024"
-slurm_ctld_parameters: []
+slurm_ctld_parameters: ['enable_configless']
 partitions: {}
 _clean_before_install: false
 _force_install_nfs: true
@@ -96,6 +89,15 @@ munge_dir_mode: "0700"
 common_mode: "0755"
 slurm_dbd_mode: "0600"
 slurm_db_cnf_mode: "0600"
+dbd_slurm_conf:
+  AccountingStorageHost: "{{ dbd_list[0] }}"
+  AccountingStoragePort: "{{ slurm_dbd_port }}"
+  AccountingStorageType: accounting_storage/slurmdbd
+partition_params:
+  PartitionName: "{{ slurm_partition_name }}"
+  Nodes: "{{ cmpt_list | join(',') }}"
+  MaxTime: "INFINITE"
+  State: "UP"
 openldap_dir_name: "openldap/"
 software_config_file: "{{ input_project_dir }}/software_config.json"
 omnia_run_tags: "{{ hostvars['localhost']['omnia_run_tags'] }}"
@@ -127,3 +129,5 @@ offline_path_aarch64:
     dest_path: "{{ packages_base_dir_aarch64 }}/doca-ofed"
 
 ssh_private_key_path: /root/.ssh/oim_rsa
+
+backup_dir: "{{ slurm_config_path }}/{{ ctld_list[0] }}/etc/slurm/backup_{{ ansible_date_time.date }}_{{ ansible_date_time.time | replace(':', '-') }}"
