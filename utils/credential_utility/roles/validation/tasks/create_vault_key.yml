@@ -14,7 +14,7 @@
 ---
 
 - name: "Create vault key for {{ credential_type }} credential file"
-  when: "{{ status_var_name }} == false"
+  when: status_var_name == false
   block:
     - name: "Create ansible vault key for {{ credential_type }}"
       ansible.builtin.set_fact:

@@ -27,7 +27,7 @@
     "{{ status_var_name }}": "{{ file_status.stat.exists }}"
 
 - name: "Include {{ credential_type }} credentials if it exists"
-  when: "{{ status_var_name }}"
+  when: status_var_name
   block:
     - name: "Check {{ credential_type }} credentials file is encrypted"
       ansible.builtin.command: cat {{ credential_file_path }}
