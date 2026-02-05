@@ -50,6 +50,18 @@ build_stream_ssl_days: 365
 build_stream_ssl_file_mode: "0600"
 
 ###############################################################
+# JWT key configuration
+###############################################################
+build_stream_jwt_keys_script: "/opt/omnia/build_stream/scripts/generate_jwt_keys.sh"
+
+###############################################################
+# Project configuration
+###############################################################
+build_stream_default_file: "/opt/omnia/input/default.yml"
+build_stream_project_default: "project_default"
+build_stream_project_build_stream: "project_build_stream"
+
+###############################################################
 # Pulp certificate configuration (host-mounted copy)
 ###############################################################
 # Cert that build_stream will verify against
