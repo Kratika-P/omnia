@@ -225,7 +225,7 @@
         - bs_info.containers[0].State.Running | bool
 
     # -------------------------------------------------------------------
-    # 5) Validate HTTPS connectivity from inside build_stream
+    # 5) Validate pulp HTTPS connectivity from inside build_stream
     # -------------------------------------------------------------------
     - name: Build curl command
       ansible.builtin.set_fact:
@@ -254,19 +254,19 @@
         msg: "{{ build_stream_https_failure_msg }}"
       when: (curl_status.stdout | trim) != "200"
 # --------------------------------------------------------------------
-# 6) Validate health API endpoint https://localhost:{{ build_stream_port }}/health"
+# 6) Validate health API endpoint https://{{ admin_ip }}:{{ build_stream_port }}/health"
 # -------------------------------------------------------------------
-    - name: Wait until omnia_build_stream container exists and is running
-      containers.podman.podman_container_info:
-        name: "{{ build_stream_container_name }}"
-      register: bs_info
-      retries: "{{ bs_container_wait_retries }}"
-      delay: "{{ bs_container_wait_delay }}"
-      until:
-        - bs_info.containers is defined
-        - bs_info.containers | length > 0
-        - bs_info.containers[0].State is defined
-        - bs_info.containers[0].State.Running | bool
+    - name: Verify API endpoint health
+      ansible.builtin.uri:
+        url: "{{ build_stream_health_endpoint }}"
+        method: GET
+        return_content: true
+        status_code: "{{ health_check_status_code }}"
+        validate_certs: false
+      register: health_check
+      retries: "{{ health_check_retries }}"
+      delay: "{{ health_check_delay }}"
+      until: health_check.status == health_check_status_code
 
   rescue:
     - name: Build_stream container deployment failed
