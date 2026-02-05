@@ -22,10 +22,6 @@
   ansible.builtin.set_fact:
     compute_image_suffix: "{% if enable_build_stream and (build_stream_job_id | default('') != '') %}-{{ build_stream_job_id }}{% endif %}"
 
-- name: debug compute_image_suffix
-  ansible.builtin.debug:
-    var: compute_image_suffix
-
 - name: Create x86_64 compute image log files
   ansible.builtin.file:
     path: "{{ openchami_log_dir }}/{{ item.key }}{{ compute_image_suffix }}_compute_image.log"
