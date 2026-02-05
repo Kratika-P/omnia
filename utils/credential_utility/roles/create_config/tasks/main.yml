@@ -13,22 +13,24 @@
 # limitations under the License.
 ---
 
-- name: Create Omnia Credentials file
-  ansible.builtin.template:
-    src: "{{ omnia_credential_template }}"
-    dest: "{{ omnia_credential_file }}"
-    mode: "{{ omnia_credential_file_mode }}"
+- name: Create Omnia credentials file
+  ansible.builtin.include_tasks: create_credential_file.yml
+  vars:
+    credential_type: "Omnia"
+    credential_template: "{{ omnia_credential_template }}"
+    credential_file_path: "{{ omnia_credential_file }}"
+    credential_file_mode: "{{ omnia_credential_file_mode }}"
+    vault_password_file: "{{ omnia_credential_vault_path }}"
+  when: not omnia_cred_file_status
 
-- name: Include vars for omnia_config_credentials.yml
-  block:
-    - name: Include omnia_credentials.yml
-      ansible.builtin.include_vars: "{{ omnia_credential_file }}"
-      register: include_omnia_credentials
-      no_log: true
-  rescue:
-    - name: Encrypt omnia_config_credentials.yml
-      ansible.builtin.include_tasks: "{{ role_path }}/../update_config/tasks/encrypt_credentials_file.yml"
-
-    - name: Fail to include omnia_config_credentials.yml
-      ansible.builtin.fail:
-        msg: "{{ password_fail_msg }}: {{ include_omnia_credentials.message }}"
+- name: Create Build Stream credentials file
+  ansible.builtin.include_tasks: create_credential_file.yml
+  vars:
+    credential_type: "Build Stream"
+    credential_template: "{{ bs_credential_template }}"
+    credential_file_path: "{{ bs_credential_file }}"
+    credential_file_mode: "{{ bs_credential_file_mode }}"
+    vault_password_file: "{{ bs_credential_vault_path }}"
+  when: 
+    - enable_build_stream | default(false) | bool
+    - not bs_cred_file_status

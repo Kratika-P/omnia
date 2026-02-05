@@ -1,4 +1,4 @@
-# Copyright 2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+# Copyright 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@
 omnia_credential_file: "{{ input_project_dir }}/omnia_config_credentials.yml"
 omnia_credential_vault_path: "{{ input_project_dir }}/.omnia_config_credentials_key"
 
+bs_credential_file: "{{ input_project_dir }}/build_stream_oauth_credentials.yml"
+bs_credential_vault_path: "{{ input_project_dir }}/.build_stream_oauth_credentials_key"
+bs_credential_file_mode: 600
+
 # Usage: fetch_optional_credentials.yml
 optional_warning_msg: "WARNING: The following are optional credentials. If left empty these credentials will be skipped. Please enter valid inputs."
 
@@ -24,12 +28,21 @@ mandatory_warning_msg: "WARNING: The following are mandatory credentials and can
 mandatory_input: "is a [MANDATORY] credential and cannot be left empty."
 optional_input: "is an [OPTIONAL] credential and can be left empty to skip."
 
+# Usage: fetch_conditional_mandatory_credentials.yml
+conditional_mandatory_warning_msg: "WARNING: The following are conditional mandatory credentials and cannot be left empty when the feature is enabled. Please enter valid inputs."
+conditional_mandatory_input: "is a [CONDITIONAL MANDATORY] credential and cannot be left empty when feature is enabled."
+
 # Usage: prompt_credentials.yml
 mandatory_password_fail_msg: "Failed. Password is required for mandatory credential or any username input. Please provide valid password."
 password_match_fail_msg: "Failed. Passwords do not match. Please try again."
 password_fail_msg: "Failed. Please provide valid password."
 mandatory_credentials_msg: "Failed. Please provide valid username for mandatory credential."
 username_fail_msg: "Failed. Please provide valid username."
+
+# Usage: update_bs_credential_file.yml
+bs_password_hash_fail_msg: "Failed to generate SSHA password hash for build stream registrar. Please check the password format and try again."
+bs_file_update_fail_msg: "Failed to update build_stream_oauth_credentials.yml. Please check file permissions and disk space."
+bs_encrypt_fail_msg: "Failed to encrypt build_stream_oauth_credentials.yml. Please check vault password and file permissions."
 
 docker_hub_warning: |
   Docker Hub Usage Warning:
@@ -50,6 +63,8 @@ omnia_credentials:
       - { password: pulp_password }
       - { username: postgres_user, password: postgres_password }
       - { password: minio_s3_password }
+    conditional_mandatory:
+      - { username: build_stream_username, password: build_stream_password, condition: enable_build_stream, file: "{{ bs_credential_file }}" }
   local_repo:
     optional:
       - { username: docker_username, password: docker_password }
@@ -78,3 +93,16 @@ omnia_credentials:
   ldms:
     mandatory:
       - { password: ldms_sampler_password }
+
+# Credential file configurations
+credential_files:
+  omnia:
+    file_path: "{{ omnia_credential_file }}"
+    vault_path: "{{ omnia_credential_vault_path }}"
+    type: "Omnia"
+  build_stream:
+    file_path: "{{ bs_credential_file }}"
+    vault_path: "{{ bs_credential_vault_path }}"
+    type: "Build Stream"
+    mode: "{{ bs_credential_file_mode }}"
+    template: "{{ role_path }}/../create_config/templates/build_stream_credential.j2"

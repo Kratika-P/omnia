@@ -13,28 +13,17 @@
 # limitations under the License.
 ---
 
-- name: Include input project directory
-  when: not project_dir_status | default(false) | bool
-  ansible.builtin.import_playbook: ../include_input_dir.yml
-  tags: always
+- name: "Create vault key for {{ credential_type }} credential file"
+  when: "{{ status_var_name }} == false"
+  block:
+    - name: "Create ansible vault key for {{ credential_type }}"
+      ansible.builtin.set_fact:
+        "{{ vault_key_var_name }}": "{{ lookup('password', '/dev/null chars=ascii_letters') }}"
 
-- name: Check and include credential file
-  hosts: localhost
-  connection: local
-  roles:
-    - validation
-  tags: always
-
-- name: Create credential config files if they don't exist
-  hosts: localhost
-  connection: local
-  roles:
-    - create_config
-  tags: always
-
-- name: Fetch and update credentials in config file
-  hosts: localhost
-  connection: local
-  roles:
-    - update_config
-  tags: always
+    - name: "Save vault key to {{ credential_type }} vault path"
+      ansible.builtin.lineinfile:
+        path: "{{ vault_password_file }}"
+        line: "{{ vault_key }}"
+        mode: "{{ conf_file_mode }}"
+        owner: root
+        create: true
