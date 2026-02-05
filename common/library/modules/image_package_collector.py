@@ -261,6 +261,10 @@ def run_module():
         else:
             arch = "x86_64"
 
+        # Base role name without architecture suffix, used for role-specific
+        # additional packages lookups
+        base_name = fg_name.replace("_x86_64", "").replace("_aarch64", "")
+
         packages = process_functional_group(
             fg_name, arch, os_version, input_project_dir,
             software_map, allowed_softwares, module
