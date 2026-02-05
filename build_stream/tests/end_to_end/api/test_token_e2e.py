@@ -33,6 +33,13 @@ from typing import Dict
 import httpx
 import pytest
 
+# Import helper functions from conftest
+from tests.end_to_end.api.conftest import (
+    generate_test_client_secret,
+    generate_invalid_client_id,
+    generate_invalid_client_secret,
+)
+
 
 @pytest.fixture
 def registered_client_e2e(  # noqa: W0613
@@ -236,7 +243,6 @@ class TestTokenEndpointE2E:
         registered_client_e2e: Dict[str, str],
     ):
         """Test token request with invalid client_secret fails."""
-        from tests.integration.conftest import generate_test_client_secret
         
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
@@ -356,7 +362,6 @@ class TestTokenEndpointE2E:
         registered_client_e2e: Dict[str, str],
     ):
         """Test token request with invalid client_id format fails."""
-        from tests.integration.conftest import generate_invalid_client_id
         
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
@@ -376,7 +381,6 @@ class TestTokenEndpointE2E:
         registered_client_e2e: Dict[str, str],
     ):
         """Test token request with invalid client_secret format fails."""
-        from tests.integration.conftest import generate_invalid_client_secret
         
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(

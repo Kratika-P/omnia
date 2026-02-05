@@ -553,7 +553,7 @@ def project_dir() -> str:
     Returns:
         Path to build_stream project directory.
     """
-    return str(Path(__file__).parent.parent.parent)
+    return str(Path(__file__).parent.parent.parent.parent)
 
 
 @pytest.fixture(scope="module")

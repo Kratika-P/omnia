@@ -255,7 +255,7 @@ class TestTokenEndpoint:
             },
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_token_invalid_grant_type_returns_422(
         self,
@@ -272,7 +272,7 @@ class TestTokenEndpoint:
             },
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_token_invalid_scope_returns_400(
         self,
@@ -312,7 +312,7 @@ class TestTokenEndpoint:
             },
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_token_invalid_client_secret_format_returns_422(
         self,
@@ -331,7 +331,7 @@ class TestTokenEndpoint:
             },
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_token_expires_in_is_positive(
         self,
