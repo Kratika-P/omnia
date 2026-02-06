@@ -26,7 +26,9 @@ software_config_file: "{{ input_project_dir }}/software_config.json"
 telemetry_config_path: "{{ input_project_dir }}/telemetry_config.yml"
 
 # Validation error messages
-invalid_software_config_fail_msg: "Failed. Please provide valid software_config.json file with cluster_os_type, cluster_os_version, repo_config and repo_config values."
+invalid_software_config_fail_msg: >-
+  Failed. Please provide valid software_config.json file with
+  cluster_os_type, cluster_os_version, repo_config and repo_config values.
 software_config_syntax_fail_msg: "Failed. Syntax errors present in software_config.json. Fix errors and re-run playbook again."
 
 # Credential validation error messages

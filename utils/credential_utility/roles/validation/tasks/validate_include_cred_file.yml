@@ -33,7 +33,7 @@
       ansible.builtin.set_fact:
         cred_file_path: "{{ credential_file_path }}"
         cred_vault_path: "{{ vault_password_file }}"
-      
+
     - name: "Include credentials - {{ credential_type }}"
       ansible.builtin.include_tasks: "{{ role_path }}/../../../../common/tasks/common/decrypt_include_encrypt.yml"
       vars:
