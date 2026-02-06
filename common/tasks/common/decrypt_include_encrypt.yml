@@ -15,7 +15,7 @@
 
 - name: Load encrypt files variables
   ansible.builtin.include_vars:
-    file: "{{ role_path }}/../vars/encrypt_files_vars.yml"
+    file: "{{ role_path }}/../../../../common/vars/encrypt_files_vars.yml"
 
 - name: Fail if credential file path is not provided
   ansible.builtin.fail:
