@@ -80,6 +80,29 @@
       changed_when: false
       failed_when: false
 
-    - name: Fail if decryption of encryption failed
+    - name: Validate credential file integrity
+      ansible.builtin.set_fact:
+        vault_corrupted: true
+      when:
+        - decrypt_result is defined
+        - decrypt_result is failed
+
+    - name: Clean up credential files
+      ansible.builtin.file:
+        path: "{{ credential_file_path }}"
+        state: absent
+      when: vault_corrupted | default(false)
+
+    - name: Reset vault configuration
+      ansible.builtin.file:
+        path: "{{ vault_password_file }}"
+        state: absent
+      when: vault_corrupted | default(false)
+
+    - name: Fail if decryption failed
       ansible.builtin.fail:
         msg: "{{ vault_decrypt_error }}"
+      when:
+        - decrypt_result is defined
+        - decrypt_result is failed
+        - not vault_corrupted | default(false)
