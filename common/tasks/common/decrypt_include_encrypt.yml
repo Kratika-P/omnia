@@ -13,12 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- name: Check if credential file exists
-  ansible.builtin.stat:
-    path: "{{ credential_file_path }}"
-  register: cred_file_stat
-  when: credential_file_path is defined
-
 - name: Fail if credential file path is not provided
   ansible.builtin.fail:
     msg: "credential_file_path must be provided"
@@ -29,28 +23,56 @@
     msg: "vault_password_file must be provided"
   when: vault_password_file is not defined
 
-- name: Check if credential file is encrypted
-  ansible.builtin.shell: >-
-    head -n1 {{ credential_file_path }} | grep -q '\$ANSIBLE_VAULT;'
-  register: cred_file_encrypted
-  changed_when: false
-  failed_when: false
+- name: Check if credential file exists
+  ansible.builtin.stat:
+    path: "{{ credential_file_path }}"
+  register: cred_file_stat
+  when: credential_file_path is defined
 
-- name: Decrypt credential file if encrypted
-  ansible.builtin.command: >-
-    ansible-vault decrypt {{ credential_file_path }}
-    --vault-password-file {{ vault_password_file }}
-  when: cred_file_encrypted.rc == 0
-  changed_when: false
+- name: Process credential file
+  block:
+    - name: Check if credential file is encrypted
+      ansible.builtin.shell: >-
+        head -n1 {{ credential_file_path }} | grep -q '\$ANSIBLE_VAULT;'
+      register: cred_file_encrypted
+      changed_when: false
+      failed_when: false
 
-- name: Include credential file
-  ansible.builtin.include_vars: "{{ credential_file_path }}"
-  register: include_credentials
-  no_log: true
+    - name: Decrypt credential file if encrypted
+      ansible.builtin.command: >-
+        ansible-vault decrypt {{ credential_file_path }}
+        --vault-password-file {{ vault_password_file }}
+      when: cred_file_encrypted.rc == 0
+      changed_when: false
+      register: decrypt_result
 
-- name: Re-encrypt credential file if it was decrypted
-  ansible.builtin.command: >-
-    ansible-vault encrypt {{ credential_file_path }}
-    --vault-password-file {{ vault_password_file }}
-  when: cred_file_encrypted.rc == 0
-  changed_when: false
+    - name: Include credential file
+      ansible.builtin.include_vars: "{{ credential_file_path }}"
+      register: include_credentials
+      no_log: true
+
+    - name: Re-encrypt credential file if it was decrypted
+      ansible.builtin.command: >-
+        ansible-vault encrypt {{ credential_file_path }}
+        --vault-password-file {{ vault_password_file }}
+      when: 
+        - cred_file_encrypted.rc == 0
+        - decrypt_result is succeeded
+      changed_when: false
+      register: encrypt_result
+
+  rescue:
+    - name: Re-encrypt credential file on error if it was decrypted
+      ansible.builtin.command: >-
+        ansible-vault encrypt {{ credential_file_path }}
+        --vault-password-file {{ vault_password_file }}
+      when: 
+        - cred_file_encrypted.rc == 0
+        - decrypt_result is defined
+      changed_when: false
+      ignore_errors: true
+
+    - name: Fail with vault error message
+      ansible.builtin.fail:
+        msg: "Failed to decrypt credential file {{ credential_file_path }}. The file may be corrupted or the vault password may be incorrect."
+  when: cred_file_stat.stat.exists | default(false)
