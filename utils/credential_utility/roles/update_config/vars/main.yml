@@ -28,10 +28,6 @@ mandatory_warning_msg: "WARNING: The following are mandatory credentials and can
 mandatory_input: "is a [MANDATORY] credential and cannot be left empty."
 optional_input: "is an [OPTIONAL] credential and can be left empty to skip."
 
-# Usage: fetch_conditional_mandatory_credentials.yml
-conditional_mandatory_warning_msg: "WARNING: The following are conditional mandatory credentials and cannot be left empty when the feature is enabled. Please enter valid inputs."
-conditional_mandatory_input: "is a [CONDITIONAL MANDATORY] credential and cannot be left empty when feature is enabled."
-
 # Usage: prompt_credentials.yml
 mandatory_password_fail_msg: "Failed. Password is required for mandatory credential or any username input. Please provide valid password."
 password_match_fail_msg: "Failed. Passwords do not match. Please try again."
@@ -61,10 +57,7 @@ omnia_credentials:
       - { username: docker_username, password: docker_password }
     mandatory:
       - { password: pulp_password }
-      - { username: postgres_user, password: postgres_password }
       - { password: minio_s3_password }
-    conditional_mandatory:
-      - { username: build_stream_username, password: build_stream_password, condition: enable_build_stream, file: "{{ bs_credential_file }}" }
   local_repo:
     optional:
       - { username: docker_username, password: docker_password }
@@ -93,6 +86,10 @@ omnia_credentials:
   ldms:
     mandatory:
       - { password: ldms_sampler_password }
+  build_stream:
+    mandatory:
+      - { username: build_stream_username, password: build_stream_password, file: "{{ bs_credential_file }}" }
+      - { username: postgres_user, password: postgres_password }
 
 # Credential file configurations
 credential_files:
