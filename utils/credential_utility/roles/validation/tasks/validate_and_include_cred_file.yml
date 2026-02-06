@@ -27,7 +27,7 @@
     "{{ status_var_name }}": "{{ file_status.stat.exists }}"
 
 - name: "Include {{ credential_type }} credentials if it exists"
-  when: status_var_name
+  when: vars[status_var_name] | default(false)
   block:
     - name: "Check {{ credential_type }} credentials file is encrypted"
       ansible.builtin.command: cat {{ credential_file_path }}
@@ -56,4 +56,4 @@
 
     - name: "Fail to include {{ credential_type }} credentials"
       ansible.builtin.fail:
-        msg: "{{ password_fail_msg }}: {{ include_credentials.message }}"
+        msg: "{{ password_fail_msg }}: {{ include_credentials_msg }}"

@@ -28,3 +28,7 @@ telemetry_config_path: "{{ input_project_dir }}/telemetry_config.yml"
 # Validation error messages
 invalid_software_config_fail_msg: "Failed. Please provide valid software_config.json file with cluster_os_type, cluster_os_version, repo_config and repo_config values."
 software_config_syntax_fail_msg: "Failed. Syntax errors present in software_config.json. Fix errors and re-run playbook again."
+
+# Credential validation error messages
+password_fail_msg: "Failed to validate credentials file"
+include_credentials_msg: "Failed to include {{ credential_file_path }}"
