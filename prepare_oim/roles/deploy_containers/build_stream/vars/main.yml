@@ -43,6 +43,7 @@ build_stream_ssl_file_mode: "0600"
 
 # JWT key configuration
 build_stream_jwt_keys_script: "/opt/omnia/build_stream/scripts/generate_jwt_keys.sh"
+build_stream_jwt_keys_dir: "/opt/omnia/build_stream/api/auth/keys"
 
 # Project configuration
 build_stream_default_file: "/opt/omnia/input/default.yml"

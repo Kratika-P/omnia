@@ -170,10 +170,23 @@
     mode: "{{ build_stream_jwt_script_mode }}"
   delegate_to: localhost
 
+- name: Check if JWT keys already exist
+  ansible.builtin.stat:
+    path: "{{ build_stream_jwt_keys_dir }}/jwt_private.pem"
+  register: jwt_private_key
+  delegate_to: localhost
+
+- name: Check if JWT public key exists
+  ansible.builtin.stat:
+    path: "{{ build_stream_jwt_keys_dir }}/jwt_public.pem"
+  register: jwt_public_key
+  delegate_to: localhost
+
 - name: Generate JWT keys
   ansible.builtin.command: "{{ build_stream_jwt_keys_script }}"
   delegate_to: localhost
   changed_when: false
+  when: not jwt_private_key.stat.exists or not jwt_public_key.stat.exists
 
 # - name: Update project name in default.yml
 #  ansible.builtin.replace:
