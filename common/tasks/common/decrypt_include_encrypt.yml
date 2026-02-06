@@ -13,6 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+- name: Check if credential file exists
+  ansible.builtin.stat:
+    path: "{{ credential_file_path }}"
+  register: cred_file_stat
+  when: credential_file_path is defined
+
+- name: Fail if credential file path is not provided
+  ansible.builtin.fail:
+    msg: "credential_file_path must be provided"
+  when: credential_file_path is not defined
+
+- name: Fail if vault password file path is not provided
+  ansible.builtin.fail:
+    msg: "vault_password_file must be provided"
+  when: vault_password_file is not defined
+
 - name: Check if credential file is encrypted
   ansible.builtin.shell: >-
     head -n1 {{ credential_file_path }} | grep -q '\$ANSIBLE_VAULT;'
