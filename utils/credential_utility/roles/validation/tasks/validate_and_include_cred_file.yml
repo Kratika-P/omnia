@@ -29,31 +29,12 @@
 - name: "Include {{ credential_type }} credentials if it exists"
   when: vars[status_var_name] | default(false)
   block:
-    - name: "Check {{ credential_type }} credentials file is encrypted"
-      ansible.builtin.command: cat {{ credential_file_path }}
-      changed_when: false
-      register: credentials_content
-      no_log: true
-
-    - name: "Decrypt {{ credential_type }} credentials file"
-      ansible.builtin.command: >-
-        ansible-vault decrypt {{ credential_file_path }}
-        --vault-password-file {{ vault_password_file }}
-      changed_when: false
-      when: ansible_vault_search_key in credentials_content.stdout
-
     - name: "Include {{ credential_type }} credentials"
-      ansible.builtin.include_vars: "{{ credential_file_path }}"
-      register: include_credentials
-      no_log: true
+      ansible.builtin.include_tasks: "{{ role_path }}/../../../../common/tasks/common/decrypt_include_encrypt.yml"
+      vars:
+        credential_file_path: "{{ credential_file_path }}"
+        vault_password_file: "{{ vault_password_file }}"
   rescue:
-    - name: "Encrypt {{ credential_type }} credentials file on error"
-      ansible.builtin.command: >-
-        ansible-vault encrypt {{ credential_file_path }}
-        --vault-password-file {{ vault_password_file }}
-      changed_when: false
-      when: ansible_vault_search_key in credentials_content.stdout
-
     - name: "Fail to include {{ credential_type }} credentials"
       ansible.builtin.fail:
         msg: "{{ password_fail_msg }}: {{ include_credentials_msg }}"
