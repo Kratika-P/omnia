@@ -63,7 +63,7 @@
       ansible.builtin.command: >-
         ansible-vault encrypt {{ credential_file_path }}
         --vault-password-file {{ vault_password_file }}
-      when: 
+      when:
         - cred_file_encrypted.rc == 0
         - decrypt_result is succeeded
       changed_when: false
@@ -74,11 +74,11 @@
       ansible.builtin.command: >-
         ansible-vault encrypt {{ credential_file_path }}
         --vault-password-file {{ vault_password_file }}
-      when: 
+      when:
         - cred_file_encrypted.rc == 0
         - decrypt_result is defined and decrypt_result is succeeded
       changed_when: false
-      ignore_errors: true
+      failed_when: false
 
     - name: Fail if decryption of encryption failed
       ansible.builtin.fail:
