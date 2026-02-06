@@ -19,12 +19,12 @@
   when: omnia_run_tags is not defined
 
 - name: Validate and include Omnia credential file if it exists
-  ansible.builtin.include_tasks: validate_and_include_cred_file.yml
+  ansible.builtin.include_tasks: validate_include_cred_file.yml
   vars:
     credential_type: "Omnia"
     credential_file_path: "{{ omnia_credential_file }}"
-    status_var_name: "omnia_cred_file_status"
     vault_password_file: "{{ omnia_credential_vault_path }}"
+    status_var_name: "omnia_cred_file_status"
 
 - name: Load build_stream_config.yml to check if enabled
   block:
@@ -38,7 +38,7 @@
         enable_build_stream: false
 
 - name: Validate and include Build Stream credential file if it exists
-  ansible.builtin.include_tasks: validate_and_include_cred_file.yml
+  ansible.builtin.include_tasks: validate_include_cred_file.yml
   when: enable_build_stream
   vars:
     credential_type: "Build Stream"

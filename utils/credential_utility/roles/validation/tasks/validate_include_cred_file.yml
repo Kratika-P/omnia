@@ -29,16 +29,11 @@
 - name: "Include {{ credential_type }} credentials if it exists"
   when: vars[status_var_name] | default(false)
   block:
-    - name: Set variables for common task
-      ansible.builtin.set_fact:
-        cred_file_path: "{{ credential_file_path }}"
-        cred_vault_path: "{{ vault_password_file }}"
-      
     - name: "Include {{ credential_type }} credentials"
-      ansible.builtin.include_tasks: "{{ role_path }}/../../../../../common/tasks/common/decrypt_include_encrypt.yml"
+      ansible.builtin.include_tasks: include_credentials.yml
       vars:
-        credential_file_path: "{{ cred_file_path }}"
-        vault_password_file: "{{ cred_vault_path }}"
+        credential_file_path: "{{ credential_file_path }}"
+        vault_password_file: "{{ vault_password_file }}"
   rescue:
     - name: "Fail to include {{ credential_type }} credentials"
       ansible.builtin.fail:
