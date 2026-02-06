@@ -175,7 +175,7 @@
   delegate_to: localhost
   changed_when: false
 
-#- name: Update project name in default.yml
+# - name: Update project name in default.yml
 #  ansible.builtin.replace:
 #    path: "{{ build_stream_default_file }}"
 #    regexp: "{{ build_stream_project_default }}"
