@@ -167,17 +167,20 @@
 - name: Set execute permission on JWT key generation script
   ansible.builtin.file:
     path: "{{ build_stream_jwt_keys_script }}"
-    mode: "0755"
+    mode: "{{ build_stream_jwt_script_mode }}"
+  delegate_to: localhost
 
 - name: Generate JWT keys
   ansible.builtin.command: "{{ build_stream_jwt_keys_script }}"
+  delegate_to: localhost
   changed_when: false
 
-- name: Update project name in default.yml
-  ansible.builtin.replace:
-    path: "{{ build_stream_default_file }}"
-    regexp: "{{ build_stream_project_default }}"
-    replace: "{{ build_stream_project_build_stream }}"
+#- name: Update project name in default.yml
+#  ansible.builtin.replace:
+#    path: "{{ build_stream_default_file }}"
+#    regexp: "{{ build_stream_project_default }}"
+#    replace: "{{ build_stream_project_build_stream }}"
+#  delegate_to: localhost
 
 # -------------------------------------------------------------------
 # 4) Deploy quadlet using template + restart via handlers

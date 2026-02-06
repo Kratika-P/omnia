@@ -35,8 +35,8 @@
 
     - name: Set build_stream variables from auth_registration
       ansible.builtin.set_fact:
-        build_stream_username: "{{ auth_registration.username | default('') }}"
-        build_stream_password_hash: "{{ auth_registration.password_hash | default('') }}"
+        build_stream_auth_username: "{{ auth_registration.username | default('') }}"
+        build_stream_auth_password_hash: "{{ auth_registration.password_hash | default('') }}"
       no_log: true
 
 - name: Fetch credentials

@@ -61,7 +61,7 @@ omnia_credentials:
       - { password: minio_s3_password }
   build_stream:
     mandatory:
-      - { username: build_stream_username, password: build_stream_password, file: "{{ bs_credential_file }}" }
+      - { username: build_stream_auth_username, password: build_stream_auth_password, file: "{{ bs_credential_file }}" }
       - { username: postgres_user, password: postgres_password }
   local_repo:
     optional:

@@ -32,6 +32,7 @@ build_stream_log_dir: "{{ omnia_path }}/log/build_stream"
 
 # Directory & File Modes
 build_stream_dir_mode: "0755"
+build_stream_jwt_script_mode: "0755"
 
 # SSL certificate configuration for build_stream
 build_stream_ssl_dir: "/opt/omnia/build_stream/ssl"
