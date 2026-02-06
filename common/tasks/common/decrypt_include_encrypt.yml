@@ -43,11 +43,26 @@
       changed_when: false
       failed_when: false
 
+    - name: Check if vault password file exists
+      ansible.builtin.stat:
+        path: "{{ vault_password_file }}"
+      register: vault_file_stat
+      when: cred_file_encrypted.rc == 0
+
+    - name: Detect state - encrypted file without vault key
+      ansible.builtin.set_fact:
+        vault_corrupted: true
+      when:
+        - cred_file_encrypted.rc == 0
+        - not vault_file_stat.stat.exists
+
     - name: Decrypt credential file if encrypted
       ansible.builtin.command: >-
         ansible-vault decrypt {{ credential_file_path }}
         --vault-password-file {{ vault_password_file }}
-      when: cred_file_encrypted.rc == 0
+      when:
+        - cred_file_encrypted.rc == 0
+        - vault_file_stat.stat.exists
       changed_when: false
       register: decrypt_result
 

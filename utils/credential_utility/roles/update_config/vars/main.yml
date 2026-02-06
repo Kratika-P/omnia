@@ -34,6 +34,7 @@ password_match_fail_msg: "Failed. Passwords do not match. Please try again."
 password_fail_msg: "Failed. Please provide valid password."
 mandatory_credentials_msg: "Failed. Please provide valid username for mandatory credential."
 username_fail_msg: "Failed. Please provide valid username."
+credential_encrypt_fail_msg: "Failed to encrypt credential file."
 
 # Usage: update_bs_credential_file.yml
 bs_password_hash_fail_msg: "Failed to generate SSHA password hash for build stream registrar. Please check the password format and try again."
