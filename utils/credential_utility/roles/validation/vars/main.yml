@@ -17,7 +17,7 @@
 omnia_credential_file: "{{ input_project_dir }}/omnia_config_credentials.yml"
 bs_credential_file: "{{ input_project_dir }}/build_stream_oauth_credentials.yml"
 omnia_credential_vault_path: "{{ input_project_dir }}/.omnia_config_credentials_key"
-bs_credential_vault_path: "{{ input_project_dir }}/.build_stream_config_credentials_key"
+bs_credential_vault_path: "{{ input_project_dir }}/.build_stream_oauth_credentials_key"
 
 # Usage: pre_requisite.yml
 ansible_vault_search_key: "$ANSIBLE_VAULT;"
