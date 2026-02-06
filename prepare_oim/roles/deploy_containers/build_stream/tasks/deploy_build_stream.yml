@@ -164,6 +164,11 @@
     - "{{ build_stream_ssl_cert }}"
     - "{{ build_stream_ssl_key }}"
 
+- name: Set execute permission on JWT key generation script
+  ansible.builtin.file:
+    path: "{{ build_stream_jwt_keys_script }}"
+    mode: "0755"
+
 - name: Generate JWT keys
   ansible.builtin.command: "{{ build_stream_jwt_keys_script }}"
 
