@@ -159,7 +159,7 @@ class TestRegisterEndpoint:
             json=invalid_request,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_register_empty_client_name_returns_422(
         self,
@@ -177,7 +177,7 @@ class TestRegisterEndpoint:
             json=invalid_request,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_register_missing_client_name_returns_422(
         self,
@@ -195,7 +195,7 @@ class TestRegisterEndpoint:
             json=invalid_request,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_register_invalid_scope_returns_422(
         self,
@@ -214,7 +214,7 @@ class TestRegisterEndpoint:
             json=invalid_request,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_register_client_name_too_long_returns_422(
         self,
@@ -232,7 +232,7 @@ class TestRegisterEndpoint:
             json=invalid_request,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_register_response_contains_all_fields(
         self,

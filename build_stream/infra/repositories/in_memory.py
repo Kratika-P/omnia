@@ -17,8 +17,8 @@
 
 from typing import Dict, List, Optional
 
-from build_stream.core.jobs.entities import Job, Stage, IdempotencyRecord, AuditEvent
-from build_stream.core.jobs.value_objects import JobId, IdempotencyKey, StageName
+from core.jobs.entities import Job, Stage, IdempotencyRecord, AuditEvent
+from core.jobs.value_objects import JobId, IdempotencyKey, StageName
 
 class InMemoryJobRepository:
     """In-memory implementation of Job repository for testing."""

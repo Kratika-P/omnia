@@ -28,8 +28,8 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from build_stream.api.router import api_router
-from build_stream.container import container
+from api.router import api_router
+from container import container
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -38,7 +38,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-container.wire(modules=["build_stream.api.jobs.routes", "build_stream.api.jobs.dependencies"])
+container.wire(modules=["api.jobs.routes", "api.jobs.dependencies"])
 logger.info("Using container: %s", container.__class__.__name__)
 
 app = FastAPI(
