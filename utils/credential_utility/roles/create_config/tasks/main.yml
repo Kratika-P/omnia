@@ -31,6 +31,6 @@
     credential_file_path: "{{ bs_credential_file }}"
     credential_file_mode: "{{ bs_credential_file_mode }}"
     vault_password_file: "{{ bs_credential_vault_path }}"
-  when: 
+  when:
     - enable_build_stream | default(false) | bool
     - not bs_cred_file_status

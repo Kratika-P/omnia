@@ -18,7 +18,7 @@
     module_utils_path: "{{ role_path }}/../../../../common/library/module_utils/"
 
 - name: Pre-load build stream credentials if they exist
-  when: 
+  when:
     - enable_build_stream | default(false) | bool
     - bs_credential_file is file
   block:
@@ -26,13 +26,13 @@
       ansible.builtin.set_fact:
         cred_file_path: "{{ bs_credential_file }}"
         cred_vault_path: "{{ bs_credential_vault_path }}"
-    
+
     - name: Include build stream credentials using common task
       ansible.builtin.include_tasks: "{{ role_path }}/../../../../common/tasks/common/decrypt_include_encrypt.yml"
       vars:
         credential_file_path: "{{ cred_file_path }}"
         vault_password_file: "{{ cred_vault_path }}"
-    
+
     - name: Set build_stream variables from auth_registration
       ansible.builtin.set_fact:
         build_stream_username: "{{ auth_registration.username | default('') }}"
@@ -51,7 +51,7 @@
       ansible.builtin.set_fact:
         cred_file_path: "{{ omnia_credential_file }}"
         cred_vault_path: "{{ omnia_credential_vault_path }}"
-    
+
     - name: Include omnia credentials using common task
       ansible.builtin.include_tasks: "{{ role_path }}/../../../../common/tasks/common/decrypt_include_encrypt.yml"
       vars:
@@ -59,20 +59,21 @@
         vault_password_file: "{{ cred_vault_path }}"
 
 - name: Include updated build stream credentials
+  when:
+    - enable_build_stream | default(false) | bool
+    - bs_cred_file_status | default(false)
   block:
     - name: Set variables for common task
       ansible.builtin.set_fact:
         cred_file_path: "{{ bs_credential_file }}"
         cred_vault_path: "{{ bs_credential_vault_path }}"
-    
+
     - name: Include build stream credentials using common task
       ansible.builtin.include_tasks: "{{ role_path }}/../../../../common/tasks/common/decrypt_include_encrypt.yml"
       vars:
         credential_file_path: "{{ cred_file_path }}"
         vault_password_file: "{{ cred_vault_path }}"
-  when: 
-    - enable_build_stream | default(false) | bool
-    - bs_cred_file_status | default(false)
+
 
 - name: Encrypt omnia credentials config
   ansible.builtin.include_tasks: encrypt_credentials_file.yml
