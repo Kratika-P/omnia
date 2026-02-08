@@ -42,7 +42,7 @@
   block:
     - name: Check if file is encrypted
       ansible.builtin.shell: >-
-        head -n1 "{{ credential_file_path }}" | grep -q '\$ANSIBLE_VAULT;'
+        set -o pipefail && head -n1 "{{ credential_file_path }}" | grep -q '\$ANSIBLE_VAULT;'
       register: is_encrypted
       changed_when: false
       failed_when: false
@@ -100,4 +100,3 @@
         - name: Fail with error message
           ansible.builtin.fail:
             msg: "{{ file_processing_error }}"
-
