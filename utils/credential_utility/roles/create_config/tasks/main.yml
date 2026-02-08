@@ -36,5 +36,5 @@
   loop: "{{ credential_files }}"
   loop_control:
     loop_var: cred_config
-  when: 
+  when:
     - cred_config.file_path is not file
