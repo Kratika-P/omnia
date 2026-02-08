@@ -13,111 +13,91 @@
 # limitations under the License.
 ---
 
+# Decrypt, include variables, and re-encrypt credential files
+# This task handles both encrypted and unencrypted credential files
+
 - name: Load encrypt files variables
   ansible.builtin.include_vars:
-    file: "{{ role_path }}/../../../../common/vars/encrypt_files_vars.yml"
+    file: "{{ role_path }}/../../../vars/encrypt_files_vars.yml"
 
-- name: Fail if credential file path is not provided
+- name: Validate required parameters
   ansible.builtin.fail:
-    msg: "{{ credential_file_path_error }}"
-  when: credential_file_path is not defined
+    msg: "{{ parameter_validation_error }}"
+  when:
+    - credential_file_path is not defined
+    - vault_password_file is not defined
 
-- name: Fail if vault password file path is not provided
-  ansible.builtin.fail:
-    msg: "{{ vault_password_file_error }}"
-  when: vault_password_file is not defined
-
-- name: Check if credential file exists
+- name: Check credential file existence
   ansible.builtin.stat:
     path: "{{ credential_file_path }}"
   register: cred_file_stat
-  when: credential_file_path is defined
+
+- name: Skip processing for non-existent files
+  ansible.builtin.debug:
+    msg: "{{ file_not_found_msg }}"
+  when: not cred_file_stat.stat.exists
 
 - name: Process credential file
-  when: cred_file_stat.stat.exists | default(false)
+  when: cred_file_stat.stat.exists
   block:
-    - name: Check if credential file is encrypted
+    - name: Check if file is encrypted
       ansible.builtin.shell: >-
-        set -o pipefail && head -n1 {{ credential_file_path }} | grep -q '\$ANSIBLE_VAULT;'
-      register: cred_file_encrypted
+        head -n1 "{{ credential_file_path }}" | grep -q '\$ANSIBLE_VAULT;'
+      register: is_encrypted
       changed_when: false
       failed_when: false
 
-    - name: Check if vault password file exists
-      ansible.builtin.stat:
-        path: "{{ vault_password_file }}"
-      register: vault_file_stat
-      when: cred_file_encrypted.rc == 0
-
-    - name: Detect state - encrypted file without vault key
-      ansible.builtin.set_fact:
-        vault_corrupted: true
-      when:
-        - cred_file_encrypted.rc == 0
-        - not vault_file_stat.stat.exists
-
-    - name: Decrypt credential file if encrypted
-      ansible.builtin.command: >-
-        ansible-vault decrypt {{ credential_file_path }}
-        --vault-password-file {{ vault_password_file }}
-      when:
-        - cred_file_encrypted.rc == 0
-        - vault_file_stat.stat.exists
-      changed_when: false
-      register: decrypt_result
-
-    - name: Include credential file
+    - name: Include unencrypted file directly
       ansible.builtin.include_vars: "{{ credential_file_path }}"
-      register: include_credentials
       no_log: true
-      when:
-        - cred_file_encrypted.rc == 0
-        - decrypt_result is succeeded
+      when: is_encrypted.rc != 0
 
-    - name: Re-encrypt credential file if it was decrypted
-      ansible.builtin.command: >-
-        ansible-vault encrypt {{ credential_file_path }}
-        --vault-password-file {{ vault_password_file }}
-      when:
-        - cred_file_encrypted.rc == 0
-        - decrypt_result is succeeded
-      changed_when: false
-      register: encrypt_result
+    - name: Process encrypted file
+      when: is_encrypted.rc == 0
+      block:
+        - name: Check vault key existence
+          ansible.builtin.stat:
+            path: "{{ vault_password_file }}"
+          register: vault_key_stat
+
+        - name: Fail if vault key missing for encrypted file
+          ansible.builtin.fail:
+            msg: "{{ vault_key_missing_error }}"
+          when: not vault_key_stat.stat.exists
+
+        - name: Decrypt credential file
+          ansible.builtin.command: >-
+            ansible-vault decrypt "{{ credential_file_path }}"
+            --vault-password-file "{{ vault_password_file }}"
+          register: decrypt_result
+          changed_when: false
+
+        - name: Include decrypted variables
+          ansible.builtin.include_vars: "{{ credential_file_path }}"
+          no_log: true
+          when: decrypt_result is succeeded
+
+        - name: Re-encrypt credential file
+          ansible.builtin.command: >-
+            ansible-vault encrypt "{{ credential_file_path }}"
+            --vault-password-file "{{ vault_password_file }}"
+          changed_when: false
+          when: decrypt_result is succeeded
 
   rescue:
-    - name: Re-encrypt credential file on error if it was decrypted
-      ansible.builtin.command: >-
-        ansible-vault encrypt {{ credential_file_path }}
-        --vault-password-file {{ vault_password_file }}
-      when:
-        - cred_file_encrypted.rc == 0
-        - decrypt_result is defined and decrypt_result is succeeded
-      changed_when: false
-      failed_when: false
+    - name: Cleanup on decryption failure
+      block:
+        - name: Re-encrypt file if partially decrypted
+          ansible.builtin.command: >-
+            ansible-vault encrypt "{{ credential_file_path }}"
+            --vault-password-file "{{ vault_password_file }}"
+          changed_when: false
+          failed_when: false
+          when:
+            - decrypt_result is defined
+            - decrypt_result is succeeded
 
-    - name: Validate credential file integrity
-      ansible.builtin.set_fact:
-        vault_corrupted: true
-      when:
-        - decrypt_result is defined
-        - decrypt_result is failed
+        - name: Fail with error message
+          ansible.builtin.fail:
+            msg: "{{ file_processing_error }}"
 
-    - name: Clean up credential files
-      ansible.builtin.file:
-        path: "{{ credential_file_path }}"
-        state: absent
-      when: vault_corrupted | default(false)
-
-    - name: Reset vault configuration
-      ansible.builtin.file:
-        path: "{{ vault_password_file }}"
-        state: absent
-      when: vault_corrupted | default(false)
-
-    - name: Fail if decryption failed
-      ansible.builtin.fail:
-        msg: "{{ vault_decrypt_error }}"
-      when:
-        - decrypt_result is defined
-        - decrypt_result is failed
-        - not vault_corrupted | default(false)
