@@ -30,7 +30,7 @@ credential_files:
 mandatory_warning_msg: "WARNING: The following are mandatory credentials and cannot be left empty. Please provide valid inputs."
 mandatory_input: "is a [MANDATORY] credential and cannot be left empty."
 optional_warning_msg: |
-  WARNING: The following are optional credentials. If left empty, these credentials will be skipped. 
+  WARNING: The following are optional credentials. If left empty, these credentials will be skipped.
   Please provide valid inputs or press Enter to skip.
 optional_input: "is an [OPTIONAL] credential and can be left empty to skip."
 conditional_mandatory_input: "is a [CONDITIONAL MANDATORY] credential and cannot be left empty when the feature is enabled."
