@@ -13,24 +13,28 @@
 # limitations under the License.
 ---
 
-- name: Create Omnia credentials file
-  ansible.builtin.include_tasks: create_credential_file.yml
-  vars:
-    credential_type: "Omnia"
-    credential_template: "{{ omnia_credential_template }}"
-    credential_file_path: "{{ omnia_credential_file }}"
-    credential_file_mode: "{{ omnia_credential_file_mode }}"
-    vault_password_file: "{{ omnia_credential_vault_path }}"
-  when: not omnia_cred_file_status
-
-- name: Create Build Stream credentials file
-  ansible.builtin.include_tasks: create_credential_file.yml
-  vars:
-    credential_type: "Build Stream"
-    credential_template: "{{ bs_credential_template }}"
-    credential_file_path: "{{ bs_credential_file }}"
-    credential_file_mode: "{{ bs_credential_file_mode }}"
-    vault_password_file: "{{ bs_credential_vault_path }}"
+- name: Include vars for encrypted credentials
+  ansible.builtin.include_tasks: "{{ role_path }}/../../../../common/tasks/common/decrypt_include_encrypt.yml"
+  loop: "{{ credential_files }}"
+  loop_control:
+    loop_var: cred_config
   when:
-    - enable_build_stream | default(false) | bool
-    - not bs_cred_file_status
+    - cred_config.file_path is file
+  vars:
+    credential_file_path: "{{ cred_config.file_path }}"
+    vault_password_file: "{{ cred_config.vault_path }}"
+
+- name: Create credential files
+  ansible.builtin.include_tasks: create_credential_file.yml
+  vars:
+    credential_type: "{{ cred_config.credential_type }}"
+    credential_template: "{{ cred_config.template }}"
+    credential_file_path: "{{ cred_config.file_path }}"
+    credential_file_mode: "{{ cred_config.file_mode }}"
+    vault_password_file: "{{ cred_config.vault_path }}"
+    credential_condition: "{{ cred_config.condition | default(false) }}"
+  loop: "{{ credential_files }}"
+  loop_control:
+    loop_var: cred_config
+  when: 
+    - cred_config.file_path is not file

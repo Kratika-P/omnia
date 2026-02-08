@@ -13,25 +13,6 @@
 # limitations under the License.
 ---
 
-- name: Create vault key for Omnia credentials
-  ansible.builtin.include_tasks: create_vault_key.yml
-  vars:
-    credential_type: "Omnia"
-    status_var_name: "omnia_cred_file_status"
-    vault_key_var_name: "omnia_credentials_vault_key"
-    vault_password_file: "{{ omnia_credential_vault_path }}"
-    vault_key: "{{ omnia_credentials_vault_key }}"
-
-- name: Create vault key for Build Stream credentials
-  ansible.builtin.include_tasks: create_vault_key.yml
-  vars:
-    credential_type: "Build Stream"
-    status_var_name: "bs_cred_file_status"
-    vault_key_var_name: "bs_credentials_vault_key"
-    vault_password_file: "{{ bs_credential_vault_path }}"
-    vault_key: "{{ bs_credentials_vault_key }}"
-  when: enable_build_stream | default(false) | bool
-
 - name: Load software_config.json as software_config
   block:
     - name: Load software_config.json as user_config

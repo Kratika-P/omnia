@@ -13,17 +13,20 @@
 # limitations under the License.
 ---
 
-- name: "Create vault key for credential file - {{ credential_type }}"
-  when: not status_var_name
-  block:
-    - name: "Create ansible vault key for {{ credential_type }}"
-      ansible.builtin.set_fact:
-        "{{ vault_key_var_name }}": "{{ lookup('password', '/dev/null chars=ascii_letters length=32') }}"
+- name: Initialize credential file status
+  ansible.builtin.set_fact:
+    "{{ status_var_name }}": false
 
-    - name: "Save vault key to vault path - {{ credential_type }}"
-      ansible.builtin.lineinfile:
-        path: "{{ vault_password_file }}"
-        line: "{{ vault_key }}"
-        mode: "{{ conf_file_mode }}"
-        owner: root
-        create: true
+- name: Check if credential file exists
+  ansible.builtin.stat:
+    path: "{{ credential_file_path }}"
+  register: file_status
+
+- name: Set status based on file existence
+  ansible.builtin.set_fact:
+    "{{ status_var_name }}": "{{ file_status.stat.exists }}"
+
+- name: Validate credential file exists
+  ansible.builtin.debug:
+    msg: "Credential file {{ credential_file_path }} {{ 'exists' if file_status.stat.exists else 'does not exist' }}"
+  when: file_status.stat.exists

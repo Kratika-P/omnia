@@ -13,11 +13,16 @@
 # limitations under the License.
 ---
 
-# Usage: validate_omnia_credential_file.yml
-omnia_credential_file: "{{ input_project_dir }}/omnia_config_credentials.yml"
-bs_credential_file: "{{ input_project_dir }}/build_stream_oauth_credentials.yml"
-omnia_credential_vault_path: "{{ input_project_dir }}/.omnia_config_credentials_key"
-bs_credential_vault_path: "{{ input_project_dir }}/.build_stream_oauth_credentials_key"
+# Credential file configurations - centralized structure
+credential_files:
+  - credential_type: "Omnia"
+    file_path: "{{ input_project_dir }}/omnia_config_credentials.yml"
+    vault_path: "{{ input_project_dir }}/.omnia_config_credentials_key"
+    condition: true
+  - credential_type: "Build Stream"
+    file_path: "{{ input_project_dir }}/build_stream_oauth_credentials.yml"
+    vault_path: "{{ input_project_dir }}/.build_stream_oauth_credentials_key"
+    condition: "{{ enable_build_stream | default(false) | bool }}"
 
 # Usage: pre_requisite.yml
 ansible_vault_search_key: "$ANSIBLE_VAULT;"
