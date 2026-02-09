@@ -244,7 +244,7 @@
             state: started
             enabled: true
 
-        - name: Open port {{ build_stream_port }} in firewall
+        - name: Open build_stream port in firewall
           ansible.posix.firewalld:
             port: "{{ build_stream_firewall_port }}"
             permanent: true
