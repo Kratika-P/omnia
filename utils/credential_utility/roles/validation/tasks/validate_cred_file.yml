@@ -13,36 +13,20 @@
 # limitations under the License.
 ---
 
-# Provision credentials
-provision_password: ""
-bmc_username: ""
-bmc_password: ""
+- name: Initialize credential file status
+  ansible.builtin.set_fact:
+    "{{ status_var_name }}": false
 
-# Prepare_oim credentials
-minio_s3_password: ""
-pulp_password: ""
-docker_username: ""
-docker_password: ""
+- name: Check if credential file exists
+  ansible.builtin.stat:
+    path: "{{ credential_file_path }}"
+  register: file_status
 
-# Omnia credentials
-slurm_db_password: ""
+- name: Set status based on file existence
+  ansible.builtin.set_fact:
+    "{{ status_var_name }}": "{{ file_status.stat.exists }}"
 
-# Security credentials
-openldap_db_username: ""
-openldap_db_password: ""
-
-# iDrac Telemetry credentials
-mysqldb_user: ""
-mysqldb_password: ""
-mysqldb_root_password: ""
-
-# csi powerscale credentials
-csi_username: ""
-csi_password: ""
-
-# LDMS sampler
-ldms_sampler_password: ""
-
-# postgres credentials
-postgres_user: ""
-postgres_password: ""
+- name: Validate credential file exists
+  ansible.builtin.debug:
+    msg: "Credential file {{ credential_file_path }} {{ 'exists' if file_status.stat.exists else 'does not exist' }}"
+  when: file_status.stat.exists
