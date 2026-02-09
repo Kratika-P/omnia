@@ -83,9 +83,8 @@ class NfsPlaybookQueueRequestRepository:
 
         except OSError as exc:
             logger.error(
-                "Failed to write request file %s: %s",
-                file_path,
-                exc,
+                "Failed to write request file: %s",
+                exc.strerror,
             )
             raise QueueUnavailableError(
                 queue_path=str(self._requests_dir),

@@ -108,7 +108,7 @@ class InputFileService:
             logger.error(
                 "Failed to prepare input files for job %s: %s, correlation_id=%s",
                 job_id,
-                exc,
+                exc.strerror,
                 correlation_id,
             )
             raise InputDirectoryInvalidError(
@@ -215,15 +215,13 @@ class PlaybookQueueResultService:
                 )
             except (ValueError, KeyError) as exc:
                 logger.error(
-                    "Failed to parse result file %s: %s",
-                    result_path,
-                    exc,
+                    "Failed to parse result file: %s",
+                    type(exc).__name__,
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 logger.error(
-                    "Failed to process result file %s: %s",
-                    result_path,
-                    exc,
+                    "Failed to process result file: %s",
+                    type(exc).__name__,
                 )
 
         return processed_count

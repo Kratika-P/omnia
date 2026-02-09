@@ -175,9 +175,8 @@ class CreateLocalRepoUseCase:
             )
             self._stage_repo.save(stage)
             logger.error(
-                "Input preparation failed for job %s: %s, correlation_id=%s",
+                "Input preparation failed for job %s, correlation_id=%s",
                 command.job_id,
-                exc.message,
                 command.correlation_id,
             )
             raise

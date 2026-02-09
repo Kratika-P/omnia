@@ -129,7 +129,7 @@ async def create_local_repository(
         ) from exc
 
     except InvalidStateTransitionError as exc:
-        logger.warning("Invalid state transition for job %s: %s", job_id, exc.message)
+        logger.warning("Invalid state transition for job %s", job_id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_response(
@@ -140,7 +140,7 @@ async def create_local_repository(
         ) from exc
 
     except InputFilesMissingError as exc:
-        logger.warning("Input files missing for job %s: %s", job_id, exc.message)
+        logger.warning("Input files missing for job %s", job_id)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
@@ -151,7 +151,7 @@ async def create_local_repository(
         ) from exc
 
     except InputDirectoryInvalidError as exc:
-        logger.warning("Input directory invalid for job %s: %s", job_id, exc.message)
+        logger.warning("Input directory invalid for job %s", job_id)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
@@ -162,7 +162,7 @@ async def create_local_repository(
         ) from exc
 
     except QueueUnavailableError as exc:
-        logger.error("Playbook queue unavailable: %s", exc.message)
+        logger.error("Playbook queue unavailable")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(

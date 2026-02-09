@@ -114,9 +114,8 @@ class NfsPlaybookQueueResultRepository:
             )
         except OSError as exc:
             logger.error(
-                "Failed to archive result file %s: %s",
-                result_path,
-                exc,
+                "Failed to archive result file: %s",
+                exc.strerror,
             )
 
     def is_available(self) -> bool:
