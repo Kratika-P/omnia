@@ -16,8 +16,11 @@
 
 import logging
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from build_stream.api.logging_utils import log_secure_info
 
 from build_stream.core.jobs.exceptions import (
     InvalidStateTransitionError,
@@ -129,7 +132,11 @@ async def create_local_repository(
         ) from exc
 
     except InvalidStateTransitionError as exc:
-        logger.warning("Invalid state transition for job %s", job_id)
+        log_secure_info(
+            "warning",
+            f"Invalid state transition for job {job_id}",
+            str(correlation_id.value),
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_response(
@@ -140,7 +147,11 @@ async def create_local_repository(
         ) from exc
 
     except InputFilesMissingError as exc:
-        logger.warning("Input files missing for job %s", job_id)
+        log_secure_info(
+            "warning",
+            f"Input files missing for job {job_id}",
+            str(correlation_id.value),
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
@@ -151,7 +162,11 @@ async def create_local_repository(
         ) from exc
 
     except InputDirectoryInvalidError as exc:
-        logger.warning("Input directory invalid for job %s", job_id)
+        log_secure_info(
+            "warning",
+            f"Input directory invalid for job {job_id}",
+            str(correlation_id.value),
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
@@ -162,7 +177,10 @@ async def create_local_repository(
         ) from exc
 
     except QueueUnavailableError as exc:
-        logger.error("Playbook queue unavailable")
+        log_secure_info(
+            "error",
+            "Playbook queue unavailable",
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(
@@ -173,7 +191,11 @@ async def create_local_repository(
         ) from exc
 
     except LocalRepoDomainError as exc:
-        logger.error("Local repo domain error: %s", exc.message)
+        log_secure_info(
+            "error",
+            f"Local repo domain error for job {job_id}",
+            str(correlation_id.value),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(

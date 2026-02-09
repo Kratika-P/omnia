@@ -17,6 +17,8 @@
 import logging
 from datetime import datetime, timezone
 
+from build_stream.api.logging_utils import log_secure_info
+
 from build_stream.core.jobs.entities import AuditEvent, Stage
 from build_stream.core.jobs.exceptions import JobNotFoundError
 from build_stream.core.jobs.repositories import (
@@ -174,10 +176,10 @@ class CreateLocalRepoUseCase:
                 error_summary=exc.message,
             )
             self._stage_repo.save(stage)
-            logger.error(
-                "Input preparation failed for job %s, correlation_id=%s",
-                command.job_id,
-                command.correlation_id,
+            log_secure_info(
+                "error",
+                f"Input preparation failed for job {command.job_id}",
+                str(command.correlation_id),
             )
             raise
 

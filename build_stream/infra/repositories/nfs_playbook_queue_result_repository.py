@@ -21,6 +21,8 @@ import shutil
 from pathlib import Path
 from typing import List, Set
 
+from build_stream.api.logging_utils import log_secure_info
+
 from build_stream.core.localrepo.entities import PlaybookResult
 
 logger = logging.getLogger(__name__)
@@ -107,15 +109,14 @@ class NfsPlaybookQueueResultRepository:
         try:
             shutil.move(str(result_path), str(archive_path))
             self._processed_files.add(result_path.name)
-            logger.info(
-                "Result file archived: %s -> %s",
-                result_path,
-                archive_path,
+            log_secure_info(
+                "info",
+                "Result file archived",
             )
-        except OSError as exc:
-            logger.error(
-                "Failed to archive result file: %s",
-                exc.strerror,
+        except OSError:  # pylint: disable=unused-variable
+            log_secure_info(
+                "error",
+                "Failed to archive result file",
             )
 
     def is_available(self) -> bool:

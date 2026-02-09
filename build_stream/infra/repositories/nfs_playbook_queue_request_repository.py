@@ -19,7 +19,12 @@ import logging
 import os
 import stat
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from typing import Final
+
+from build_stream.api.logging_utils import log_secure_info
 from build_stream.core.localrepo.entities import PlaybookRequest
 from build_stream.core.localrepo.exceptions import QueueUnavailableError
 
@@ -74,17 +79,17 @@ class NfsPlaybookQueueRequestRepository:
 
             os.chmod(file_path, FILE_PERMISSIONS)
 
-            logger.info(
-                "Request file written: %s for job %s",
-                file_path,
-                request.job_id,
+            log_secure_info(
+                "info",
+                f"Request file written for job {request.job_id}",
+                str(request.correlation_id),
             )
             return file_path
 
         except OSError as exc:
-            logger.error(
-                "Failed to write request file: %s",
-                exc.strerror,
+            log_secure_info(
+                "error",
+                "Failed to write request file",
             )
             raise QueueUnavailableError(
                 queue_path=str(self._requests_dir),

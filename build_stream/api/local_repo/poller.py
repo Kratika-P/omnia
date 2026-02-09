@@ -21,6 +21,8 @@ when results are available.
 import asyncio
 import logging
 
+from build_stream.api.logging_utils import log_secure_info
+
 from build_stream.core.localrepo.services import PlaybookQueueResultService
 from build_stream.orchestrator.local_repo.callbacks import StageCompletionCallback
 
@@ -59,14 +61,17 @@ class ResultPoller:
     async def start(self) -> None:
         """Start the background polling task."""
         if self._running:
-            logger.warning("Result poller is already running")
+            log_secure_info(
+                "warning",
+                "Result poller is already running",
+            )
             return
 
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
-        logger.info(
-            "Result poller started with %d second interval",
-            self._poll_interval,
+        log_secure_info(
+            "info",
+            f"Result poller started with {self._poll_interval} second interval",
         )
 
     async def stop(self) -> None:
@@ -79,7 +84,10 @@ class ResultPoller:
             except asyncio.CancelledError:
                 pass
             self._task = None
-        logger.info("Result poller stopped")
+        log_secure_info(
+            "info",
+            "Result poller stopped",
+        )
 
     async def _poll_loop(self) -> None:
         """Main polling loop that runs as a background task."""
@@ -91,9 +99,15 @@ class ResultPoller:
                     self._callback.on_stage_completed,
                 )
                 if processed > 0:
-                    logger.info("Processed %d result(s)", processed)
+                    log_secure_info(
+                        "info",
+                        f"Processed {processed} result(s)",
+                    )
             except Exception as exc:  # pylint: disable=broad-except
-                logger.error("Error in result poller: %s", exc)
+                log_secure_info(
+                    "error",
+                    "Error in result poller",
+                )
 
             await asyncio.sleep(self._poll_interval)
 

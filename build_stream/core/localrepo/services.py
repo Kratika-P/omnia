@@ -19,6 +19,8 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
+from build_stream.api.logging_utils import log_secure_info
+
 from .entities import PlaybookRequest, PlaybookResult
 from .exceptions import (
     InputDirectoryInvalidError,
@@ -95,21 +97,18 @@ class InputFileService:
                 else:
                     shutil.copy2(str(item), str(dest_item))
 
-            logger.info(
-                "Input files prepared for job %s: %s -> %s, correlation_id=%s",
-                job_id,
-                source_path,
-                destination_path,
-                correlation_id,
+            log_secure_info(
+                "info",
+                f"Input files prepared for job {job_id}",
+                str(correlation_id),
             )
             return True
 
         except OSError as exc:
-            logger.error(
-                "Failed to prepare input files for job %s: %s, correlation_id=%s",
-                job_id,
-                exc.strerror,
-                correlation_id,
+            log_secure_info(
+                "error",
+                f"Failed to prepare input files for job {job_id}",
+                str(correlation_id),
             )
             raise InputDirectoryInvalidError(
                 job_id=job_id,
@@ -159,11 +158,10 @@ class PlaybookQueueRequestService:
             )
 
         request_path = self._request_repo.write_request(request)
-        logger.info(
-            "Playbook request submitted for job %s: %s, correlation_id=%s",
-            request.job_id,
-            request_path,
-            correlation_id,
+        log_secure_info(
+            "info",
+            f"Request submitted for job {request.job_id}",
+            str(request.correlation_id),
         )
         return request_path
 
@@ -208,20 +206,20 @@ class PlaybookQueueResultService:
                 callback(result)
                 self._result_repo.archive_result(result_path)
                 processed_count += 1
-                logger.info(
-                    "Processed result for job %s from %s",
-                    result.job_id,
-                    result_path,
+                log_secure_info(
+                    "info",
+                    f"Processed result for job {result.job_id}",
+                    str(result.correlation_id),
                 )
             except (ValueError, KeyError) as exc:
-                logger.error(
-                    "Failed to parse result file: %s",
-                    type(exc).__name__,
+                log_secure_info(
+                    "error",
+                    "Failed to parse result file",
                 )
             except Exception as exc:  # pylint: disable=broad-except
-                logger.error(
-                    "Failed to process result file: %s",
-                    type(exc).__name__,
+                log_secure_info(
+                    "error",
+                    "Failed to process result file",
                 )
 
         return processed_count
