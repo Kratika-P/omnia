@@ -25,6 +25,11 @@
             "additionalProperties": {
               "oneOf": [
                 {
+                  "type": "string",
+                  "description": "File path string",
+                  "pattern": "^/.+"
+                },
+                {
                   "type": "object",
                   "description": "Inline configuration mapping",
                   "additionalProperties": true

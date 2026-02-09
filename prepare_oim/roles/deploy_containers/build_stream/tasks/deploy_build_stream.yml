@@ -163,6 +163,38 @@
   loop:
     - "{{ build_stream_ssl_cert }}"
     - "{{ build_stream_ssl_key }}"
+
+- name: Set execute permission on JWT key generation script
+  ansible.builtin.file:
+    path: "{{ build_stream_jwt_keys_script }}"
+    mode: "{{ build_stream_jwt_script_mode }}"
+  delegate_to: localhost
+
+- name: Check if JWT keys already exist
+  ansible.builtin.stat:
+    path: "{{ build_stream_jwt_keys_dir }}/jwt_private.pem"
+  register: jwt_private_key
+  delegate_to: localhost
+
+- name: Check if JWT public key exists
+  ansible.builtin.stat:
+    path: "{{ build_stream_jwt_keys_dir }}/jwt_public.pem"
+  register: jwt_public_key
+  delegate_to: localhost
+
+- name: Generate JWT keys
+  ansible.builtin.command: "{{ build_stream_jwt_keys_script }}"
+  delegate_to: localhost
+  changed_when: false
+  when: not jwt_private_key.stat.exists or not jwt_public_key.stat.exists
+
+# - name: Update project name in default.yml
+#  ansible.builtin.replace:
+#    path: "{{ build_stream_default_file }}"
+#    regexp: "{{ build_stream_project_default }}"
+#    replace: "{{ build_stream_project_build_stream }}"
+#  delegate_to: localhost
+
 # -------------------------------------------------------------------
 # 4) Deploy quadlet using template + restart via handlers
 # -------------------------------------------------------------------
@@ -215,7 +247,7 @@
         - bs_info.containers[0].State.Running | bool
 
     # -------------------------------------------------------------------
-    # 5) Validate HTTPS connectivity from inside build_stream
+    # 5) Validate pulp HTTPS connectivity from inside build_stream
     # -------------------------------------------------------------------
     - name: Build curl command
       ansible.builtin.set_fact:
@@ -244,19 +276,19 @@
         msg: "{{ build_stream_https_failure_msg }}"
       when: (curl_status.stdout | trim) != "200"
 # --------------------------------------------------------------------
-# 6) Validate health API endpoint https://localhost:{{ build_stream_port }}/health"
+# 6) Validate health API endpoint https://{{ admin_ip }}:{{ build_stream_port }}/health"
 # -------------------------------------------------------------------
-    - name: Wait until omnia_build_stream container exists and is running
-      containers.podman.podman_container_info:
-        name: "{{ build_stream_container_name }}"
-      register: bs_info
-      retries: "{{ bs_container_wait_retries }}"
-      delay: "{{ bs_container_wait_delay }}"
-      until:
-        - bs_info.containers is defined
-        - bs_info.containers | length > 0
-        - bs_info.containers[0].State is defined
-        - bs_info.containers[0].State.Running | bool
+    - name: Verify API endpoint health
+      ansible.builtin.uri:
+        url: "{{ build_stream_health_endpoint }}"
+        method: GET
+        return_content: true
+        status_code: "{{ health_check_status_code }}"
+        validate_certs: false
+      register: health_check
+      retries: "{{ health_check_retries }}"
+      delay: "{{ health_check_delay }}"
+      until: health_check.status == health_check_status_code
 
   rescue:
     - name: Build_stream container deployment failed

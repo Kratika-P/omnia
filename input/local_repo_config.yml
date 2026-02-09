@@ -79,6 +79,29 @@
 # 7. omnia_repo_url_rhel_aarch64
 #--------------------------------
 #    Same as above but for RHEL aarch64.
+#
+# 8. additional_repos_x86_64
+#----------------------------
+#    Optional list of additional repository URLs for x86_64 architecture.
+#    These repos are aggregated into a single Pulp repository, allowing dynamic
+#    addition/removal without changing compute node configurations.
+# Fields:
+#   url           : Base URL of the repository (required)
+#   gpgkey        : GPG key URL (required, can be empty - disables gpgcheck)
+#   name          : Unique name for the repository (required)
+#   sslcacert     : Path to SSL CA certificate (optional)
+#   sslclientkey  : Path to SSL client key (optional)
+#   sslclientcert : Path to SSL client certificate (optional)
+# Notes:
+#   - All repos are synced into a single aggregated Pulp repository
+#   - Compute nodes are configured once with a fixed URL that never changes
+#   - Policy is controlled globally via repo_config in software_config.json (per-entry policy not supported)
+#   - Name must be unique within this list and must not conflict with names in other repo keys
+#   - Packages from these repos can only be used via additional_packages.json
+#
+# 9. additional_repos_aarch64
+#-----------------------------
+#    Same as above but for aarch64 architecture.
 
 # ================================
 # VARIABLES
@@ -104,3 +127,9 @@ omnia_repo_url_rhel_x86_64:
 omnia_repo_url_rhel_aarch64:
   - { url: "https://download.docker.com/linux/centos/10/aarch64/stable/", gpgkey: "https://download.docker.com/linux/centos/gpg", name: "docker-ce"}
   - { url: "https://dl.fedoraproject.org/pub/epel/10/Everything/aarch64/", gpgkey: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-10", name: "epel"}
+# Example:
+# additional_repos_x86_64:
+#  - { url: "https://rpm.grafana.com/", gpgkey: "", name: "grafana" }
+#  - { url: "https://repo.example.com/x86_64/", gpgkey: "", name: "custom-repo", sslcacert: "/path/ca.crt", sslclientkey: "/path/client.key", sslclientcert: "/path/client.crt" }
+additional_repos_x86_64:
+additional_repos_aarch64:

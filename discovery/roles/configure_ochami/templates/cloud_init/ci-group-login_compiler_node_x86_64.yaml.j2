@@ -15,9 +15,26 @@
           ssh_authorized_keys: "{{ read_ssh_key.stdout }}"
           lock_passwd: false
           hashed_passwd: "{{ hashed_password_output.stdout }}"
+        - name: {{ slurm_user }}
+          uid: {{ slurm_uid }}
+          system: true
+          no_create_home: true
+          shell: /sbin/nologin
       disable_root: false
 
       write_files:
+        - path: /usr/local/bin/doca-install.sh
+          owner: root:root
+          permissions: '{{ file_mode_755 }}'
+          content: |
+            {{ lookup('template', 'templates/doca-ofed/doca-install.sh.j2') | indent(12) }}
+
+        - path: /usr/local/bin/configure-ib-network.sh
+          owner: root:root
+          permissions: '{{ file_mode_755 }}'
+          content: |
+            {{ lookup('template', 'templates/doca-ofed/configure-ib-network.sh.j2') | indent(12) }}
+
         - path: /usr/local/bin/set-ssh.sh
           permissions: '0755'
           content: |
@@ -52,7 +69,13 @@
                     fi
                 done
             fi
-
+        
+        - path: /root/.ssh/config
+          permissions: '0600'
+          content: |
+            Host {{ slurm_control_ssh_patterns }}
+                IdentityFile {{ client_mount_path }}/slurm/ssh/oim_rsa
+                IdentitiesOnly yes
 
         - path: /usr/local/bin/install_cuda_toolkit.sh
           permissions: '0755'
@@ -72,32 +95,44 @@
 
             echo "[INFO] Mounting NFS runfile directory for CUDA toolkit..."
             mkdir -p /cuda-runfile
-            mount -t nfs {{ cloud_init_nfs_path }}/runfile /cuda-runfile
+            mount -t nfs {{ cloud_init_nfs_path }}/hpc_tools/runfile /cuda-runfile
 
             if [ $? -ne 0 ]; then
                 echo "[ERROR] Failed to mount NFS runfile share. Exiting."
                 exit 1
             fi
 
-            echo "[INFO] Installing CUDA toolkit..."
-            if [ -f "/cuda-runfile/cuda_13.0.2_580.95.05_linux.run" ]; then
-                # Install only the toolkit component
-                bash /cuda-runfile/cuda_13.0.2_580.95.05_linux.run --silent --toolkit --toolkitpath=/usr/local/cuda --override
+            echo "[INFO] Setting up shared CUDA directory..."
+            # Create and mount shared directory for compute nodes
+            mkdir -p /shared-cuda-toolkit
+            mount -t nfs {{ cloud_init_nfs_path }}/cuda/ /shared-cuda-toolkit
+
+            if [ $? -ne 0 ]; then
+                echo "[ERROR] Failed to mount NFS cuda share. Exiting."
+                umount /cuda-runfile 2>/dev/null
+                exit 1
+            fi
+
+            echo "[INFO] Installing CUDA toolkit directly to shared NFS location..."
+            if [ -f "/cuda-runfile/{{ cuda_runfile_x86_64 }}" ]; then
+                mkdir -p /shared-cuda-toolkit/tmp
+                # Install toolkit directly to the NFS-mounted shared location
+                bash /cuda-runfile/{{ cuda_runfile_x86_64 }} --silent --toolkit --tmpdir=/shared-cuda-toolkit/tmp --toolkitpath=/shared-cuda-toolkit --override
 
                 if [ $? -eq 0 ]; then
-                    echo "[SUCCESS] CUDA toolkit installed successfully."
+                    echo "[SUCCESS] CUDA toolkit installed successfully to shared location."
 
-                    # Set up environment variables
+                    # Set up environment variables pointing to shared location
                     cat > /etc/profile.d/cuda.sh << 'ENDOFFILE'
-            export PATH=/usr/local/cuda/bin:$PATH
-            export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-            export CUDA_HOME=/usr/local/cuda
+            export PATH=/shared-cuda-toolkit/bin:$PATH
+            export LD_LIBRARY_PATH=/shared-cuda-toolkit/lib64:$LD_LIBRARY_PATH
+            export CUDA_HOME=/shared-cuda-toolkit
             ENDOFFILE
 
                     # Apply environment variables for current session
-                    export PATH=/usr/local/cuda/bin:$PATH
-                    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-                    export CUDA_HOME=/usr/local/cuda
+                    export PATH=/shared-cuda-toolkit/bin:$PATH
+                    export LD_LIBRARY_PATH=/shared-cuda-toolkit/lib64:$LD_LIBRARY_PATH
+                    export CUDA_HOME=/shared-cuda-toolkit
 
                     echo "[INFO] CUDA environment configured"
                 else
@@ -120,7 +155,7 @@
             # Create shared directory for compute nodes to mount
             mkdir -p /shared-cuda-toolkit
             # Mount the shared NFS location where compute nodes will access the toolkit
-            mount -t nfs {{ cloud_init_nfs_path }}/cuda/ /shared-cuda-toolkit
+            mount -t nfs {{ cloud_init_nfs_path }}/hpc_tools/cuda/ /shared-cuda-toolkit
 
             echo "[INFO] Copying CUDA toolkit to shared location..."
             # Copy the installed CUDA toolkit to the shared location for compute nodes
@@ -132,8 +167,6 @@
             rmdir /cuda-runfile 2>/dev/null
 
             echo "===== CUDA Toolkit installation completed ====="
-
-
 
 {% if hostvars['localhost']['openldap_support'] %}
         - path: /etc/sssd/sssd.conf
@@ -170,35 +203,47 @@
           content: |
             {{ lookup('template', 'templates/slurm/check_slurm_controller_status.sh.j2') | indent(12) }}
 
+        - path: /tmp/apptainer_mirror.conf
+          permissions: '0644'
+          content: |
+            {{ lookup('template', 'templates/nodes/apptainer_mirror.conf.j2') | indent(12) }}
+
       runcmd:
         - /usr/local/bin/set-ssh.sh
         - /usr/local/bin/install_cuda_toolkit.sh
-        - groupadd -r {{ slurm_group_name }}
-        - useradd -r -g {{ slurm_group_name }} -d {{ home_dir }} -s /sbin/nologin {{ user }}
 
-        - mkdir -p /var/log/slurm /var/run/slurm /var/spool /var/lib/slurm /etc/slurm/epilog.d /etc/munge /cert /var/log/track
-        - echo "{{ cloud_init_nfs_path }}/cert  /cert   nfs defaults,_netdev 0 0" >> /etc/fstab
+        # Ensure Slurm NFS root is mounted at client_mount_path (e.g. /share_omnia)
+        - mkdir -p {{ client_mount_path }}/slurm/ssh 
+        - mkdir -p /var/log/slurm /var/run/slurm /var/spool /var/lib/slurm /etc/slurm/epilog.d /etc/munge /cert /var/log/track /var/lib/packages /hpc_tools
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/log/slurm  /var/log/slurm   nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool      /var/spool       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/etc/slurm/epilog.d     /etc/slurm/epilog.d      nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/var/spool      /var/spool       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ cloud_init_nfs_path }}/$(hostname -s)/etc/munge      /etc/munge       nfs defaults,_netdev 0 0" >> /etc/fstab
         - echo "{{ trackfile_nfs_path }}    /var/log/track       nfs defaults,_netdev 0 0" >> /etc/fstab
+        - echo "{{ cloud_init_nfs_path}}/hpc_tools  /hpc_tools   nfs defaults,_netdev 0 0" >> /etc/fstab
+        - echo "{{ cloud_init_nfs_path }}/ssh {{ client_mount_path }}/slurm/ssh nfs defaults,_netdev 0 0" >> /etc/fstab
+        - echo "{{ cloud_init_nfs_path }}/cert  /cert   nfs defaults,_netdev 0 0" >> /etc/fstab
+        - echo "{{ cloud_init_nfs_path }}/packages  /var/lib/packages   nfs defaults,_netdev 0 0" >> /etc/fstab
+
         - chmod {{ file_mode }} /etc/fstab
         - mount -a
+        - cp /cert/pulp_webserver.crt /etc/pki/ca-trust/source/anchors && update-ca-trust
+        - sed -i 's/^gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
+        - bash /usr/local/bin/doca-install.sh && bash /usr/local/bin/configure-ib-network.sh
         - yes | cp /etc/slurm/epilog.d/slurmd.service /usr/lib/systemd/system/
         - /usr/local/bin/check_slurm_controller_status.sh
-        - chown -R {{ user }}:{{ slurm_group_name }} /var/log/slurm
-        - chown -R {{ user }}:{{ slurm_group_name }} /var/run/slurm
-        - chown -R {{ user }}:{{ slurm_group_name }} /var/spool
-        - chown -R {{ user }}:{{ slurm_group_name }} /var/lib/slurm
+        - chown -R {{ slurm_user }}:{{ slurm_user }} /var/log/slurm
+        - chown -R {{ slurm_user }}:{{ slurm_user }} /var/run/slurm
+        - chown -R {{ slurm_user }}:{{ slurm_user }} /var/spool
+        - chown -R {{ slurm_user }}:{{ slurm_user }} /var/lib/slurm
         - chown -R {{ munge_user }}:{{ munge_group }} /etc/munge/munge.key
         - chmod {{ file_mode_755 }} /var/log/slurm /var/run/slurm /var/spool /var/lib/slurm
         - chmod {{ file_mode_400 }} /etc/munge/munge.key
         - chmod {{ file_mode_755 }} /etc/slurm/epilog.d/
         - mkdir -p /var/spool/slurmd
         - chmod {{ file_mode_755 }} /var/spool/slurmd
-        - chown -R {{ user }}:{{ slurm_group_name }} /var/spool/slurmd
+        - chown -R {{ slurm_user }}:{{ slurm_user }} /var/spool/slurmd
         - setenforce 0
         - systemctl enable firewalld
         - systemctl start firewalld
@@ -218,6 +263,8 @@
         - systemctl restart sshd
         - cp /cert/pulp_webserver.crt /etc/pki/ca-trust/source/anchors && update-ca-trust
         - sed -i 's/^gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
+        - mkdir -p /etc/containers/registries.conf.d
+        - mv /tmp/apptainer_mirror.conf /etc/containers/registries.conf.d/apptainer_mirror.conf
 
 {% if hostvars['localhost']['openldap_support'] %}
         - /usr/local/bin/update_ldap_conf.sh

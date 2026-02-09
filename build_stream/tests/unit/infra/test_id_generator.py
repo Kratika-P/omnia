@@ -16,7 +16,7 @@
 
 import uuid
 
-from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
+from infra.id_generator import JobUUIDGenerator, UUIDv4Generator
 
 
 class TestJobUUIDGenerator:

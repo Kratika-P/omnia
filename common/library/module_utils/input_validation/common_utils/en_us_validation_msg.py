@@ -326,6 +326,12 @@ ADMIN_IP_HOSTNAME_COLUMN_MISSING_MSG = (
     "Please ensure the CSV file has the required headers."
 )
 NETWORK_SPEC_FILE_NOT_FOUND_MSG = "network_spec.yml file not found in input folder."
+IB_NETMASK_BITS_MISMATCH_MSG = (
+    "netmask_bits configured for ib_network must match admin_network netmask_bits in network_spec.yml."
+)
+IB_SUBNET_IN_ADMIN_RANGE_MSG = (
+    "ib_network subnet must be outside the admin network range derived from primary_oim_admin_ip/netmask_bits in network_spec.yml."
+)
 
 # telemetry
 MANDATORY_FIELD_FAIL_MSG = "must not be empty"
@@ -433,3 +439,4 @@ def get_logic_failed(input_file_path):
 def get_logic_success(input_file_path):
     """Returns a formatted message indicating logic validation success for a file."""
     return f"{'#' * 10} Logic validation successful for {input_file_path} {'#' * 10}"
+

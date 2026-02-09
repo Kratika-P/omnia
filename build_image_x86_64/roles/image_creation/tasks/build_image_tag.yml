@@ -13,21 +13,16 @@
 #  limitations under the License.
 ---
 
-- name: Pull specific OpenCHAMI image by version tag
+- name: Pull image-build image
   ansible.builtin.command:
-    cmd: "podman pull {{ openchami_image_sha }}"
+    cmd: "podman pull {{ image_build_el10 }}"
   register: pull_result
+  retries: "{{ pull_image_retries }}"
+  delay: "{{ pull_image_delay }}"
+  until: pull_result.rc == 0
   changed_when: "'Image is up to date' not in pull_result.stdout"
 
 - name: Fail if image not pulled successfully
   ansible.builtin.fail:
     msg: "{{ pull_result.stdout }}"
   when: pull_result.rc != 0
-
-- name: Tagging OpenCHAMI image with stable name
-  ansible.builtin.command:
-    cmd: "{{ ochami_stable_image_tag }}"
-  args:
-    creates: "{{ ochami_stable_image_path }}"
-  register: tag_result
-  changed_when: "'Tagged' in tag_result.stdout"

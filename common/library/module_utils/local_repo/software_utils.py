@@ -36,7 +36,8 @@ from ansible.module_utils.local_repo.config import (
     RHEL_OS_URL,
     SOFTWARES_KEY,
     REPO_CONFIG,
-    ARCH_SUFFIXES
+    ARCH_SUFFIXES,
+    ADDITIONAL_REPOS_KEY
 )
 
 
@@ -198,7 +199,7 @@ def transform_package_dict(data, arch_val,logger):
 
 
 def parse_repo_urls(repo_config, local_repo_config_path,
-                    version_variables, vault_key_path, sub_urls,logger):
+                    version_variables, vault_key_path, sub_urls,logger,sw_archs=None):
     """
     Parses the repository URLs from the given local repository configuration file.
     Args:
@@ -209,6 +210,8 @@ def parse_repo_urls(repo_config, local_repo_config_path,
         sub_urls (dict): Mapping of architectures to subscription URLs that override 
                          default RHEL URLs when provided.
         logger (logging.Logger): Logger instance used for structured logging of process steps.
+        sw_archs (list, optional): List of architectures to process based on software_config.json.
+                                   If None, defaults to ARCH_SUFFIXES.
     Returns:
         tuple: A tuple where the first element is either the parsed repository URLs as a JSON string
                (on success) or the rendered URL (if unreachable),
@@ -221,7 +224,10 @@ def parse_repo_urls(repo_config, local_repo_config_path,
     user_repo_entry = {}
     rhel_repo_entry = {}
 
-    for arch in ARCH_SUFFIXES:
+    archs_to_process = sw_archs if sw_archs else ARCH_SUFFIXES
+    logger.info(f"Processing repository URLs for architectures: {archs_to_process}")
+
+    for arch in archs_to_process:
         
         # Always ensure these are lists
         rhel_repo_entry[arch] = list(local_yaml.get(f"rhel_os_url_{arch}") or [])
@@ -755,3 +761,139 @@ def remove_duplicates_from_trans(trans):
             groups[group] = cleaned
 
     return trans
+
+
+def parse_additional_repos(local_repo_config_path, repo_config, vault_key_path, logger):
+    """
+    Parses additional repository URLs from the local repository configuration file.
+    These repos are aggregated into a single Pulp repository per architecture.
+
+    Args:
+        local_repo_config_path (str): The path to the local repository configuration file.
+        repo_config (str): Global repo configuration policy from software_config.json.
+        vault_key_path (str): Ansible vault key path for decrypting SSL certificates.
+        logger (logging.Logger): Logger instance for structured logging.
+
+    Returns:
+        tuple: (additional_repos_config, error_message)
+            - additional_repos_config (dict): Dictionary with arch as key and list of repo configs as value.
+            - error_message (str or None): Error message if validation fails, None otherwise.
+    """
+    logger.info("Starting parse_additional_repos()")
+    local_yaml = load_yaml(local_repo_config_path)
+
+    additional_repos_config = {}
+    policy = REPO_CONFIG.get(repo_config, "on_demand")
+
+    vault_key_full_path = os.path.join(vault_key_path, ".local_repo_credentials_key")
+
+    for arch in ARCH_SUFFIXES:
+        key = f"{ADDITIONAL_REPOS_KEY}_{arch}"
+        repo_list = local_yaml.get(key) or []
+
+        if not repo_list:
+            logger.info(f"No additional repos found for {arch}")
+            additional_repos_config[arch] = []
+            continue
+
+        # Validate for duplicate names within this arch
+        names_seen = set()
+        for repo in repo_list:
+            name = repo.get("name", "")
+            if name in names_seen:
+                error_msg = f"Duplicate name '{name}' found in {key}. Each repo must have a unique name."
+                logger.error(error_msg)
+                return None, error_msg
+            names_seen.add(name)
+
+        parsed_repos = []
+        for repo in repo_list:
+            name = repo.get("name", "unknown")
+            url = repo.get("url", "")
+            gpgkey = repo.get("gpgkey", "")
+            ca_cert = repo.get("sslcacert", "")
+            client_key = repo.get("sslclientkey", "")
+            client_cert = repo.get("sslclientcert", "")
+
+            logger.info(f"Processing additional repo '{name}' for arch '{arch}' - URL: {url}")
+
+            # Decrypt SSL certificates if encrypted
+            for path in [ca_cert, client_key, client_cert]:
+                if path and is_encrypted(path):
+                    result, message = process_file(path, vault_key_full_path, "decrypt")
+                    if result is False:
+                        error_msg = f"Decryption failed for additional repo path: {path} | Error: {message}"
+                        logger.error(error_msg)
+                        return None, error_msg
+
+            # Check URL reachability
+            if not is_remote_url_reachable(url, client_cert=client_cert,
+                                           client_key=client_key, ca_cert=ca_cert):
+                error_msg = f"Additional repo URL unreachable: {url}"
+                logger.error(error_msg)
+                return None, error_msg
+
+            parsed_repos.append({
+                "name": name,
+                "url": url,
+                "gpgkey": gpgkey if gpgkey else "",
+                "ca_cert": ca_cert,
+                "client_key": client_key,
+                "client_cert": client_cert,
+                "policy": policy,
+                "arch": arch
+            })
+            logger.info(f"Added additional repo entry: {name}")
+
+        additional_repos_config[arch] = parsed_repos
+
+    logger.info(f"Successfully parsed additional repos. x86_64: {len(additional_repos_config.get('x86_64', []))}, "
+                f"aarch64: {len(additional_repos_config.get('aarch64', []))}")
+    return additional_repos_config, None
+
+
+def validate_additional_repos_names(local_repo_config_path, logger):
+    """
+    Validates that names in additional_repos_* do not conflict with names in other repo keys.
+
+    Args:
+        local_repo_config_path (str): The path to the local repository configuration file.
+        logger (logging.Logger): Logger instance for structured logging.
+
+    Returns:
+        tuple: (is_valid, error_message)
+            - is_valid (bool): True if validation passes, False otherwise.
+            - error_message (str or None): Error message if validation fails, None otherwise.
+    """
+    logger.info("Starting validate_additional_repos_names()")
+    local_yaml = load_yaml(local_repo_config_path)
+
+    # Keys to check for conflicts
+    other_repo_keys = {
+        "x86_64": ["user_repo_url_x86_64", "rhel_os_url_x86_64", "omnia_repo_url_rhel_x86_64"],
+        "aarch64": ["user_repo_url_aarch64", "rhel_os_url_aarch64", "omnia_repo_url_rhel_aarch64"]
+    }
+
+    for arch in ARCH_SUFFIXES:
+        additional_key = f"{ADDITIONAL_REPOS_KEY}_{arch}"
+        additional_repos = local_yaml.get(additional_key) or []
+
+        if not additional_repos:
+            continue
+
+        # Get all names from additional_repos for this arch
+        additional_names = {repo.get("name", "") for repo in additional_repos if repo.get("name")}
+
+        # Check against other repo keys for the same arch
+        for other_key in other_repo_keys.get(arch, []):
+            other_repos = local_yaml.get(other_key) or []
+            for repo in other_repos:
+                other_name = repo.get("name", "")
+                if other_name in additional_names:
+                    error_msg = (f"Name '{other_name}' in {additional_key} conflicts with "
+                                 f"existing repo name in {other_key}. Please use a unique name.")
+                    logger.error(error_msg)
+                    return False, error_msg
+
+    logger.info("Additional repos name validation passed.")
+    return True, None

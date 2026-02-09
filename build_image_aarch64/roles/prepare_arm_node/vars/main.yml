@@ -22,7 +22,6 @@ aarch64_regctl_url: "https://github.com/regclient/regclient/releases/latest/down
 pulp_repo_file_path: "/etc/yum.repos.d/pulp.repo"
 pulp_webserver_cert_path: "/opt/omnia/pulp/settings/certs/pulp_webserver.crt"
 anchors_path: "/etc/pki/ca-trust/source/anchors/pulp_webserver.crt"
-regctl_tar_path: "omnia/offline_repo/cluster/aarch64/rhel/10.0/tarball/regctl-linux-arm64/regctl-linux-arm64.tar.gz"
 regctl_bin_path: "/usr/local/bin/regctl"
 
 # Error messages

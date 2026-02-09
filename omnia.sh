@@ -30,7 +30,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 YELLOW='\033[0;33m'
-omnia_release=2.0.0.0
+omnia_release=2.1.0.0
 
 core_container_status=false
 omnia_path=""
@@ -704,6 +704,12 @@ setup_container() {
         selinux_option=""
     fi
 
+    # Check if RHEL subscription is enabled
+    subscription_enabled=false
+    if [ -d "/etc/pki/entitlement" ] && [ "$(ls -A /etc/pki/entitlement/*.pem 2>/dev/null)" ]; then
+        subscription_enabled=true
+    fi
+
     # --- Generate Quadlet container file ---
     cat > /etc/containers/systemd/${container_name}.container <<EOF
 # ===============================================================
@@ -716,7 +722,7 @@ Description=${container_name^} Container
 [Container]
 ContainerName=${container_name}
 HostName=${container_name}
-Image=${container_name}:1.0
+Image=${container_name}:1.1
 Network=host
 
 # Capabilities
@@ -728,6 +734,17 @@ Volume=${omnia_path}/omnia/ssh_config/.ssh:/root/.ssh${selinux_option}
 Volume=${omnia_path}/omnia/log/core/container:/var/log${selinux_option}
 Volume=${omnia_path}/omnia/hosts:/etc/hosts${selinux_option}
 Volume=${omnia_path}/omnia/pulp/pulp_ha:/root/.config/pulp${selinux_option}
+EOF
+
+    # Add subscription volume mounts only if subscription is enabled
+    if [ "$subscription_enabled" = true ]; then
+        cat >> /etc/containers/systemd/${container_name}.container <<EOF
+Volume=/etc/pki/entitlement:/etc/pki/entitlement:ro,z
+Volume=/etc/yum.repos.d/redhat.repo:/etc/yum.repos.d/redhat.repo:ro,z
+EOF
+    fi
+
+    cat >> /etc/containers/systemd/${container_name}.container <<EOF
 
 [Service]
 Restart=always
@@ -919,23 +936,24 @@ start_container_session() {
 }
 
 show_help() {
-    echo "Usage: $0 [--install | --uninstall | --help]"
+    echo "Usage: $0 [--install | --uninstall | --version | --help]"
     echo "  -i, --install     Install and start the Omnia core container"
     echo "  -u, --uninstall   Uninstall the Omnia core container and clean up configuration"
+    echo "  -v, --version     Display Omnia version information"
     echo "  -h, --help        More information about usage"
 }
 
 install_omnia_core() {
-    local omnia_core_tag="1.0"
+    local omnia_core_tag="1.1"
     local omnia_core_registry="docker.io/dellhpcomniaaisolution"
     
-    # Check if local omnia_core:1.0 exists
+    # Check if local omnia_core:1.1 exists
     if podman inspect omnia_core:${omnia_core_tag} >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Omnia core image (omnia_core:${omnia_core_tag}) found locally.${NC}"
     # Check if latest exists for backward compatibility
     elif podman inspect omnia_core:latest >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Omnia core image (omnia_core:latest) found locally.${NC}"
-        # Tag it as 1.0 for consistency
+        # Tag it as 1.1 for consistency
         podman tag omnia_core:latest omnia_core:${omnia_core_tag}
     else
         # Try pulling from Docker Hub with retry logic
@@ -1104,6 +1122,34 @@ install_omnia_core() {
     fi
 }
 
+# Check if Omnia core container is running
+check_container_status() {
+    # Check if the Omnia core container is running
+    if ! podman ps --format '{{.Names}}' | grep -qw "omnia_core"; then
+        echo -e "${RED}ERROR: Omnia core container is not running.${NC}"
+        exit 1
+    fi
+}
+
+# Function to display version information
+display_version() {
+    # Check if metadata file exists and Omnia core container is running
+    check_container_status
+    
+    # Fetch the metadata from the oim_metadata.yml file in the container
+    echo -e "${GREEN} Fetching metadata from omnia_core container...${NC}"
+    core_config=$(podman exec omnia_core /bin/bash -c 'cat /opt/omnia/.data/oim_metadata.yml')
+    
+    # Extract Omnia version from metadata file
+    omnia_version=$(echo "$core_config" | grep "omnia_version:" | cut -d':' -f2 | tr -d ' \t\n\r')
+    
+    # Display version information
+    echo "Omnia version: $omnia_version"
+    
+    # Return exit code 0 on success
+    exit 0
+}
+
 # Main function to check if omnia_core container is already running.
 # If yes, ask the user if they want to enter the container or reinstall.
 # If no, set it up.
@@ -1114,6 +1160,9 @@ main() {
             ;;
         --uninstall|-u)
             cleanup_omnia_core
+            ;;
+        --version|-v)
+            display_version
             ;;
         --help|-h|"")
             show_help
