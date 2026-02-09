@@ -24,9 +24,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Final
 
-from build_stream.api.logging_utils import log_secure_info
-from build_stream.core.localrepo.entities import PlaybookRequest
-from build_stream.core.localrepo.exceptions import QueueUnavailableError
+from api.logging_utils import log_secure_info
+from core.localrepo.entities import PlaybookRequest
+from core.localrepo.exceptions import QueueUnavailableError
 
 logger = logging.getLogger(__name__)
 

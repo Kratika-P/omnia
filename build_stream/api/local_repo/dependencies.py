@@ -18,12 +18,12 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, status
 
-from build_stream.core.jobs.value_objects import ClientId, CorrelationId
+from core.jobs.value_objects import ClientId, CorrelationId
 
 
 def _get_container():
     """Lazy import of container to avoid circular imports."""
-    from build_stream.container import container  # pylint: disable=import-outside-toplevel
+    from container import container  # pylint: disable=import-outside-toplevel
     return container
 
 

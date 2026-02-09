@@ -21,9 +21,9 @@ import shutil
 from pathlib import Path
 from typing import List, Set
 
-from build_stream.api.logging_utils import log_secure_info
+from api.logging_utils import log_secure_info
 
-from build_stream.core.localrepo.entities import PlaybookResult
+from core.localrepo.entities import PlaybookResult
 
 logger = logging.getLogger(__name__)
 

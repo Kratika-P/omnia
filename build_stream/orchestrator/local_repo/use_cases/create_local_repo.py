@@ -17,34 +17,34 @@
 import logging
 from datetime import datetime, timezone
 
-from build_stream.api.logging_utils import log_secure_info
+from api.logging_utils import log_secure_info
 
-from build_stream.core.jobs.entities import AuditEvent, Stage
-from build_stream.core.jobs.exceptions import JobNotFoundError
-from build_stream.core.jobs.repositories import (
+from core.jobs.entities import AuditEvent, Stage
+from core.jobs.exceptions import JobNotFoundError
+from core.jobs.repositories import (
     AuditEventRepository,
     JobRepository,
     StageRepository,
     UUIDGenerator,
 )
-from build_stream.core.jobs.value_objects import StageName, StageType
-from build_stream.core.localrepo.entities import PlaybookRequest
-from build_stream.core.localrepo.exceptions import (
+from core.jobs.value_objects import StageName, StageType
+from core.localrepo.entities import PlaybookRequest
+from core.localrepo.exceptions import (
     InputDirectoryInvalidError,
     InputFilesMissingError,
 )
-from build_stream.core.localrepo.services import (
+from core.localrepo.services import (
     InputFileService,
     PlaybookQueueRequestService,
 )
-from build_stream.core.localrepo.value_objects import (
+from core.localrepo.value_objects import (
     ExecutionTimeout,
     ExtraVars,
     PlaybookPath,
 )
 
-from ..commands import CreateLocalRepoCommand
-from ..dtos import LocalRepoResponse
+from orchestrator.local_repo.commands import CreateLocalRepoCommand
+from orchestrator.local_repo.dtos import LocalRepoResponse
 
 logger = logging.getLogger(__name__)
 

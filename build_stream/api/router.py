@@ -16,10 +16,10 @@
 
 from fastapi import APIRouter
 
-from .auth import router as auth_router
-from .jobs import router as jobs_router
-from .local_repo import router as local_repo_router
-from .parse_catalog import router as parse_catalog_router
+from api.auth.routes import router as auth_router
+from api.jobs.routes import router as jobs_router
+from api.local_repo.routes import router as local_repo_router
+from api.parse_catalog.routes import router as parse_catalog_router
 
 api_router = APIRouter(prefix="/api/v1")
 

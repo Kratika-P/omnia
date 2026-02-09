@@ -19,13 +19,13 @@ import os
 
 from dependency_injector import containers, providers
 
-from build_stream.core.localrepo.services import (
+from core.localrepo.services import (
     InputFileService,
     PlaybookQueueRequestService,
     PlaybookQueueResultService,
 )
-from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
-from build_stream.infra.repositories import (
+from infra.id_generator import JobUUIDGenerator, UUIDv4Generator
+from infra.repositories import (
     InMemoryJobRepository,
     InMemoryStageRepository,
     InMemoryIdempotencyRepository,
@@ -34,9 +34,9 @@ from build_stream.infra.repositories import (
     NfsPlaybookQueueResultRepository,
     NfsInputDirectoryRepository,
 )
-from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
-from build_stream.orchestrator.local_repo.callbacks import LocalRepoStageCallback
-from build_stream.orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
+from orchestrator.jobs.use_cases import CreateJobUseCase
+from orchestrator.local_repo.callbacks import LocalRepoStageCallback
+from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
 
 
 class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
@@ -50,10 +50,10 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     wiring_config = containers.WiringConfiguration(
         modules=[
-            "build_stream.api.jobs.routes",
-            "build_stream.api.jobs.dependencies",
-            "build_stream.api.local_repo.routes",
-            "build_stream.api.local_repo.dependencies",
+            "api.jobs.routes",
+            "api.jobs.dependencies",
+            "api.local_repo.routes",
+            "api.local_repo.dependencies",
         ]
     )
 
@@ -131,10 +131,10 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     wiring_config = containers.WiringConfiguration(
         modules=[
-            "build_stream.api.jobs.routes",
-            "build_stream.api.jobs.dependencies",
-            "build_stream.api.local_repo.routes",
-            "build_stream.api.local_repo.dependencies",
+            "api.jobs.routes",
+            "api.jobs.dependencies",
+            "api.local_repo.routes",
+            "api.local_repo.dependencies",
         ]
     )
 

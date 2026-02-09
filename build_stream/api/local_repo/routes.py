@@ -20,28 +20,28 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from build_stream.api.logging_utils import log_secure_info
+from api.logging_utils import log_secure_info
 
-from build_stream.core.jobs.exceptions import (
+from core.jobs.exceptions import (
     InvalidStateTransitionError,
     JobNotFoundError,
 )
-from build_stream.core.jobs.value_objects import ClientId, CorrelationId, JobId
-from build_stream.core.localrepo.exceptions import (
+from core.jobs.value_objects import ClientId, CorrelationId, JobId
+from core.localrepo.exceptions import (
     InputDirectoryInvalidError,
     InputFilesMissingError,
     LocalRepoDomainError,
     QueueUnavailableError,
 )
-from build_stream.orchestrator.local_repo.commands import CreateLocalRepoCommand
-from build_stream.orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
+from orchestrator.local_repo.commands import CreateLocalRepoCommand
+from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
 
-from .dependencies import (
+from api.local_repo.dependencies import (
     get_create_local_repo_use_case,
     get_local_repo_client_id,
     get_local_repo_correlation_id,
 )
-from .schemas import CreateLocalRepoResponse, LocalRepoErrorResponse
+from api.local_repo.schemas import CreateLocalRepoResponse, LocalRepoErrorResponse
 
 logger = logging.getLogger(__name__)
 

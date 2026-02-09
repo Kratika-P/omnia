@@ -21,10 +21,10 @@ when results are available.
 import asyncio
 import logging
 
-from build_stream.api.logging_utils import log_secure_info
+from api.logging_utils import log_secure_info
 
-from build_stream.core.localrepo.services import PlaybookQueueResultService
-from build_stream.orchestrator.local_repo.callbacks import StageCompletionCallback
+from core.localrepo.services import PlaybookQueueResultService
+from orchestrator.local_repo.callbacks import StageCompletionCallback
 
 logger = logging.getLogger(__name__)
 

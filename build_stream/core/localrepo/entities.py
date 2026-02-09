@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from build_stream.core.jobs.value_objects import CorrelationId, JobId
+from core.jobs.value_objects import CorrelationId, JobId
 
-from .value_objects import ExecutionTimeout, ExtraVars, PlaybookPath
+from core.localrepo.value_objects import ExecutionTimeout, ExtraVars, PlaybookPath
 
 
 @dataclass(frozen=True)

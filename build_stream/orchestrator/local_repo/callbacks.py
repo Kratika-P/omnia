@@ -17,9 +17,9 @@
 import logging
 from typing import Protocol
 
-from build_stream.core.jobs.repositories import JobRepository, StageRepository
-from build_stream.core.jobs.value_objects import JobId, StageName, StageType
-from build_stream.core.localrepo.entities import PlaybookResult
+from core.jobs.repositories import JobRepository, StageRepository
+from core.jobs.value_objects import JobId, StageName, StageType
+from core.localrepo.entities import PlaybookResult
 
 logger = logging.getLogger(__name__)
 
