@@ -236,9 +236,24 @@
         - bs_info.containers[0].State is defined
         - bs_info.containers[0].State.Running | bool
 
-    # -------------------------------------------------------------------
-    # 5) Validate pulp HTTPS connectivity from inside build_stream
-    # -------------------------------------------------------------------
+    - name: Configure firewall for omnia_build_stream
+      block:
+        - name: Start firewalld service
+          ansible.builtin.systemd:
+            name: firewalld
+            state: started
+            enabled: true
+
+        - name: Open port {{ build_stream_port }} in firewall
+          ansible.posix.firewalld:
+            port: "{{ build_stream_firewall_port }}"
+            permanent: true
+            state: enabled
+            immediate: true
+
+# -------------------------------------------------------------------
+# 5) Validate pulp HTTPS connectivity from inside build_stream
+# -------------------------------------------------------------------
     - name: Build curl command
       ansible.builtin.set_fact:
         curl_cmd:
