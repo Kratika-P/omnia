@@ -19,14 +19,14 @@ import os
 
 from dependency_injector import containers, providers
 
-from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
-from build_stream.infra.repositories import (
+from infra.id_generator import JobUUIDGenerator, UUIDv4Generator
+from infra.repositories import (
     InMemoryJobRepository,
     InMemoryStageRepository,
     InMemoryIdempotencyRepository,
     InMemoryAuditEventRepository,
 )
-from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
+from orchestrator.jobs.use_cases import CreateJobUseCase
 
 
 class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
@@ -38,12 +38,8 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     Activated when ENV=dev (default).
     """
 
-    wiring_config = containers.WiringConfiguration(
-        modules=[
-            "build_stream.api.jobs.routes",
-            "build_stream.api.jobs.dependencies",
-        ]
-    )
+    # Don't wire at module level to avoid circular imports
+    # wiring_config will be set later in main.py
 
     job_id_generator = providers.Singleton(JobUUIDGenerator)
     uuid_generator = providers.Singleton(UUIDv4Generator)
@@ -76,12 +72,8 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     Activated when ENV=prod.
     """
 
-    wiring_config = containers.WiringConfiguration(
-        modules=[
-            "build_stream.api.jobs.routes",
-            "build_stream.api.jobs.dependencies",
-        ]
-    )
+    # Don't wire at module level to avoid circular imports
+    # wiring_config will be set later in main.py
 
     job_id_generator = providers.Singleton(JobUUIDGenerator)
     uuid_generator = providers.Singleton(UUIDv4Generator)

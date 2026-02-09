@@ -92,11 +92,11 @@ def generate_test_client_secret(length: int = 32) -> str:
     """
     if length < 8:
         raise ValueError("Client secret length must be at least 8 characters")
-    
+
     # Generate random part (subtract 6 for "bld_s_" prefix)
     random_part_length = max(8, length - 6)
     random_part = generate_secure_test_password(random_part_length)
-    
+
     return f"bld_s_{random_part}"
 
 
@@ -106,7 +106,10 @@ def generate_invalid_client_id() -> str:
     Returns:
         Invalid client ID without proper prefix
     """
-    return "invalid_client_id_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    return (
+        "invalid_client_id_" + 
+        ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    )
 
 
 def generate_invalid_client_secret() -> str:
@@ -115,7 +118,10 @@ def generate_invalid_client_secret() -> str:
     Returns:
         Invalid client secret without proper prefix
     """
-    return "invalid_secret_" + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    return (
+        "invalid_secret_" + 
+        ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    )
 
 
 class IntegrationTestConfig:
@@ -293,6 +299,7 @@ class ServerManager:
         "jsonschema",
         "ansible",
         "cryptography",
+        "dependency-injector",
     ]
 
     def __init__(  # noqa: R0913,R0917 pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -400,6 +407,7 @@ class ServerManager:
             "JWT_PRIVATE_KEY_PATH": str(self.vault_manager.private_key_file),
             "JWT_PUBLIC_KEY_PATH": str(self.vault_manager.public_key_file),
             "LOG_LEVEL": "DEBUG",
+            "PYTHONPATH": str(self.project_dir),
         })
         logger.info("    HOST=%s", self.host)
         logger.info("    PORT=%s", self.port)
@@ -409,6 +417,7 @@ class ServerManager:
         logger.info("    JWT_PRIVATE_KEY_PATH=%s", self.vault_manager.private_key_file)
         logger.info("    JWT_PUBLIC_KEY_PATH=%s", self.vault_manager.public_key_file)
         logger.info("    LOG_LEVEL=DEBUG")
+        logger.info("    PYTHONPATH=%s", self.project_dir)
 
         logger.info("  Starting uvicorn server...")
         logger.info("    Python: %s", self.python_path)
@@ -544,7 +553,7 @@ def project_dir() -> str:
     Returns:
         Path to build_stream project directory.
     """
-    return str(Path(__file__).parent.parent.parent)
+    return str(Path(__file__).parent.parent.parent.parent)
 
 
 @pytest.fixture(scope="module")

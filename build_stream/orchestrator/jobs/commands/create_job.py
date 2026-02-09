@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass
 
-from build_stream.core.jobs.value_objects import (
+from core.jobs.value_objects import (
     ClientId,
     CorrelationId,
     IdempotencyKey,

@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared pytest fixtures for Build Stream API tests."""
+"""Shared pytest fixtures for Build Stream API tests.
 
-# pylint: disable=redefined-outer-name,global-statement,import-outside-toplevel,protected-access
-
-"""Note: This conftest is for mock-based unit/integration tests.
+Note: This conftest is for mock-based unit/integration tests.
 E2E integration tests use tests/integration/conftest.py which does not
 import the app directly (it runs the server as a subprocess).
 """
+
+# pylint: disable=redefined-outer-name,global-statement,import-outside-toplevel,protected-access
 
 import base64
 import sys
@@ -28,10 +28,7 @@ from typing import Dict, Generator
 
 import pytest
 
-# Add project root to Python path for imports
-PROJECT_ROOT = Path(__file__).parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+# Note: pythonpath is set in pytest.ini at project root
 
 # Lazy imports to avoid triggering FastAPI route registration
 # when running E2E tests that don't need these fixtures
@@ -96,8 +93,8 @@ def mock_vault_client():
     Returns:
         MockVaultClient with default test credentials.
     """
-    MockVaultClient = _get_mock_vault_client()
-    return MockVaultClient()
+    mock_vault_client = _get_mock_vault_client()
+    return mock_vault_client()
 
 
 @pytest.fixture
@@ -135,8 +132,8 @@ def mock_jwt_handler():
     Returns:
         MockJWTHandler for testing JWT operations.
     """
-    MockJWTHandler = _get_mock_jwt_handler()
-    return MockJWTHandler()
+    mock_jwt_handler = _get_mock_jwt_handler()
+    return mock_jwt_handler()
 
 
 @pytest.fixture
@@ -151,23 +148,24 @@ def test_client(mock_vault_client, mock_jwt_handler) -> Generator:  # noqa: W062
         TestClient configured for testing.
     """
     from fastapi.testclient import TestClient  # noqa: PLC0415
+    from api.auth.routes import get_auth_service  # noqa: PLC0415
 
     app = _get_app()
     auth_service_class = _get_auth_service()
-    auth_routes = _get_auth_routes()
 
     test_auth_service = auth_service_class(
         vault_client=mock_vault_client,
         jwt_handler=mock_jwt_handler,
     )
-    original_service = auth_routes._auth_service  # noqa: W0212
 
-    auth_routes._auth_service = test_auth_service
+    # Override the dependency injection
+    app.dependency_overrides[get_auth_service] = lambda: test_auth_service
 
     with TestClient(app) as client:
         yield client
 
-    auth_routes._auth_service = original_service
+    # Clean up dependency overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -184,23 +182,24 @@ def test_client_with_existing_client(  # noqa: C0301,W0621
         TestClient configured for testing max client scenarios.
     """
     from fastapi.testclient import TestClient  # noqa: PLC0415
+    from api.auth.routes import get_auth_service  # noqa: PLC0415
 
     app = _get_app()
     auth_service_class = _get_auth_service()
-    auth_routes = _get_auth_routes()
 
     test_auth_service = auth_service_class(
         vault_client=mock_vault_with_client,
         jwt_handler=mock_jwt_handler,
     )
-    original_service = auth_routes._auth_service  # noqa: W0212
 
-    auth_routes._auth_service = test_auth_service  # noqa: W0212
+    # Override the dependency injection
+    app.dependency_overrides[get_auth_service] = lambda: test_auth_service
 
     with TestClient(app) as client:
         yield client
 
-    auth_routes._auth_service = original_service  # noqa: W0212
+    # Clean up dependency overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

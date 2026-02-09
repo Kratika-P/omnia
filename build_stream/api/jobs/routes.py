@@ -19,19 +19,19 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from build_stream.core.jobs.exceptions import (
+from core.jobs.exceptions import (
     IdempotencyConflictError,
     InvalidStateTransitionError,
     JobNotFoundError,
 )
-from build_stream.core.jobs.value_objects import (
+from core.jobs.value_objects import (
     ClientId,
     CorrelationId,
     IdempotencyKey,
     JobId,
 )
-from build_stream.orchestrator.jobs.commands import CreateJobCommand
-from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
+from orchestrator.jobs.commands import CreateJobCommand
+from orchestrator.jobs.use_cases import CreateJobUseCase
 
 from .dependencies import (
     get_client_id,

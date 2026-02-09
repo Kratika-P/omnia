@@ -16,15 +16,23 @@
 
 import uuid
 
-from build_stream.core.jobs.exceptions import JobDomainError
-from build_stream.core.jobs.repositories import JobIdGenerator, UUIDGenerator
-from build_stream.core.jobs.value_objects import JobId
+from core.jobs.exceptions import JobDomainError
+from core.jobs.repositories import JobIdGenerator, UUIDGenerator
+from core.jobs.value_objects import JobId
 
 
 class JobUUIDGenerator(JobIdGenerator):  # pylint: disable=R0903
     """JobId generator using UUID v4."""
 
     def generate(self) -> JobId:
+        """Generate a new JobId using UUID v4.
+        
+        Returns:
+            JobId: A new job identifier.
+            
+        Raises:
+            JobDomainError: If JobId generation fails.
+        """
         try:
             return JobId(str(uuid.uuid4()))
         except ValueError:
@@ -37,4 +45,9 @@ class UUIDv4Generator(UUIDGenerator):  # pylint: disable=R0903
     """UUID v4 generator for general purpose use (returns uuid.UUID)."""
 
     def generate(self) -> uuid.UUID:
+        """Generate a new UUID v4.
+        
+        Returns:
+            uuid.UUID: A new UUID v4 instance.
+        """
         return uuid.uuid4()

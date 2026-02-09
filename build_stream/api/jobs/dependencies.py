@@ -18,11 +18,11 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, status
 
-from build_stream.container import container
-from build_stream.core.jobs.value_objects import ClientId, CorrelationId
-from build_stream.infra.id_generator import JobUUIDGenerator, UUIDv4Generator
-from build_stream.infra.repositories import InMemoryJobRepository, InMemoryStageRepository
-from build_stream.orchestrator.jobs.use_cases import CreateJobUseCase
+from container import container
+from core.jobs.value_objects import ClientId, CorrelationId
+from infra.id_generator import JobUUIDGenerator
+from infra.repositories import InMemoryJobRepository, InMemoryStageRepository
+from orchestrator.jobs.use_cases import CreateJobUseCase
 
 
 def get_id_generator() -> JobUUIDGenerator:
