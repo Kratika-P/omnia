@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""OAuth2 Authentication API module."""
+"""Application command DTOs for local repository."""
 
-from api.auth.routes import router
+from .create_local_repo import CreateLocalRepoCommand
 
-__all__ = ["router"]
+__all__ = ["CreateLocalRepoCommand"]

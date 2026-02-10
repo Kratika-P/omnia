@@ -20,16 +20,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from api.dependencies import require_catalog_read
-from container import container
-from core.catalog.exceptions import CatalogParseError as CoreCatalogParseError
-from core.jobs.exceptions import (
-    InvalidStateTransitionError,
-    JobNotFoundError,
-    StageAlreadyCompletedError,
-    TerminalStateViolationError,
-)
-from .schemas import ErrorResponse, ParseCatalogResponse, ParseCatalogStatus
-from .service import (
+from api.parse_catalog.schemas import ErrorResponse, ParseCatalogResponse, ParseCatalogStatus
+from api.parse_catalog.service import (
+>>>>>>> upstream/pub/build_stream
     CatalogParseError,
     InvalidFileFormatError,
     InvalidJSONError,

@@ -30,7 +30,7 @@ from .exceptions import (
     ArtifactValidationError,
 )
 from .entities import ArtifactRecord
-from .interfaces import ArtifactStore, ArtifactMetadataRepository
+from .ports import ArtifactStore, ArtifactMetadataRepository
 
 __all__ = [
     "ArtifactKey",

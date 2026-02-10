@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""OAuth2 Authentication API module."""
-
-from api.auth.routes import router
+from api.local_repo.routes import router
 
 __all__ = ["router"]
