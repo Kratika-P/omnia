@@ -944,8 +944,8 @@ show_help() {
 }
 
 install_omnia_core() {
-    local omnia_core_tag="1.0"
-    local omnia_core_registry="localhost"
+    local omnia_core_tag="1.1"
+    local omnia_core_registry="docker.io/dellhpcomniaaisolution"
     
     # Check if local omnia_core:1.1 exists
     if podman inspect omnia_core:${omnia_core_tag} >/dev/null 2>&1; then
