@@ -22,12 +22,16 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from api.dependencies import require_catalog_read
 from api.parse_catalog.schemas import ErrorResponse, ParseCatalogResponse, ParseCatalogStatus
 from api.parse_catalog.service import (
->>>>>>> upstream/pub/build_stream
-    CatalogParseError,
     InvalidFileFormatError,
     InvalidJSONError,
     ParseCatalogService,
 )
+from core.catalog.exceptions import (
+    CatalogParseError,
+    CatalogSchemaValidationError,
+    FileTooLargeError,
+)
+from core.jobs.exceptions import JobNotFoundError, TerminalStateViolationError, StageAlreadyCompletedError, InvalidStateTransitionError
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +207,7 @@ async def parse_catalog(
             },
         ) from e
 
-    except (CatalogParseError, CoreCatalogParseError) as e:
+    except CatalogParseError as e:
         logger.error("Catalog parsing failed for file: %s", file.filename)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

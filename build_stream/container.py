@@ -213,6 +213,16 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         uuid_generator=uuid_generator,
     )
 
+    parse_catalog_use_case = providers.Factory(
+        ParseCatalogUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        artifact_store=artifact_store,
+        artifact_metadata_repo=artifact_metadata_repository,
+        uuid_generator=uuid_generator,
+    )
+
 
 class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Production profile container.
@@ -304,6 +314,16 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         audit_repo=audit_repository,
         input_file_service=input_file_service,
         playbook_queue_service=playbook_queue_request_service,
+        uuid_generator=uuid_generator,
+    )
+
+    parse_catalog_use_case = providers.Factory(
+        ParseCatalogUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        artifact_store=artifact_store,
+        artifact_metadata_repo=artifact_metadata_repository,
         uuid_generator=uuid_generator,
     )
 
