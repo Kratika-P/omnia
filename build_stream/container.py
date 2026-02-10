@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Dependency Injector containers for the Jobs API."""
+"""Dependency Injector containers for the Build Stream API."""
 # pylint: disable=c-extension-no-member
 
 import os
@@ -20,6 +20,11 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
+from core.localrepo.services import (
+    InputFileService,
+    PlaybookQueueRequestService,
+    PlaybookQueueResultService,
+)
 from common.config import load_config
 from infra.artifact_store.in_memory_artifact_store import InMemoryArtifactStore
 from infra.artifact_store.in_memory_artifact_metadata import (
@@ -32,8 +37,13 @@ from infra.repositories import (
     InMemoryStageRepository,
     InMemoryIdempotencyRepository,
     InMemoryAuditEventRepository,
+    NfsInputDirectoryRepository,
+    NfsPlaybookQueueRequestRepository,
+    NfsPlaybookQueueResultRepository,
 )
 from orchestrator.jobs.use_cases import CreateJobUseCase
+from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
+from orchestrator.local_repo.result_poller import LocalRepoResultPoller
 
 
 def _create_artifact_store():
@@ -79,20 +89,64 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     Activated when ENV=dev (default).
     """
 
-    # Don't wire at module level to avoid circular imports
-    # wiring_config will be set later in main.py
+    wiring_config = containers.WiringConfiguration(
+        modules=[
+            "api.jobs.routes",
+            "api.jobs.dependencies",
+            "api.local_repo.routes",
+            "api.local_repo.dependencies",
+        ]
+    )
 
     job_id_generator = providers.Singleton(JobUUIDGenerator)
     uuid_generator = providers.Singleton(UUIDv4Generator)
 
+    # --- Jobs repositories ---
     job_repository = providers.Singleton(InMemoryJobRepository)
-
     stage_repository = providers.Singleton(InMemoryStageRepository)
-
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
-
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
 
+    # --- Local repo repositories ---
+    input_directory_repository = providers.Singleton(
+        NfsInputDirectoryRepository,
+    )
+    
+    playbook_queue_request_repository = providers.Singleton(
+        NfsPlaybookQueueRequestRepository,
+    )
+    
+    playbook_queue_result_repository = providers.Singleton(
+        NfsPlaybookQueueResultRepository,
+    )
+
+    # --- Local repo services ---
+    input_file_service = providers.Factory(
+        InputFileService,
+        input_repo=input_directory_repository,
+    )
+    
+    playbook_queue_request_service = providers.Factory(
+        PlaybookQueueRequestService,
+        request_repo=playbook_queue_request_repository,
+    )
+    
+    playbook_queue_result_service = providers.Factory(
+        PlaybookQueueResultService,
+        result_repo=playbook_queue_result_repository,
+    )
+    
+    # --- Result poller ---
+    result_poller = providers.Singleton(
+        LocalRepoResultPoller,
+        result_service=playbook_queue_result_service,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        uuid_generator=uuid_generator,
+        poll_interval=int(os.getenv("RESULT_POLL_INTERVAL", "5")),
+    )
+
+    # --- Use cases ---
     artifact_store = providers.Singleton(_create_artifact_store)
 
     artifact_metadata_repository = providers.Singleton(
@@ -109,6 +163,16 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         uuid_generator=uuid_generator,
     )
 
+    create_local_repo_use_case = providers.Factory(
+        CreateLocalRepoUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        input_file_service=input_file_service,
+        playbook_queue_service=playbook_queue_request_service,
+        uuid_generator=uuid_generator,
+    )
+
 
 class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Production profile container.
@@ -119,20 +183,64 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     Activated when ENV=prod.
     """
 
-    # Don't wire at module level to avoid circular imports
-    # wiring_config will be set later in main.py
+    wiring_config = containers.WiringConfiguration(
+        modules=[
+            "api.jobs.routes",
+            "api.jobs.dependencies",
+            "api.local_repo.routes",
+            "api.local_repo.dependencies",
+        ]
+    )
 
     job_id_generator = providers.Singleton(JobUUIDGenerator)
     uuid_generator = providers.Singleton(UUIDv4Generator)
 
+    # --- Jobs repositories ---
     job_repository = providers.Singleton(InMemoryJobRepository)
-
     stage_repository = providers.Singleton(InMemoryStageRepository)
-
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
-
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
 
+    # --- Local repo repositories ---
+    input_directory_repository = providers.Singleton(
+        NfsInputDirectoryRepository,
+    )
+    
+    playbook_queue_request_repository = providers.Singleton(
+        NfsPlaybookQueueRequestRepository,
+    )
+    
+    playbook_queue_result_repository = providers.Singleton(
+        NfsPlaybookQueueResultRepository,
+    )
+
+    # --- Local repo services ---
+    input_file_service = providers.Factory(
+        InputFileService,
+        input_repo=input_directory_repository,
+    )
+    
+    playbook_queue_request_service = providers.Factory(
+        PlaybookQueueRequestService,
+        request_repo=playbook_queue_request_repository,
+    )
+    
+    playbook_queue_result_service = providers.Factory(
+        PlaybookQueueResultService,
+        result_repo=playbook_queue_result_repository,
+    )
+    
+    # --- Result poller ---
+    result_poller = providers.Singleton(
+        LocalRepoResultPoller,
+        result_service=playbook_queue_result_service,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        uuid_generator=uuid_generator,
+        poll_interval=int(os.getenv("RESULT_POLL_INTERVAL", "5")),
+    )
+
+    # --- Use cases ---
     artifact_store = providers.Singleton(_create_artifact_store)
 
     artifact_metadata_repository = providers.Singleton(
@@ -146,6 +254,16 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         idempotency_repo=idempotency_repository,
         audit_repo=audit_repository,
         job_id_generator=job_id_generator,
+        uuid_generator=uuid_generator,
+    )
+
+    create_local_repo_use_case = providers.Factory(
+        CreateLocalRepoUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        input_file_service=input_file_service,
+        playbook_queue_service=playbook_queue_request_service,
         uuid_generator=uuid_generator,
     )
 
