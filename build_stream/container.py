@@ -26,7 +26,7 @@ from core.localrepo.services import (
     PlaybookQueueResultService,
 )
 from common.config import load_config
->>>>>>> upstream/pub/build_stream
+
 from infra.artifact_store.in_memory_artifact_store import InMemoryArtifactStore
 from infra.artifact_store.in_memory_artifact_metadata import (
     InMemoryArtifactMetadataRepository,
@@ -187,7 +187,6 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     )
 
     # --- Use cases ---
->>>>>>> upstream/pub/build_stream
     artifact_store = providers.Singleton(_create_artifact_store)
 
     artifact_metadata_repository = providers.Singleton(
@@ -211,7 +210,6 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         audit_repo=audit_repository,
         input_file_service=input_file_service,
         playbook_queue_service=playbook_queue_request_service,
->>>>>>> upstream/pub/build_stream
         uuid_generator=uuid_generator,
     )
 
@@ -283,7 +281,6 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     )
 
     # --- Use cases ---
->>>>>>> upstream/pub/build_stream
     artifact_store = providers.Singleton(_create_artifact_store)
 
     artifact_metadata_repository = providers.Singleton(
@@ -307,7 +304,6 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         audit_repo=audit_repository,
         input_file_service=input_file_service,
         playbook_queue_service=playbook_queue_request_service,
->>>>>>> upstream/pub/build_stream
         uuid_generator=uuid_generator,
     )
 
