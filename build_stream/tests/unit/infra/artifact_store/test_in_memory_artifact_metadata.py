@@ -63,6 +63,7 @@ class TestSave:
     """Tests for saving artifact records."""
 
     def test_save_and_find(self, artifact_metadata_repo) -> None:
+        """Test that save and find operations work correctly."""
         record = _make_record()
         artifact_metadata_repo.save(record)
         found = artifact_metadata_repo.find_by_job_stage_and_label(
@@ -74,6 +75,7 @@ class TestSave:
         assert found.id == "rec-001"
 
     def test_save_overwrites_same_key(self, artifact_metadata_repo) -> None:
+        """Test that save overwrites existing record with same key."""
         record1 = _make_record(record_id="rec-001")
         record2 = _make_record(record_id="rec-002")
         artifact_metadata_repo.save(record1)
@@ -91,6 +93,7 @@ class TestFind:
     """Tests for finding artifact records."""
 
     def test_find_not_found(self, artifact_metadata_repo) -> None:
+        """Test that find returns None for nonexistent record."""
         found = artifact_metadata_repo.find_by_job_stage_and_label(
             job_id=JobId(VALID_JOB_ID),
             stage_name=StageName(StageType.PARSE_CATALOG.value),
@@ -99,6 +102,7 @@ class TestFind:
         assert found is None
 
     def test_find_by_job(self, artifact_metadata_repo) -> None:
+        """Test that find_by_job returns correct records."""
         artifact_metadata_repo.save(_make_record(label="catalog-file", record_id="r1"))
         artifact_metadata_repo.save(
             _make_record(
@@ -118,6 +122,7 @@ class TestFind:
         assert len(results) == 2
 
     def test_find_by_job_empty(self, artifact_metadata_repo) -> None:
+        """Test that find_by_job returns empty list for no records."""
         results = artifact_metadata_repo.find_by_job(JobId(VALID_JOB_ID))
         assert results == []
 
@@ -126,6 +131,7 @@ class TestDelete:
     """Tests for deleting artifact records."""
 
     def test_delete_by_job(self, artifact_metadata_repo) -> None:
+        """Test that delete_by_job removes correct records."""
         artifact_metadata_repo.save(_make_record(label="catalog-file", record_id="r1"))
         artifact_metadata_repo.save(
             _make_record(
@@ -147,5 +153,6 @@ class TestDelete:
         assert len(artifact_metadata_repo.find_by_job(JobId(VALID_JOB_ID_2))) == 1
 
     def test_delete_by_job_returns_zero(self, artifact_metadata_repo) -> None:
+        """Test that delete_by_job returns 0 for no matching records."""
         count = artifact_metadata_repo.delete_by_job(JobId(VALID_JOB_ID))
         assert count == 0
