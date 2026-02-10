@@ -17,7 +17,7 @@
 These tests validate the complete parse catalog workflow using real OAuth2
 authentication instead of mocks. The tests follow the chronological order:
 1. Health check
-2. Client registration 
+2. Client registration
 3. Token generation
 4. Job creation
 5. Parse catalog execution
@@ -35,14 +35,13 @@ Requirements:
 import json
 import os
 import uuid
-from pathlib import Path
 from typing import Dict, Optional
 
 import httpx
 import pytest
 
 
-class ParseCatalogContext:
+class ParseCatalogContext:  # pylint: disable=too-many-instance-attributes
     """Context object to store state across parse catalog tests.
 
     This class maintains state between test steps, allowing tests to
@@ -104,10 +103,10 @@ class ParseCatalogContext:
         # Go up from end_to_end/api/ to tests/ then to fixtures/
         fixtures_dir = os.path.dirname(os.path.dirname(here))
         catalog_path = os.path.join(fixtures_dir, "fixtures", "catalogs", "catalog_rhel.json")
-        
-        with open(catalog_path, 'r') as f:
+
+        with open(catalog_path, 'r', encoding='utf-8') as f:
             catalog_data = json.load(f)
-        
+
         self.catalog_content = json.dumps(catalog_data, indent=2).encode('utf-8')
 
 
@@ -310,17 +309,25 @@ class TestParseCatalogWorkflow:
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 f"/api/v1/jobs/{parse_catalog_context.job_id}/stages/parse-catalog",
-                files={"file": ("catalog.json", parse_catalog_context.catalog_content, "application/json")},
+                files={
+                    "file": (
+                        "catalog.json", 
+                        parse_catalog_context.catalog_content,
+                        "application/json"
+                    )
+                },
                 headers=headers,
             )
 
         # The response should indicate the stage was processed
         # It might fail due to missing dependencies, but the workflow should be complete
-        assert response.status_code in [200, 400, 422, 500], f"Parse catalog failed: {response.text}"
-        
+        assert response.status_code in [200, 400, 422, 500], (
+            f"Parse catalog failed: {response.text}"
+        )
+
         # Get response data for verification
         response_data = response.json() if response.status_code == 200 else None
-        
+
         # If successful, verify the response structure
         if response.status_code == 200 and response_data:
             assert "status" in response_data
@@ -356,13 +363,13 @@ class TestParseCatalogWorkflow:
                 json=job_data,
                 headers=headers,
             )
-        
+
         assert job_response.status_code == 201
         new_job_id = job_response.json()["job_id"]
 
         # Create invalid catalog data
         invalid_catalog = b'{"invalid": "catalog"}'
-        
+
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 f"/api/v1/jobs/{new_job_id}/stages/parse-catalog",
@@ -371,7 +378,9 @@ class TestParseCatalogWorkflow:
             )
 
         # Should handle the error gracefully
-        assert response.status_code in [400, 422, 500, 409], f"Expected error response, got: {response.status_code}"
+        assert response.status_code in [400, 422, 500, 409], (
+            f"Expected error response, got: {response.status_code}"
+        )
 
     def test_07_parse_catalog_with_oversized_file(
         self,
@@ -405,22 +414,24 @@ class TestParseCatalogWorkflow:
                 json=job_data,
                 headers=headers,
             )
-        
+
         assert job_response.status_code == 201
         new_job_id = job_response.json()["job_id"]
 
         # Test with an oversized file
         oversized_content = b'x' * (10 * 1024 * 1024)  # 10MB
-        
+
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 f"/api/v1/jobs/{new_job_id}/stages/parse-catalog",
                 files={"file": ("oversized.json", oversized_content, "application/json")},
                 headers=headers,
             )
-        
+
         # Should reject oversized files
-        assert response.status_code in [400, 413, 422], f"Expected file size error, got: {response.status_code}"
+        assert response.status_code in [400, 413, 422], (
+            f"Expected file size error, got: {response.status_code}"
+        )
 
     def test_08_parse_catalog_job_status_integration(
         self,
@@ -448,8 +459,10 @@ class TestParseCatalogWorkflow:
             )
 
         # Job status should be accessible
-        assert response.status_code in [200, 404], f"Job status check failed: {response.status_code}"
-        
+        assert response.status_code in [200, 404], (
+            f"Job status check failed: {response.status_code}"
+        )
+
         if response.status_code == 200:
             job_data = response.json()
             assert "job_state" in job_data
@@ -510,22 +523,24 @@ class TestParseCatalogWorkflow:
                 json=job_data,
                 headers=headers,
             )
-        
+
         assert job_response.status_code == 201
         new_job_id = job_response.json()["job_id"]
 
         # Test with an oversized file (security check)
         oversized_content = b'x' * (10 * 1024 * 1024)  # 10MB
-        
+
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 f"/api/v1/jobs/{new_job_id}/stages/parse-catalog",
                 files={"file": ("oversized.json", oversized_content, "application/json")},
                 headers=headers,
             )
-        
+
         # Should reject oversized files for security
-        assert response.status_code in [400, 413, 422], f"Expected file size error, got: {response.status_code}"
+        assert response.status_code in [400, 413, 422], (
+            f"Expected file size error, got: {response.status_code}"
+        )
 
 
 @pytest.mark.e2e
@@ -549,11 +564,15 @@ class TestParseCatalogErrorHandling:
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 f"/api/v1/jobs/{job_id}/stages/parse-catalog",
-                files={"file": ("catalog.json", catalog_content, "application/json")},
+                files={
+                    "file": ("catalog.json", catalog_content, "application/json")
+                },
             )
 
         # Should fail with either 401 (auth) or 422 (validation before auth)
-        assert response.status_code in [401, 422], f"Expected 401 or 422, got: {response.status_code}"
+        assert response.status_code in [401, 422], (
+            f"Expected 401 or 422, got: {response.status_code}"
+        )
 
     def test_parse_catalog_with_invalid_token_fails(
         self,
@@ -572,13 +591,20 @@ class TestParseCatalogErrorHandling:
                 headers=headers,
             )
 
-        assert response.status_code == 401, f"Expected 401, got: {response.status_code}"
+        assert response.status_code == 401, (
+            f"Expected 401, got: {response.status_code}"
+        )
 
-    
+
 
 @pytest.mark.e2e
 @pytest.mark.integration
-@pytest.mark.skip(reason="Security validation tests have vault setup conflicts - skipping to focus on core functionality")
+@pytest.mark.skip(
+    reason=(
+        "Security validation tests have vault setup conflicts - "
+        "skipping to focus on core functionality"
+    )
+)
 class TestParseCatalogSecurityValidation:
     """Security validation tests for parse catalog API.
 
@@ -586,7 +612,7 @@ class TestParseCatalogSecurityValidation:
     - Input validation and sanitization
     - File type validation
     - Path traversal prevention
-    
+
     NOTE: This class is skipped due to vault setup conflicts in independent test execution.
     Core security validation is covered in the main workflow tests.
     """
@@ -602,7 +628,7 @@ class TestParseCatalogSecurityValidation:
         # Use unique client name to avoid conflicts
         unique_client_id = str(uuid.uuid4())[:8]
         client_name = f"malicious-content-test-{unique_client_id}"
-        
+
         # Register client and get token first
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             # Register client
@@ -645,10 +671,10 @@ class TestParseCatalogSecurityValidation:
             job_id = job_response.json()["job_id"]
 
         headers = {"Authorization": f"Bearer {token_data['access_token']}"}
-        
+
         # Test with malicious content
         malicious_content = b'{"Catalog": {"Name": "<script>alert(\'xss\')</script>"}}'
-        
+
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             response = client.post(
                 f"/api/v1/jobs/{job_id}/stages/parse-catalog",
@@ -657,8 +683,10 @@ class TestParseCatalogSecurityValidation:
             )
 
         # Should handle malicious content safely
-        assert response.status_code in [400, 422, 500], f"Expected error for malicious content, got: {response.status_code}"
-        
+        assert response.status_code in [400, 422, 500], (
+            f"Expected error for malicious content, got: {response.status_code}"
+        )
+
         # Response should not contain the malicious content
         if response.status_code in [400, 422]:
             response_text = response.text.lower()
@@ -674,7 +702,7 @@ class TestParseCatalogSecurityValidation:
         # Use unique client name to avoid conflicts
         unique_client_id = str(uuid.uuid4())[:8]
         client_name = f"param-validation-test-{unique_client_id}"
-        
+
         # Register client and get token first
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             # Register client
@@ -716,17 +744,25 @@ class TestParseCatalogSecurityValidation:
             assert job_response.status_code == 201
             job_id = job_response.json()["job_id"]
 
-        headers = {"Authorization": f"Bearer {token_data['access_token']}"}
-        
+        headers = {
+            "Authorization": f"Bearer {token_data['access_token']}"
+        }
+
         # Test with wrong parameter name
         valid_content = b'{"test": "catalog"}'
-        
-        with httpx.Client(base_url=base_url, timeout=30.0) as client:
+
+        with httpx.Client(
+            base_url=base_url, timeout=30.0
+        ) as client:
             response = client.post(
                 f"/api/v1/jobs/{job_id}/stages/parse-catalog",
-                files={"wrong_param": ("catalog.json", valid_content, "application/json")},
+                files={
+                    "wrong_param": ("catalog.json", valid_content, "application/json")
+                },
                 headers=headers,
             )
 
         # Should reject wrong parameter name
-        assert response.status_code == 422, f"Expected 422 for wrong parameter, got: {response.status_code}"
+        assert response.status_code == 422, (
+            f"Expected 422 for wrong parameter, got: {response.status_code}"
+        )

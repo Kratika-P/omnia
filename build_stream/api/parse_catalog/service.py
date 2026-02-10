@@ -22,8 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from common.config import load_config
 from core.catalog.generator import generate_root_json_from_catalog
+from common.config import load_config
+from container import container
+from core.jobs.value_objects import CorrelationId, JobId
+from infra.id_generator import UUIDv4Generator
+from orchestrator.catalog.commands.parse_catalog import ParseCatalogCommand
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +72,7 @@ class ParseCatalogService:  # pylint: disable=too-few-public-methods
                 self.output_root = "/tmp/build_stream/tmp/generator"
         else:
             self.output_root = output_root
-        
+
         Path(self.output_root).mkdir(parents=True, exist_ok=True)
 
     async def parse_catalog(
@@ -103,28 +107,23 @@ class ParseCatalogService:  # pylint: disable=too-few-public-methods
 
     async def _process_catalog_via_orchestrator(self, json_data: dict, job_id: str) -> ParseResult:
         """Process catalog using the orchestrator use case."""
-        from container import container
-        from orchestrator.catalog.commands.parse_catalog import ParseCatalogCommand
-        from core.jobs.value_objects import JobId, CorrelationId
-        from infra.id_generator import UUIDv4Generator
-        
         # Create command for orchestrator
         uuid_gen = UUIDv4Generator()
-        
+
         # Convert json_data back to bytes as expected by orchestrator
         json_bytes = json.dumps(json_data).encode('utf-8')
-        
+
         command = ParseCatalogCommand(
             job_id=JobId(job_id),
             correlation_id=CorrelationId(str(uuid_gen.generate())),
             filename="uploaded.json",
             content=json_bytes,
         )
-        
+
         # Execute via orchestrator use case
         use_case = container.parse_catalog_use_case()
         result = use_case.execute(command)
-        
+
         # Convert orchestrator result to API result
         return ParseResult(
             success=True,
@@ -184,7 +183,6 @@ class ParseCatalogService:  # pylint: disable=too-few-public-methods
             return ParseResult(
                 success=True,
                 message="Catalog parsed successfully",
-                output_path=self.output_root,
             )
 
         except FileNotFoundError as e:

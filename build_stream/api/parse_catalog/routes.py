@@ -28,10 +28,13 @@ from api.parse_catalog.service import (
 )
 from core.catalog.exceptions import (
     CatalogParseError,
-    CatalogSchemaValidationError,
-    FileTooLargeError,
 )
-from core.jobs.exceptions import JobNotFoundError, TerminalStateViolationError, StageAlreadyCompletedError, InvalidStateTransitionError
+from core.jobs.exceptions import (
+    InvalidStateTransitionError,
+    JobNotFoundError,
+    StageAlreadyCompletedError,
+    TerminalStateViolationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +116,6 @@ async def parse_catalog(
             "status": ParseCatalogStatus.SUCCESS.value,
             "message": result.message,
         }
-            
         return response_data
 
     except ValueError as e:
@@ -129,17 +131,17 @@ async def parse_catalog(
                     "correlation_id": "test-correlation-id"
                 },
             ) from e
-        else:
-            # Re-raise other ValueError as internal error
-            logger.exception("Unexpected ValueError processing file: %s", file.filename)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error_code": "INTERNAL_ERROR",
-                    "message": "An unexpected error occurred",
-                    "correlation_id": "test-correlation-id"
-                },
-            ) from e
+
+        # Re-raise other ValueError as internal error
+        logger.exception("Unexpected ValueError processing file: %s", file.filename)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error_code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                "correlation_id": "test-correlation-id"
+            },
+        ) from e
 
     except JobNotFoundError as e:
         logger.warning("Job not found: %s", job_id)

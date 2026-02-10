@@ -18,23 +18,24 @@
 
 import json
 import logging
-import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
+
+import hashlib
+
+from jsonschema import ValidationError
 
 from core.artifacts.entities import ArtifactRecord
 from core.artifacts.exceptions import ArtifactAlreadyExistsError
 from core.artifacts.interfaces import ArtifactMetadataRepository, ArtifactStore
-from core.artifacts.value_objects import ArtifactKind, ArtifactRef, StoreHint
+from core.artifacts.value_objects import ArtifactDigest, ArtifactKind, ArtifactRef, StoreHint
 from core.catalog.exceptions import (
-    CatalogParseError,
     CatalogSchemaValidationError,
     InvalidFileFormatError,
     InvalidJSONError,
 )
-from jsonschema import ValidationError
 from core.catalog.generator import generate_root_json_from_catalog
 from core.jobs.entities import AuditEvent, Job, Stage
 from core.jobs.exceptions import (
@@ -49,15 +50,21 @@ from core.jobs.repositories import (
     StageRepository,
     UUIDGenerator,
 )
-from core.jobs.value_objects import JobId, StageName, StageType, StageState, JobState
+from core.jobs.value_objects import (
+    ClientId,
+    StageName,
+    StageState,
+    StageType,
+    JobState,
+)
 
-from ..commands.parse_catalog import ParseCatalogCommand
-from ..dtos import ParseCatalogResult
+from orchestrator.catalog.commands.parse_catalog import ParseCatalogCommand
+from orchestrator.catalog.dtos import ParseCatalogResult
 
 logger = logging.getLogger(__name__)
 
 
-class ParseCatalogUseCase:
+class ParseCatalogUseCase:  # pylint: disable=too-few-public-methods
     """Use case for executing the parse-catalog stage.
 
     Orchestrates:
@@ -237,8 +244,6 @@ class ParseCatalogUseCase:
             # Idempotent: artifact already stored from a previous attempt
             key = self._artifact_store.generate_key(hint, ArtifactKind.FILE)
             raw = self._artifact_store.retrieve(key, ArtifactKind.FILE)
-            import hashlib
-            from core.artifacts.value_objects import ArtifactDigest
             digest = ArtifactDigest(hashlib.sha256(raw).hexdigest())
             catalog_ref = ArtifactRef(
                 key=key, digest=digest, size_bytes=len(raw),
@@ -309,8 +314,6 @@ class ParseCatalogUseCase:
             except ArtifactAlreadyExistsError:
                 key = self._artifact_store.generate_key(hint, ArtifactKind.ARCHIVE)
                 raw = self._artifact_store.retrieve(key, ArtifactKind.FILE)
-                import hashlib
-                from core.artifacts.value_objects import ArtifactDigest
                 digest = ArtifactDigest(hashlib.sha256(raw).hexdigest())
                 root_jsons_ref = ArtifactRef(
                     key=key, digest=digest, size_bytes=len(raw),
@@ -391,7 +394,6 @@ class ParseCatalogUseCase:
         details: dict,
     ) -> None:
         """Emit an audit event."""
-        from core.jobs.value_objects import ClientId
         client_id = (
             self._current_job.client_id
             if self._current_job is not None
