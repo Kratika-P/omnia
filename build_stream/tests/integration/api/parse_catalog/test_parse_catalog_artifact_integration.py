@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Integration tests for file artifact storage with parse catalog."""
+"""Integration tests for parse catalog API with artifact storage."""
 
 import json
 import os
