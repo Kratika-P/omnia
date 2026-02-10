@@ -16,9 +16,16 @@
 # pylint: disable=c-extension-no-member
 
 import os
+from pathlib import Path
 
 from dependency_injector import containers, providers
 
+from common.config import load_config
+from infra.artifact_store.in_memory_artifact_store import InMemoryArtifactStore
+from infra.artifact_store.in_memory_artifact_metadata import (
+    InMemoryArtifactMetadataRepository,
+)
+from infra.artifact_store.file_artifact_store import FileArtifactStore
 from infra.id_generator import JobUUIDGenerator, UUIDv4Generator
 from infra.repositories import (
     InMemoryJobRepository,
@@ -27,6 +34,40 @@ from infra.repositories import (
     InMemoryAuditEventRepository,
 )
 from orchestrator.jobs.use_cases import CreateJobUseCase
+
+
+def _create_artifact_store():
+    """Factory function to create artifact store based on configuration.
+    
+    Returns:
+        InMemoryArtifactStore or FileArtifactStore based on config.
+    """
+    try:
+        config = load_config()
+        
+        # Check backend setting
+        if config.artifact_store.backend == "file_store" and config.file_store is not None:
+            base_path = Path(config.file_store.base_path)
+            return FileArtifactStore(
+                base_path=base_path,
+                max_artifact_size_bytes=config.artifact_store.max_file_size_bytes,
+            )
+        elif config.artifact_store.backend == "memory_store":
+            return InMemoryArtifactStore(
+                max_artifact_size_bytes=config.artifact_store.max_file_size_bytes,
+            )
+        
+        # Fall back to file store with default path
+        return FileArtifactStore(
+            base_path=Path("/opt/omnia/build_stream/artifacts"),
+            max_artifact_size_bytes=config.artifact_store.max_file_size_bytes,
+        )
+    except (FileNotFoundError, ValueError):
+        # If config not found or invalid, use file store with defaults as fallback
+        return FileArtifactStore(
+            base_path=Path("/opt/omnia/build_stream/artifacts"),
+            max_artifact_size_bytes=5242880,  # 5MB default
+        )
 
 
 class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
@@ -51,6 +92,12 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
 
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
+
+    artifact_store = providers.Singleton(_create_artifact_store)
+
+    artifact_metadata_repository = providers.Singleton(
+        InMemoryArtifactMetadataRepository,
+    )
 
     create_job_use_case = providers.Factory(
         CreateJobUseCase,
@@ -85,6 +132,12 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
 
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
+
+    artifact_store = providers.Singleton(_create_artifact_store)
+
+    artifact_metadata_repository = providers.Singleton(
+        InMemoryArtifactMetadataRepository,
+    )
 
     create_job_use_case = providers.Factory(
         CreateJobUseCase,
