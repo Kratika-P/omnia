@@ -21,6 +21,7 @@ from pathlib import Path
 from dependency_injector import containers, providers
 
 from common.config import load_config
+from core.artifacts.value_objects import SafePath
 from infra.artifact_store.in_memory_artifact_store import InMemoryArtifactStore
 from infra.artifact_store.in_memory_artifact_metadata import (
     InMemoryArtifactMetadataRepository,
@@ -33,7 +34,12 @@ from infra.repositories import (
     InMemoryIdempotencyRepository,
     InMemoryAuditEventRepository,
 )
+from orchestrator.catalog.use_cases.parse_catalog import ParseCatalogUseCase
 from orchestrator.jobs.use_cases import CreateJobUseCase
+
+_RESOURCES_DIR = Path(__file__).resolve().parent / "core" / "catalog" / "resources"
+_DEFAULT_POLICY_PATH = _RESOURCES_DIR / "adapter_policy.json"
+_DEFAULT_SCHEMA_PATH = _RESOURCES_DIR / "AdapterPolicySchema.json"
 
 
 def _create_artifact_store():
@@ -109,6 +115,16 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         uuid_generator=uuid_generator,
     )
 
+    parse_catalog_use_case = providers.Factory(
+        ParseCatalogUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        artifact_store=artifact_store,
+        artifact_metadata_repo=artifact_metadata_repository,
+        uuid_generator=uuid_generator,
+    )
+
 
 class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Production profile container.
@@ -146,6 +162,16 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         idempotency_repo=idempotency_repository,
         audit_repo=audit_repository,
         job_id_generator=job_id_generator,
+        uuid_generator=uuid_generator,
+    )
+
+    parse_catalog_use_case = providers.Factory(
+        ParseCatalogUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        artifact_store=artifact_store,
+        artifact_metadata_repo=artifact_metadata_repository,
         uuid_generator=uuid_generator,
     )
 
