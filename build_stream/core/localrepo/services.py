@@ -14,10 +14,11 @@
 
 """Domain services for Local Repository module."""
 
+import asyncio
 import logging
 import shutil
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional, Protocol
 
 from api.logging_utils import log_secure_info
 
@@ -34,6 +35,46 @@ from core.localrepo.repositories import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class PlaybookExecutorPort(Protocol):
+    """Port for executing playbooks asynchronously.
+
+    This protocol defines the interface that infrastructure adapters
+    must implement to execute playbooks.
+    """
+
+    async def execute(
+        self,
+        job_id: str,
+        playbook_path: str,
+        extra_vars: Optional[dict],
+        timeout_minutes: int,
+        correlation_id: Optional[str],
+    ) -> asyncio.Task:
+        """Execute playbook asynchronously.
+
+        Args:
+            job_id: Job identifier
+            playbook_path: Path to the playbook file
+            extra_vars: Extra variables to pass to the playbook
+            timeout_minutes: Execution timeout in minutes
+            correlation_id: Request correlation ID
+
+        Returns:
+            Task that will complete when execution is done
+        """
+
+    async def get_log(self, job_id: str, stage_name: str) -> Optional[str]:
+        """Get execution log for a specific job and stage.
+
+        Args:
+            job_id: Job identifier
+            stage_name: Stage name
+
+        Returns:
+            Log file path if available, None otherwise
+        """
 
 
 class InputFileService:
@@ -223,3 +264,65 @@ class PlaybookQueueResultService:
                 )
 
         return processed_count
+
+
+class PlaybookExecutionService:
+    """Core service for executing playbooks asynchronously.
+
+    This service contains the business logic for playbook execution
+    and delegates the technical implementation to infrastructure adapters.
+    """
+
+    def __init__(self, playbook_executor_adapter: PlaybookExecutorPort) -> None:
+        """Initialize playbook execution service.
+
+        Args:
+            playbook_executor_adapter: Infrastructure adapter for playbook execution.
+        """
+        self._executor_adapter = playbook_executor_adapter
+
+    async def execute_playbook(self, execution_request: PlaybookRequest) -> asyncio.Task:
+        """Execute playbook asynchronously.
+
+        Args:
+            execution_request: Domain entity containing execution parameters
+
+        Returns:
+            Task that will complete when execution is done
+
+        Raises:
+            ValueError: If the execution request is invalid
+        """
+        # Domain validation logic
+        if not execution_request.job_id:
+            raise ValueError("Job ID is required for playbook execution")
+
+        if not execution_request.playbook_path:
+            raise ValueError("Playbook path is required for playbook execution")
+
+        logger.info(
+            "Executing playbook for job_id=%s, correlation_id=%s",
+            execution_request.job_id,
+            execution_request.correlation_id,
+        )
+
+        # Map domain entity to adapter parameters
+        return await self._executor_adapter.execute(
+            job_id=execution_request.job_id,
+            playbook_path=execution_request.playbook_path,
+            extra_vars=execution_request.extra_vars,
+            timeout_minutes=execution_request.timeout.minutes,
+            correlation_id=execution_request.correlation_id,
+        )
+
+    async def get_execution_log(self, job_id: str, stage_name: str) -> Optional[str]:
+        """Get execution log for a specific job and stage.
+
+        Args:
+            job_id: Job identifier
+            stage_name: Stage name
+
+        Returns:
+            Log file path if available, None otherwise
+        """
+        return await self._executor_adapter.get_log(job_id, stage_name)

@@ -16,12 +16,16 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from api.local_repo.dependencies import (
+    get_create_local_repo_use_case,
+    get_local_repo_client_id,
+    get_local_repo_correlation_id,
+)
+from api.local_repo.schemas import CreateLocalRepoResponse, LocalRepoErrorResponse
 from api.logging_utils import log_secure_info
-
 from core.jobs.exceptions import (
     InvalidStateTransitionError,
     JobNotFoundError,
@@ -31,17 +35,9 @@ from core.localrepo.exceptions import (
     InputDirectoryInvalidError,
     InputFilesMissingError,
     LocalRepoDomainError,
-    QueueUnavailableError,
 )
 from orchestrator.local_repo.commands import CreateLocalRepoCommand
 from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
-
-from api.local_repo.dependencies import (
-    get_create_local_repo_use_case,
-    get_local_repo_client_id,
-    get_local_repo_correlation_id,
-)
-from api.local_repo.schemas import CreateLocalRepoResponse, LocalRepoErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +61,8 @@ def _build_error_response(
     "/{job_id}/stages/create-local-repository",
     response_model=CreateLocalRepoResponse,
     status_code=status.HTTP_202_ACCEPTED,
+    summary="Create local repository",
+    description="Trigger the create-local-repository stage for a job",
     responses={
         202: {"description": "Stage accepted", "model": CreateLocalRepoResponse},
         400: {"description": "Invalid request", "model": LocalRepoErrorResponse},
@@ -74,16 +72,16 @@ def _build_error_response(
         500: {"description": "Internal error", "model": LocalRepoErrorResponse},
     },
 )
-async def create_local_repository(
+def create_local_repository(
     job_id: str,
+    use_case: CreateLocalRepoUseCase = Depends(get_create_local_repo_use_case),
     client_id: ClientId = Depends(get_local_repo_client_id),
     correlation_id: CorrelationId = Depends(get_local_repo_correlation_id),
-    use_case: CreateLocalRepoUseCase = Depends(get_create_local_repo_use_case),
 ) -> CreateLocalRepoResponse:
     """Trigger the create-local-repository stage for a job.
 
-    Accepts the request asynchronously and returns 202 Accepted.
-    The playbook execution is handled via the NFS playbook queue.
+    Accepts the request synchronously and returns 202 Accepted.
+    The playbook execution is handled by the NFS queue watcher service.
     """
     logger.info(
         "Create local repo request: job_id=%s, client_id=%s, correlation_id=%s",
@@ -171,20 +169,6 @@ async def create_local_repository(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
                 "INPUT_DIRECTORY_INVALID",
-                exc.message,
-                correlation_id.value,
-            ).model_dump(),
-        ) from exc
-
-    except QueueUnavailableError as exc:
-        log_secure_info(
-            "error",
-            "Playbook queue unavailable",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_build_error_response(
-                "QUEUE_UNAVAILABLE",
                 exc.message,
                 correlation_id.value,
             ).model_dump(),

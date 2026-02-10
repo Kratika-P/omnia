@@ -27,7 +27,10 @@ from core.jobs.repositories import (
     StageRepository,
     UUIDGenerator,
 )
-from core.jobs.value_objects import StageName, StageType
+from core.jobs.value_objects import (
+    StageName,
+    StageType,
+)
 from core.localrepo.entities import PlaybookRequest
 from core.localrepo.exceptions import (
     InputDirectoryInvalidError,
@@ -48,7 +51,7 @@ from orchestrator.local_repo.dtos import LocalRepoResponse
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PLAYBOOK_PATH = "/opt/omnia/local_repo/local_repo.yml"
+DEFAULT_PLAYBOOK_PATH = "/omnia/utils/include_input_dir.yml"
 
 
 class CreateLocalRepoUseCase:
@@ -59,14 +62,14 @@ class CreateLocalRepoUseCase:
     - Job ownership verification: Client must own the job
     - Input file validation: Prerequisites checked before playbook execution
     - Audit trail: Emits STAGE_STARTED event
-    - Async handoff: Writes request to NFS queue and returns immediately
+    - NFS queue submission: Submits playbook request to NFS queue for watcher service
 
     Attributes:
         job_repo: Job repository port.
         stage_repo: Stage repository port.
         audit_repo: Audit event repository port.
         input_file_service: Input file validation and preparation service.
-        request_service: Playbook queue request service.
+        playbook_queue_service: NFS queue service for submitting playbook requests.
         uuid_generator: UUID generator for events and request IDs.
     """
 
@@ -76,7 +79,7 @@ class CreateLocalRepoUseCase:
         stage_repo: StageRepository,
         audit_repo: AuditEventRepository,
         input_file_service: InputFileService,
-        request_service: PlaybookQueueRequestService,
+        playbook_queue_service: PlaybookQueueRequestService,
         uuid_generator: UUIDGenerator,
     ) -> None:  # pylint: disable=too-many-arguments,too-many-positional-arguments
         """Initialize use case with repository and service dependencies.
@@ -86,14 +89,14 @@ class CreateLocalRepoUseCase:
             stage_repo: Stage repository implementation.
             audit_repo: Audit event repository implementation.
             input_file_service: Input file service for validation.
-            request_service: Playbook queue request service.
+            playbook_queue_service: NFS queue service for submitting requests.
             uuid_generator: UUID generator for identifiers.
         """
         self._job_repo = job_repo
         self._stage_repo = stage_repo
         self._audit_repo = audit_repo
         self._input_file_service = input_file_service
-        self._request_service = request_service
+        self._playbook_queue_service = playbook_queue_service
         self._uuid_generator = uuid_generator
 
     def execute(self, command: CreateLocalRepoCommand) -> LocalRepoResponse:
@@ -110,7 +113,7 @@ class CreateLocalRepoUseCase:
             InvalidStateTransitionError: If stage is not in PENDING state.
             InputFilesMissingError: If prerequisite input files are missing.
             InputDirectoryInvalidError: If input directory is invalid.
-            LocalRepoDomainError: If playbook queue is unavailable.
+            QueueUnavailableError: If NFS queue is not accessible.
         """
         self._validate_job(command)
         stage = self._validate_stage(command)
@@ -118,7 +121,7 @@ class CreateLocalRepoUseCase:
         self._prepare_input_files(command, stage)
 
         request = self._build_playbook_request(command)
-        self._submit_request(command, request, stage)
+        self._submit_to_queue(command, request, stage)
 
         self._emit_stage_started_event(command)
 
@@ -199,27 +202,29 @@ class CreateLocalRepoUseCase:
             request_id=str(self._uuid_generator.generate()),
         )
 
-    def _submit_request(
+    def _submit_to_queue(
         self,
         command: CreateLocalRepoCommand,
         request: PlaybookRequest,
         stage: Stage,
     ) -> None:
-        """Submit the playbook request to the NFS queue and update stage state."""
+        """Submit playbook request to NFS queue for watcher service."""
         stage.start()
         self._stage_repo.save(stage)
 
-        self._request_service.submit_request(
+        # Submit request to NFS queue
+        self._playbook_queue_service.submit_request(
             request=request,
             correlation_id=str(command.correlation_id),
         )
 
         logger.info(
-            "Playbook request submitted for job %s, stage=%s, correlation_id=%s",
+            "Playbook request submitted to queue for job %s, stage=%s, correlation_id=%s",
             command.job_id,
             StageType.CREATE_LOCAL_REPOSITORY.value,
             command.correlation_id,
         )
+
 
     def _emit_stage_started_event(
         self,

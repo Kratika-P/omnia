@@ -30,13 +30,13 @@ from infra.repositories import (
     InMemoryStageRepository,
     InMemoryIdempotencyRepository,
     InMemoryAuditEventRepository,
+    NfsInputDirectoryRepository,
     NfsPlaybookQueueRequestRepository,
     NfsPlaybookQueueResultRepository,
-    NfsInputDirectoryRepository,
 )
 from orchestrator.jobs.use_cases import CreateJobUseCase
-from orchestrator.local_repo.callbacks import LocalRepoStageCallback
 from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
+from orchestrator.local_repo.result_poller import LocalRepoResultPoller
 
 
 class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
@@ -66,15 +66,17 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
 
-    # --- Local repo NFS repositories ---
+    # --- Local repo repositories ---
+    input_directory_repository = providers.Singleton(
+        NfsInputDirectoryRepository,
+    )
+    
     playbook_queue_request_repository = providers.Singleton(
         NfsPlaybookQueueRequestRepository,
     )
+    
     playbook_queue_result_repository = providers.Singleton(
         NfsPlaybookQueueResultRepository,
-    )
-    input_directory_repository = providers.Singleton(
-        NfsInputDirectoryRepository,
     )
 
     # --- Local repo services ---
@@ -82,20 +84,25 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         InputFileService,
         input_repo=input_directory_repository,
     )
+    
     playbook_queue_request_service = providers.Factory(
         PlaybookQueueRequestService,
         request_repo=playbook_queue_request_repository,
     )
+    
     playbook_queue_result_service = providers.Factory(
         PlaybookQueueResultService,
         result_repo=playbook_queue_result_repository,
     )
-
-    # --- Local repo callback ---
-    local_repo_stage_callback = providers.Factory(
-        LocalRepoStageCallback,
-        job_repo=job_repository,
+    
+    # --- Result poller ---
+    result_poller = providers.Singleton(
+        LocalRepoResultPoller,
+        result_service=playbook_queue_result_service,
         stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        uuid_generator=uuid_generator,
+        poll_interval=int(os.getenv("RESULT_POLL_INTERVAL", "5")),
     )
 
     # --- Use cases ---
@@ -115,7 +122,7 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         stage_repo=stage_repository,
         audit_repo=audit_repository,
         input_file_service=input_file_service,
-        request_service=playbook_queue_request_service,
+        playbook_queue_service=playbook_queue_request_service,
         uuid_generator=uuid_generator,
     )
 
@@ -147,15 +154,17 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
     audit_repository = providers.Singleton(InMemoryAuditEventRepository)
 
-    # --- Local repo NFS repositories ---
+    # --- Local repo repositories ---
+    input_directory_repository = providers.Singleton(
+        NfsInputDirectoryRepository,
+    )
+    
     playbook_queue_request_repository = providers.Singleton(
         NfsPlaybookQueueRequestRepository,
     )
+    
     playbook_queue_result_repository = providers.Singleton(
         NfsPlaybookQueueResultRepository,
-    )
-    input_directory_repository = providers.Singleton(
-        NfsInputDirectoryRepository,
     )
 
     # --- Local repo services ---
@@ -163,20 +172,25 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         InputFileService,
         input_repo=input_directory_repository,
     )
+    
     playbook_queue_request_service = providers.Factory(
         PlaybookQueueRequestService,
         request_repo=playbook_queue_request_repository,
     )
+    
     playbook_queue_result_service = providers.Factory(
         PlaybookQueueResultService,
         result_repo=playbook_queue_result_repository,
     )
-
-    # --- Local repo callback ---
-    local_repo_stage_callback = providers.Factory(
-        LocalRepoStageCallback,
-        job_repo=job_repository,
+    
+    # --- Result poller ---
+    result_poller = providers.Singleton(
+        LocalRepoResultPoller,
+        result_service=playbook_queue_result_service,
         stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        uuid_generator=uuid_generator,
+        poll_interval=int(os.getenv("RESULT_POLL_INTERVAL", "5")),
     )
 
     # --- Use cases ---
@@ -196,7 +210,7 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         stage_repo=stage_repository,
         audit_repo=audit_repository,
         input_file_service=input_file_service,
-        request_service=playbook_queue_request_service,
+        playbook_queue_service=playbook_queue_request_service,
         uuid_generator=uuid_generator,
     )
 
