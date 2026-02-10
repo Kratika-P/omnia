@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Repository port interfaces (Protocols) for Artifact domain.
+"""Repository interfaces (Protocols) for Artifact domain.
 
 These define the contracts that infrastructure implementations must satisfy.
 """

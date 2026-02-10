@@ -26,7 +26,7 @@ from typing import Dict, List, Tuple
 
 from core.artifacts.entities import ArtifactRecord
 from core.artifacts.exceptions import ArtifactAlreadyExistsError
-from core.artifacts.ports import ArtifactMetadataRepository, ArtifactStore
+from core.artifacts.interfaces import ArtifactMetadataRepository, ArtifactStore
 from core.artifacts.value_objects import ArtifactKind, ArtifactRef, StoreHint
 from core.catalog.exceptions import (
     CatalogParseError,
