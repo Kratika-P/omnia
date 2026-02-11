@@ -20,10 +20,10 @@ and writes results back to the results queue. It is designed to be stateless and
 run as a systemd service in the OIM Core container.
 
 Architecture:
-- Polls /opt/omnia/playbook_queue/requests/ every 2 seconds
+- Polls /opt/omnia/build_stream/playbook_queue/requests/ every 2 seconds
 - Moves requests to processing/ to prevent duplicate execution
 - Executes ansible-playbook with timeout and error handling
-- Writes structured results to /opt/omnia/playbook_queue/results/
+- Writes structured results to /opt/omnia/build_stream/playbook_queue/results/
 - Supports max 5 concurrent playbook executions
 """
 
@@ -41,11 +41,16 @@ from threading import Thread, Semaphore
 from typing import Dict, Optional, Any
 
 # Configuration
-QUEUE_BASE = Path(os.getenv("PLAYBOOK_QUEUE_BASE", "/opt/omnia/playbook_queue"))
+QUEUE_BASE = Path(os.getenv("PLAYBOOK_QUEUE_BASE", "/opt/omnia/build_stream/playbook_queue"))
 REQUESTS_DIR = QUEUE_BASE / "requests"
 RESULTS_DIR = QUEUE_BASE / "results"
 PROCESSING_DIR = QUEUE_BASE / "processing"
 ARCHIVE_DIR = QUEUE_BASE / "archive"
+
+# NFS shared path configuration
+NFS_SHARE_PATH = Path(os.getenv("NFS_SHARE_PATH", "/abc"))
+HOST_LOG_BASE_DIR = NFS_SHARE_PATH / "omnia" / "build_stream_logs"
+CONTAINER_LOG_BASE_DIR = Path("/opt/omnia/build_stream_logs")
 
 POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "2"))
 MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "5"))
@@ -83,6 +88,7 @@ def ensure_directories():
         ARCHIVE_DIR,
         ARCHIVE_DIR / "requests",
         ARCHIVE_DIR / "results",
+        HOST_LOG_BASE_DIR,  # NFS log directory
     ]
     
     for directory in directories:
@@ -161,29 +167,52 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     
     started_at = datetime.now(timezone.utc)
     
-    # Build ansible-playbook command
-    cmd = ["ansible-playbook", playbook_path]
+    # Create job-specific log directory on NFS share
+    host_log_dir = HOST_LOG_BASE_DIR / job_id / stage_name
+    host_log_dir.mkdir(parents=True, exist_ok=True)
     
-    # Add extra vars if provided
-    if extra_vars:
-        extra_vars_json = json.dumps(extra_vars)
-        cmd.extend(["--extra-vars", extra_vars_json])
+    # Create log file path with timestamp
+    timestamp = started_at.strftime("%Y%m%d_%H%M%S")
+    host_log_file_path = host_log_dir / f"ansible_playbook_{timestamp}.log"
     
-    # Add verbosity for debugging
-    cmd.append("-v")
+    # Container log path (equivalent path in container)
+    container_log_file_path = CONTAINER_LOG_BASE_DIR / job_id / stage_name / f"ansible_playbook_{timestamp}.log"
+    
+    # Build podman command to execute playbook in omnia_core container
+    cmd = [
+        "podman", "exec",
+        "-e", f"ANSIBLE_LOG_PATH={container_log_file_path}",
+        "omnia_core",
+        "ansible-playbook",
+        playbook_path,
+        "--extra-vars", json.dumps(extra_vars) if extra_vars else "{}",
+        "-v"
+    ]
     
     logger.debug(f"Executing command: {' '.join(cmd)}")
+    logger.info(f"Ansible logs will be written to: {host_log_file_path} (container: {container_log_file_path})")
     
     try:
-        # Execute playbook with timeout
+        # Execute playbook with timeout and custom log path
         timeout_seconds = timeout_minutes * 60
         result = subprocess.run(
             cmd,
-            capture_output=True,
-            text=True,
+            capture_output=False,  # Don't capture to avoid duplication with ANSIBLE_LOG_PATH
             timeout=timeout_seconds,
-            check=False
+            check=False,
+            env=os.environ.copy()  # Pass environment variables
         )
+        
+        # Log file is directly accessible via NFS share, no need to copy
+        # Wait a moment for log to be written
+        import time
+        time.sleep(0.5)
+        
+        # Verify log file exists
+        if host_log_file_path.exists():
+            logger.info(f"Log file confirmed at: {host_log_file_path}")
+        else:
+            logger.warning(f"Log file not found at expected location: {host_log_file_path}")
         
         completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - started_at).total_seconds()
@@ -205,8 +234,7 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             "correlation_id": correlation_id,
             "status": status,
             "exit_code": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "log_file_path": str(host_log_file_path),  # Host path to Ansible log file (NFS share)
             "started_at": started_at.isoformat(),
             "completed_at": completed_at.isoformat(),
             "duration_seconds": int(duration_seconds),
