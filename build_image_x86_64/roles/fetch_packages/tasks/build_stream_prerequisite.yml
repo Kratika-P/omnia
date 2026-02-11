@@ -25,10 +25,6 @@
   ansible.builtin.set_fact:
     image_key: "{{ image_key | default(lookup('env', 'image_key') | default('')) }}"
 
-- name: debug
-  ansible.builtin.debug:
-    var: image_key
-  
 - name: Normalize functional_groups input into list
   ansible.builtin.set_fact:
     functional_group_list: "{{ functional_groups if functional_groups is iterable and functional_groups is not string else (functional_groups | from_yaml) }}"

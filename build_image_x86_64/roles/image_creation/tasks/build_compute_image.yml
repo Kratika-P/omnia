@@ -28,10 +28,6 @@
     - (build_stream_job_id | default('') | length) > 0
     - (image_key | default('') | length) > 0
 
-- name: debug compute image suffix
-  ansible.builtin.debug:
-    var: compute_image_suffix
-
 - name: Create x86_64 compute image log files
   ansible.builtin.file:
     path: "{{ openchami_log_dir }}/{{ item.key }}{{ compute_image_suffix }}_compute_image.log"
