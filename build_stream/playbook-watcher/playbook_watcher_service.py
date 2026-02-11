@@ -30,6 +30,7 @@ Architecture:
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -39,6 +40,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread, Semaphore
 from typing import Dict, Optional, Any
+
+# Implicit logging utilities for secure logging
+def log_secure_info(level: str, message: str, identifier: Optional[str] = None) -> None:
+    """Log information securely with optional identifier truncation.
+    
+    This function provides consistent secure logging across all modules.
+    When an identifier is provided, only the first 8 characters are logged
+    to prevent exposure of sensitive data while maintaining debugging capability.
+    
+    Args:
+        level: Log level ('info', 'warning', 'error', 'debug', 'critical')
+        message: Log message template
+        identifier: Optional identifier (job_id, request_id, etc.) - first 8 chars logged
+    """
+    logger = logging.getLogger(__name__)
+
+    if identifier:
+        # Always log first 8 characters for identification
+        log_message = f"{message}: {identifier[:8]}..."
+    else:
+        # Generic message when no identifier context
+        log_message = message
+
+    log_func = getattr(logger, level)
+    log_func(log_message)
 
 # Configuration
 QUEUE_BASE = Path(os.getenv("PLAYBOOK_QUEUE_BASE", "/opt/omnia/build_stream/playbook_queue"))
@@ -68,15 +94,19 @@ logging.basicConfig(
 logger = logging.getLogger("playbook_watcher")
 
 # Global state
-shutdown_requested = False
+SHUTDOWN_REQUESTED = False
 job_semaphore = Semaphore(MAX_CONCURRENT_JOBS)
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum, _):
     """Handle shutdown signals gracefully."""
-    global shutdown_requested
-    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-    shutdown_requested = True
+    global SHUTDOWN_REQUESTED
+    log_secure_info(
+        "info",
+        "Received signal",
+        str(signum)
+    )
+    SHUTDOWN_REQUESTED = True
 
 
 def ensure_directories():
@@ -90,66 +120,185 @@ def ensure_directories():
         ARCHIVE_DIR / "results",
         HOST_LOG_BASE_DIR,  # NFS log directory
     ]
-    
+
     for directory in directories:
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            logger.debug(f"Ensured directory exists: {directory}")
-        except Exception as e:
-            logger.error(f"Failed to create directory {directory}: {e}")
+            log_secure_info(
+                "debug",
+                "Ensured directory exists"
+            )
+        except (OSError, IOError) as e:
+            log_secure_info(
+                "error",
+                "Failed to create directory"
+            )
             raise
+
+
+def validate_playbook_path(playbook_path: str) -> bool:
+    """Validate playbook path to prevent command injection.
+    
+    Args:
+        playbook_path: Path to the playbook file
+        
+    Returns:
+        True if path is valid, False otherwise
+    """
+    # Only allow alphanumeric, underscores, hyphens, forward slashes, and dots
+    # Reject any shell metacharacters or command injection patterns
+    pattern = r'^[a-zA-Z0-9_\-/.]+$'
+    
+    if not re.match(pattern, playbook_path):
+        return False
+    
+    # Prevent path traversal attempts
+    if '..' in playbook_path:
+        return False
+    
+    # Ensure it ends with .yml or .yaml
+    if not (playbook_path.endswith('.yml') or playbook_path.endswith('.yaml')):
+        return False
+    
+    return True
+
+
+def validate_job_id(job_id: str) -> bool:
+    """Validate job ID format.
+    
+    Args:
+        job_id: Job identifier
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    # Allow UUID format or alphanumeric with hyphens/underscores
+    uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    alnum_pattern = r'^[a-zA-Z0-9_-]+$'
+    
+    return bool(re.match(uuid_pattern, job_id) or re.match(alnum_pattern, job_id))
+
+
+def validate_stage_name(stage_name: str) -> bool:
+    """Validate stage name to prevent injection.
+    
+    Args:
+        stage_name: Name of the stage
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    # Only allow alphanumeric, spaces, hyphens, and underscores
+    pattern = r'^[a-zA-Z0-9 _-]+$'
+    return bool(re.match(pattern, stage_name))
 
 
 def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
     """Parse and validate request file.
-    
+
     Args:
         request_path: Path to the request JSON file
-        
+
     Returns:
         Parsed request dictionary or None if invalid
     """
     try:
         with open(request_path, 'r', encoding='utf-8') as f:
             request_data = json.load(f)
-        
+
         # Validate required fields
         required_fields = ["job_id", "stage_name", "playbook_path"]
         missing_fields = [field for field in required_fields if field not in request_data]
-        
+
         if missing_fields:
             logger.error(
-                f"Request file {request_path.name} missing required fields: {missing_fields}"
+                "Request file missing required fields: %s",
+                ', '.join(missing_fields)
             )
             return None
+
+        # Validate inputs to prevent injection
+        job_id = str(request_data["job_id"])
+        stage_name = str(request_data["stage_name"])
+        playbook_path = str(request_data["playbook_path"])
         
+        if not validate_job_id(job_id):
+            logger.error("Invalid job_id format in request")
+            return None
+            
+        if not validate_stage_name(stage_name):
+            logger.error("Invalid stage_name format in request")
+            return None
+            
+        if not validate_playbook_path(playbook_path):
+            logger.error("Invalid or potentially malicious playbook path in request")
+            return None
+
         # Set defaults
         request_data.setdefault("timeout_minutes", DEFAULT_TIMEOUT_MINUTES)
         request_data.setdefault("extra_vars", {})
-        request_data.setdefault("correlation_id", request_data["job_id"])
-        
-        logger.info(
-            f"Parsed request: job_id={request_data['job_id']}, "
-            f"stage={request_data['stage_name']}, "
-            f"correlation_id={request_data.get('correlation_id')}"
+        request_data.setdefault("correlation_id", job_id)
+
+        log_secure_info(
+            "info",
+            "Parsed request for job",
+            job_id
         )
-        
+        log_secure_info(
+            "debug",
+            "Stage name",
+            stage_name
+        )
+
         return request_data
-        
+
     except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in request file {request_path.name}: {e}")
+        log_secure_info(
+            "error",
+            "Invalid JSON in request file"
+        )
         return None
-    except Exception as e:
-        logger.error(f"Error parsing request file {request_path.name}: {e}")
+    except (KeyError, TypeError, ValueError) as e:
+        log_secure_info(
+            "error",
+            "Error parsing request file"
+        )
         return None
+
+
+def _build_log_paths(job_id: str, stage_name: str, started_at: datetime) -> tuple:
+    """Build host and container log file paths.
+
+    Args:
+        job_id: Job identifier
+        stage_name: Stage name
+        started_at: Start time for timestamp
+
+    Returns:
+        Tuple of (host_log_file_path, container_log_file_path, host_log_dir)
+    """
+    # Create job-specific log directory on NFS share
+    host_log_dir = HOST_LOG_BASE_DIR / job_id / stage_name
+    host_log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create log file path with timestamp
+    timestamp = started_at.strftime("%Y%m%d_%H%M%S")
+    host_log_file_path = host_log_dir / f"ansible_playbook_{timestamp}.log"
+
+    # Container log path (equivalent path in container)
+    container_log_file_path = (
+        CONTAINER_LOG_BASE_DIR / job_id / stage_name / f"ansible_playbook_{timestamp}.log"
+    )
+
+    return host_log_file_path, container_log_file_path, host_log_dir
 
 
 def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     """Execute Ansible playbook and capture results.
-    
+
     Args:
         request_data: Parsed request dictionary
-        
+
     Returns:
         Result dictionary with execution details
     """
@@ -159,39 +308,49 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     extra_vars = request_data.get("extra_vars", {})
     timeout_minutes = request_data.get("timeout_minutes", DEFAULT_TIMEOUT_MINUTES)
     correlation_id = request_data.get("correlation_id", job_id)
-    
-    logger.info(
-        f"Executing playbook for job_id={job_id}, stage={stage_name}, "
-        f"correlation_id={correlation_id}"
+
+    log_secure_info(
+        "info",
+        "Executing playbook for job",
+        job_id
     )
-    
+    log_secure_info(
+        "debug",
+        "Stage name",
+        stage_name
+    )
+
     started_at = datetime.now(timezone.utc)
-    
-    # Create job-specific log directory on NFS share
-    host_log_dir = HOST_LOG_BASE_DIR / job_id / stage_name
-    host_log_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create log file path with timestamp
-    timestamp = started_at.strftime("%Y%m%d_%H%M%S")
-    host_log_file_path = host_log_dir / f"ansible_playbook_{timestamp}.log"
-    
-    # Container log path (equivalent path in container)
-    container_log_file_path = CONTAINER_LOG_BASE_DIR / job_id / stage_name / f"ansible_playbook_{timestamp}.log"
-    
+    host_log_file_path, container_log_file_path, _ = _build_log_paths(
+        job_id, stage_name, started_at
+    )
+
     # Build podman command to execute playbook in omnia_core container
+    # Use shlex.quote to properly escape arguments and prevent command injection
+    import shlex
+    
     cmd = [
         "podman", "exec",
-        "-e", f"ANSIBLE_LOG_PATH={container_log_file_path}",
+        "-e", f"ANSIBLE_LOG_PATH={shlex.quote(str(container_log_file_path))}",
         "omnia_core",
         "ansible-playbook",
-        playbook_path,
+        shlex.quote(playbook_path),
         "--extra-vars", json.dumps(extra_vars) if extra_vars else "{}",
         "-v"
     ]
-    
-    logger.debug(f"Executing command: {' '.join(cmd)}")
-    logger.info(f"Ansible logs will be written to: {host_log_file_path} (container: {container_log_file_path})")
-    
+
+    # Don't log the full command with potentially sensitive paths
+    log_secure_info(
+        "debug",
+        "Executing ansible playbook for job",
+        job_id
+    )
+    log_secure_info(
+        "info",
+        "Ansible logs will be written to job directory",
+        job_id
+    )
+
     try:
         # Execute playbook with timeout and custom log path
         timeout_seconds = timeout_minutes * 60
@@ -202,30 +361,42 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             check=False,
             env=os.environ.copy()  # Pass environment variables
         )
-        
+
         # Log file is directly accessible via NFS share, no need to copy
         # Wait a moment for log to be written
-        import time
         time.sleep(0.5)
-        
+
         # Verify log file exists
         if host_log_file_path.exists():
-            logger.info(f"Log file confirmed at: {host_log_file_path}")
+            log_secure_info(
+                "info",
+                "Log file confirmed for job",
+                job_id
+            )
         else:
-            logger.warning(f"Log file not found at expected location: {host_log_file_path}")
-        
+            log_secure_info(
+                "warning",
+                "Log file not found at expected location for job",
+                job_id
+            )
+
         completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - started_at).total_seconds()
-        
+
         # Determine status
         status = "success" if result.returncode == 0 else "failed"
-        
-        logger.info(
-            f"Playbook execution completed: job_id={job_id}, "
-            f"status={status}, exit_code={result.returncode}, "
-            f"duration={duration_seconds:.2f}s"
+
+        log_secure_info(
+            "info",
+            "Playbook execution completed for job",
+            job_id
         )
-        
+        log_secure_info(
+            "debug",
+            "Execution status",
+            status
+        )
+
         # Build result dictionary
         result_data = {
             "job_id": job_id,
@@ -240,23 +411,24 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             "duration_seconds": int(duration_seconds),
             "timestamp": completed_at.isoformat(),
         }
-        
+
         # Add error details if failed
         if status == "failed":
             result_data["error_code"] = "PLAYBOOK_EXECUTION_FAILED"
             result_data["error_summary"] = f"Playbook exited with code {result.returncode}"
-        
+
         return result_data
-        
+
     except subprocess.TimeoutExpired:
         completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - started_at).total_seconds()
-        
-        logger.error(
-            f"Playbook execution timed out: job_id={job_id}, "
-            f"timeout={timeout_minutes}m"
+
+        log_secure_info(
+            "error",
+            "Playbook execution timed out for job",
+            job_id
         )
-        
+
         return {
             "job_id": job_id,
             "stage_name": stage_name,
@@ -273,15 +445,16 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             "error_summary": f"Execution exceeded timeout of {timeout_minutes} minutes",
             "timestamp": completed_at.isoformat(),
         }
-        
-    except Exception as e:
+
+    except (OSError, subprocess.SubprocessError) as e:
         completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - started_at).total_seconds()
-        
+
         logger.exception(
-            f"Unexpected error executing playbook: job_id={job_id}, error={e}"
+            "Unexpected error executing playbook for job %s",
+            job_id
         )
-        
+
         return {
             "job_id": job_id,
             "stage_name": stage_name,
@@ -299,88 +472,106 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             "timestamp": completed_at.isoformat(),
         }
 
-
 def write_result_file(result_data: Dict[str, Any], original_filename: str) -> bool:
     """Write result file to results directory.
-    
+
     Args:
         result_data: Result dictionary to write
         original_filename: Original request filename for correlation
-        
+
     Returns:
         True if successful, False otherwise
     """
     job_id = result_data["job_id"]
-    
+
     try:
         # Use same filename pattern as request for easy correlation
         result_filename = original_filename
         result_path = RESULTS_DIR / result_filename
-        
-        # Write atomically using temp file
-        temp_path = result_path.with_suffix('.tmp')
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            json.dump(result_data, f, indent=2)
-        
-        # Atomic rename
-        temp_path.rename(result_path)
-        
-        logger.info(f"Wrote result file: {result_filename}, job_id={job_id}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Failed to write result file for job_id={job_id}: {e}")
-        return False
 
+        with open(result_path, 'w', encoding='utf-8') as f:
+            json.dump(result_data, f, indent=2)
+
+        log_secure_info(
+            "info",
+            "Wrote result file for job",
+            job_id
+        )
+        return True
+
+    except (OSError, IOError) as e:
+        log_secure_info(
+            "error",
+            "Failed to write result file for job",
+            job_id
+        )
+        return False
 
 def archive_request_file(request_path: Path) -> None:
     """Archive processed request file.
-    
+
     Args:
         request_path: Path to the request file to archive
     """
     try:
         archive_path = ARCHIVE_DIR / "requests" / request_path.name
         shutil.move(str(request_path), str(archive_path))
-        logger.debug(f"Archived request file: {request_path.name}")
-    except Exception as e:
-        logger.warning(f"Failed to archive request file {request_path.name}: {e}")
-
+        log_secure_info(
+            "debug",
+            "Archived request file",
+            request_path.name[:8] if request_path.name else None
+        )
+    except (OSError, IOError) as e:
+        log_secure_info(
+            "warning",
+            "Failed to archive request file",
+            request_path.name[:8] if request_path.name else None
+        )
 
 def process_request(request_path: Path) -> None:
     """Process a single request file.
-    
+
     This function handles the complete lifecycle of a request:
     1. Move to processing directory (atomic lock)
     2. Parse request
     3. Execute playbook
     4. Write result
     5. Archive request
-    
+
     Args:
         request_path: Path to the request file
     """
     request_filename = request_path.name
     processing_path = PROCESSING_DIR / request_filename
-    
-    try:
-        # Acquire semaphore for concurrency control
-        job_semaphore.acquire()
-        
+
+    with job_semaphore:
+
         try:
             # Move to processing directory (atomic lock)
             try:
                 shutil.move(str(request_path), str(processing_path))
-                logger.debug(f"Moved request to processing: {request_filename}")
+                log_secure_info(
+                    "debug",
+                    "Moved request to processing",
+                    request_filename[:8] if request_filename else None
+                )
             except FileNotFoundError:
                 # File already moved by another process
-                logger.debug(f"Request already being processed: {request_filename}")
+                log_secure_info(
+                    "debug",
+                    "Request already being processed",
+                    request_filename[:8] if request_filename else None
+                )
                 return
-            
+
             # Parse request
             request_data = parse_request_file(processing_path)
             if not request_data:
-                logger.error(f"Invalid request file: {request_filename}")
+                log_secure_info(
+                    "error",
+                    "Invalid request file",
+                    request_filename[:8] if request_filename else None
+                )
                 # Write error result
                 error_result = {
                     "job_id": "unknown",
@@ -394,124 +585,167 @@ def process_request(request_path: Path) -> None:
                 write_result_file(error_result, request_filename)
                 archive_request_file(processing_path)
                 return
-            
+
             # Execute playbook
             result_data = execute_playbook(request_data)
-            
+
             # Write result
             write_result_file(result_data, request_filename)
-            
+
             # Archive request
             archive_request_file(processing_path)
-            
+
         finally:
             # Ensure processing file is cleaned up even on error
             if processing_path.exists():
                 try:
                     processing_path.unlink()
-                except Exception as e:
-                    logger.warning(f"Failed to remove processing file {request_filename}: {e}")
-    
-    finally:
-        # Release semaphore
-        job_semaphore.release()
-
+                except (OSError, IOError) as e:
+                    log_secure_info(
+                        "warning",
+                        "Failed to remove processing file",
+                        request_filename[:8] if request_filename else None
+                    )
 
 def process_request_async(request_path: Path) -> None:
     """Process request in a separate thread.
-    
+
     Args:
         request_path: Path to the request file
     """
     thread = Thread(target=process_request, args=(request_path,), daemon=True)
     thread.start()
 
-
 def scan_and_process_requests() -> int:
     """Scan requests directory and process new requests.
-    
+
     Returns:
         Number of requests processed
     """
     try:
         request_files = sorted(REQUESTS_DIR.glob("*.json"))
-        
+
         if not request_files:
             return 0
-        
-        logger.debug(f"Found {len(request_files)} request file(s)")
-        
+
+        log_secure_info(
+            "debug",
+            "Found request files",
+            str(len(request_files))
+        )
+
         processed_count = 0
         for request_path in request_files:
-            if shutdown_requested:
-                logger.info("Shutdown requested, stopping request processing")
+            if SHUTDOWN_REQUESTED:
+                log_secure_info(
+                    "info",
+                    "Shutdown requested"
+                )
                 break
-            
+
             try:
                 # Process asynchronously
                 process_request_async(request_path)
                 processed_count += 1
-            except Exception as e:
-                logger.error(f"Error processing request {request_path.name}: {e}")
-        
-        return processed_count
-        
-    except Exception as e:
-        logger.error(f"Error scanning requests directory: {e}")
-        return 0
+            except (OSError, IOError) as e:
+                log_secure_info(
+                    "error",
+                    "Error processing request",
+                    request_path.name[:8] if request_path.name else None
+                )
 
+        return processed_count
+
+    except (OSError, IOError) as e:
+        log_secure_info(
+            "error",
+            "Error scanning requests directory"
+        )
+        return 0
 
 def run_watcher_loop():
     """Main watcher loop that continuously polls for requests."""
-    logger.info("Starting Playbook Watcher Service")
-    logger.info(f"Queue base: {QUEUE_BASE}")
-    logger.info(f"Poll interval: {POLL_INTERVAL_SECONDS}s")
-    logger.info(f"Max concurrent jobs: {MAX_CONCURRENT_JOBS}")
-    logger.info(f"Default timeout: {DEFAULT_TIMEOUT_MINUTES}m")
-    
+    log_secure_info(
+        "info",
+        "Starting Playbook Watcher Service"
+    )
+    log_secure_info(
+        "info",
+        "Queue base directory"
+    )
+    log_secure_info(
+        "info",
+        f"Poll interval: {POLL_INTERVAL_SECONDS}s"
+    )
+    log_secure_info(
+        "info",
+        f"Max concurrent jobs: {MAX_CONCURRENT_JOBS}"
+    )
+    log_secure_info(
+        "info",
+        f"Default timeout: {DEFAULT_TIMEOUT_MINUTES}m"
+    )
+
     # Ensure directories exist
     try:
         ensure_directories()
-    except Exception as e:
-        logger.critical(f"Failed to initialize directories: {e}")
+    except (OSError, IOError) as e:
+        log_secure_info(
+            "critical",
+            "Failed to initialize directories"
+        )
         sys.exit(1)
-    
+
     # Main loop
     iteration = 0
-    while not shutdown_requested:
+    while not SHUTDOWN_REQUESTED:
         iteration += 1
-        
+
         try:
             processed_count = scan_and_process_requests()
-            
+
             if processed_count > 0:
-                logger.info(f"Processed {processed_count} request(s) in iteration {iteration}")
-            
-        except Exception as e:
-            logger.exception(f"Unexpected error in watcher loop iteration {iteration}: {e}")
-        
+                log_secure_info(
+                    "info",
+                    "Processed requests in iteration",
+                    str(processed_count)
+                )
+
+        except RuntimeError as e:
+            logger.exception(
+                "Unexpected error in watcher loop iteration %d",
+                iteration
+            )
+
         # Sleep before next poll
         time.sleep(POLL_INTERVAL_SECONDS)
-    
-    logger.info("Playbook Watcher Service stopped")
 
+    log_secure_info(
+        "info",
+        "Playbook Watcher Service stopped"
+    )
 
 def main():
     """Main entry point for the watcher service."""
     # Register signal handlers
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     try:
         run_watcher_loop()
     except KeyboardInterrupt:
-        logger.info("Received keyboard interrupt, shutting down...")
-    except Exception as e:
-        logger.critical(f"Fatal error in watcher service: {e}")
+        log_secure_info(
+            "info",
+            "Received keyboard interrupt"
+        )
+    except (RuntimeError, OSError):
+        log_secure_info(
+            "critical",
+            "Fatal error in watcher service"
+        )
         sys.exit(1)
-    
-    sys.exit(0)
 
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
