@@ -20,12 +20,6 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
-from core.localrepo.services import (
-    InputFileService,
-    PlaybookQueueRequestService,
-    PlaybookQueueResultService,
-)
-from common.config import load_config
 from infra.artifact_store.in_memory_artifact_store import InMemoryArtifactStore
 from infra.artifact_store.in_memory_artifact_metadata import (
     InMemoryArtifactMetadataRepository,
@@ -41,20 +35,28 @@ from infra.repositories import (
     NfsPlaybookQueueRequestRepository,
     NfsPlaybookQueueResultRepository,
 )
+from orchestrator.catalog.use_cases.parse_catalog import ParseCatalogUseCase
 from orchestrator.jobs.use_cases import CreateJobUseCase
 from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
 from orchestrator.local_repo.result_poller import LocalRepoResultPoller
 
+from core.localrepo.services import (
+    InputFileService,
+    PlaybookQueueRequestService,
+    PlaybookQueueResultService,
+)
+from common.config import load_config
+
 
 def _create_artifact_store():
     """Factory function to create artifact store based on configuration.
-    
+
     Returns:
         InMemoryArtifactStore or FileArtifactStore based on config.
     """
     try:
         config = load_config()
-        
+
         # Check backend setting
         if config.artifact_store.backend == "file_store" and config.file_store is not None:
             base_path = Path(config.file_store.base_path)
@@ -62,11 +64,12 @@ def _create_artifact_store():
                 base_path=base_path,
                 max_artifact_size_bytes=config.artifact_store.max_file_size_bytes,
             )
-        elif config.artifact_store.backend == "memory_store":
+
+        if config.artifact_store.backend == "memory_store":
             return InMemoryArtifactStore(
                 max_artifact_size_bytes=config.artifact_store.max_file_size_bytes,
             )
-        
+
         # Fall back to file store with default path
         return FileArtifactStore(
             base_path=Path("/opt/omnia/build_stream/artifacts"),
@@ -79,13 +82,17 @@ def _create_artifact_store():
             max_artifact_size_bytes=5242880,  # 5MB default
         )
 
+_RESOURCES_DIR = Path(__file__).resolve().parent / "core" / "catalog" / "resources"
+_DEFAULT_POLICY_PATH = _RESOURCES_DIR / "adapter_policy.json"
+_DEFAULT_SCHEMA_PATH = _RESOURCES_DIR / "AdapterPolicySchema.json"
+
 
 class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Development profile container.
-    
+
     Uses in-memory mock repositories for fast development and testing.
     No external dependencies (database, S3, etc.) required.
-    
+
     Activated when ENV=dev (default).
     """
 
@@ -111,11 +118,11 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     input_directory_repository = providers.Singleton(
         NfsInputDirectoryRepository,
     )
-    
+
     playbook_queue_request_repository = providers.Singleton(
         NfsPlaybookQueueRequestRepository,
     )
-    
+
     playbook_queue_result_repository = providers.Singleton(
         NfsPlaybookQueueResultRepository,
     )
@@ -125,17 +132,17 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         InputFileService,
         input_repo=input_directory_repository,
     )
-    
+
     playbook_queue_request_service = providers.Factory(
         PlaybookQueueRequestService,
         request_repo=playbook_queue_request_repository,
     )
-    
+
     playbook_queue_result_service = providers.Factory(
         PlaybookQueueResultService,
         result_repo=playbook_queue_result_repository,
     )
-    
+
     # --- Result poller ---
     result_poller = providers.Singleton(
         LocalRepoResultPoller,
@@ -173,10 +180,20 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         uuid_generator=uuid_generator,
     )
 
+    parse_catalog_use_case = providers.Factory(
+        ParseCatalogUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        artifact_store=artifact_store,
+        artifact_metadata_repo=artifact_metadata_repository,
+        uuid_generator=uuid_generator,
+    )
+
 
 class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Production profile container.
-    
+
     Currently uses mock repositories (same as dev).
     TODO: Replace with PostgreSQL repositories when SQL implementation is ready.
 
@@ -205,11 +222,11 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     input_directory_repository = providers.Singleton(
         NfsInputDirectoryRepository,
     )
-    
+
     playbook_queue_request_repository = providers.Singleton(
         NfsPlaybookQueueRequestRepository,
     )
-    
+
     playbook_queue_result_repository = providers.Singleton(
         NfsPlaybookQueueResultRepository,
     )
@@ -219,17 +236,17 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         InputFileService,
         input_repo=input_directory_repository,
     )
-    
+
     playbook_queue_request_service = providers.Factory(
         PlaybookQueueRequestService,
         request_repo=playbook_queue_request_repository,
     )
-    
+
     playbook_queue_result_service = providers.Factory(
         PlaybookQueueResultService,
         result_repo=playbook_queue_result_repository,
     )
-    
+
     # --- Result poller ---
     result_poller = providers.Singleton(
         LocalRepoResultPoller,
@@ -267,29 +284,39 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         uuid_generator=uuid_generator,
     )
 
+    parse_catalog_use_case = providers.Factory(
+        ParseCatalogUseCase,
+        job_repo=job_repository,
+        stage_repo=stage_repository,
+        audit_repo=audit_repository,
+        artifact_store=artifact_store,
+        artifact_metadata_repo=artifact_metadata_repository,
+        uuid_generator=uuid_generator,
+    )
+
 
 def get_container_class():
     """Select container class based on ENV environment variable.
-    
+
     Returns:
         DevContainer if ENV=dev (default)
         ProdContainer if ENV=prod
-    
+
     Usage:
         # Set environment variable before running
         ENV=prod python main.py
-        
+
         # Or set in code before importing
         os.environ['ENV'] = 'prod'
-        
+
         # Or set in shell
         export ENV=prod
         python main.py
-        
+
         # Windows PowerShell
         $env:ENV = "prod"
         python main.py
-        
+
         # Windows Command Prompt
         set ENV=prod
         python main.py
