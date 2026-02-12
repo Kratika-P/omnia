@@ -147,10 +147,37 @@ def validate_playbook_path(playbook_path: str) -> bool:
     """
     # Must be an absolute path
     if not playbook_path.startswith('/'):
+        log_secure_info(
+            "error",
+            "Playbook path must be absolute",
+            playbook_path[:8] if playbook_path else None
+        )
         return False
     
     # Prevent path traversal attempts
     if '..' in playbook_path:
+        log_secure_info(
+            "error",
+            "Path traversal detected in playbook path",
+            playbook_path[:8] if playbook_path else None
+        )
+        return False
+        
+    # Whitelist approach: Only allow specific playbook directories
+    allowed_prefixes = [
+        '/omnia/utils/',
+        '/omnia/build_image_aarch64/',
+        '/omnia/build_image_x86_64/',
+        '/omnia/discovery/',
+        '/omnia/local_repo/'
+    ]
+    
+    if not any(playbook_path.startswith(prefix) for prefix in allowed_prefixes):
+        log_secure_info(
+            "error",
+            "Playbook path not in allowed directories",
+            playbook_path[:8] if playbook_path else None
+        )
         return False
     
     # Reject any shell metacharacters or command injection patterns
@@ -158,10 +185,20 @@ def validate_playbook_path(playbook_path: str) -> bool:
     pattern = r'^[a-zA-Z0-9_\-/.]+$'
     
     if not re.match(pattern, playbook_path):
+        log_secure_info(
+            "error",
+            "Invalid characters in playbook path",
+            playbook_path[:8] if playbook_path else None
+        )
         return False
     
     # Ensure it ends with .yml or .yaml
     if not (playbook_path.endswith('.yml') or playbook_path.endswith('.yaml')):
+        log_secure_info(
+            "error",
+            "Playbook must have .yml or .yaml extension",
+            playbook_path[:8] if playbook_path else None
+        )
         return False
     
     # Additional security: Check for suspicious patterns
@@ -173,11 +210,30 @@ def validate_playbook_path(playbook_path: str) -> bool:
         r'`',  # Command substitution
         r'<',  # Input redirection
         r'>',  # Output redirection
+        r'\\', # Backslash (potential escaping)
+        r'\"', # Quote (potential string termination)
+        r'\'', # Single quote (potential string termination)
+        r'\(', # Subshell execution
+        r'\)' # Subshell execution
     ]
     
     for pattern in suspicious_patterns:
         if re.search(pattern, playbook_path):
+            log_secure_info(
+                "error",
+                "Suspicious pattern detected in playbook path",
+                playbook_path[:8] if playbook_path else None
+            )
             return False
+            
+    # Verify file exists and is a regular file
+    if not os.path.isfile(playbook_path):
+        log_secure_info(
+            "error",
+            "Playbook file does not exist or is not a regular file",
+            playbook_path[:8] if playbook_path else None
+        )
+        return False
     
     return True
 
@@ -222,6 +278,18 @@ def validate_extra_vars(extra_vars: Dict[str, Any]) -> bool:
         True if valid, False otherwise
     """
     if not isinstance(extra_vars, dict):
+        log_secure_info(
+            "error",
+            "extra_vars must be a dictionary"
+        )
+        return False
+        
+    # Limit the size of extra_vars to prevent DoS
+    if len(json.dumps(extra_vars)) > 10240:  # 10KB limit
+        log_secure_info(
+            "error",
+            "extra_vars exceeds maximum allowed size"
+        )
         return False
     
     # Check for suspicious patterns in keys and values
@@ -235,37 +303,109 @@ def validate_extra_vars(extra_vars: Dict[str, Any]) -> bool:
         r'>',  # Output redirection
         r'\(', # Subshell
         r'\)', # Subshell
+        r'\\', # Backslash (potential escaping)
+        r'\"', # Quote (potential string termination)
+        r'\'', # Single quote (potential string termination)
+        r'\{', # Brace expansion
+        r'\}', # Brace expansion
+        r'\[', # Command substitution
+        r'\]'  # Command substitution
     ]
     
-    def check_value(value):
-        """Recursively check values for suspicious patterns."""
+    # Whitelist for allowed keys
+    allowed_key_pattern = r'^[a-zA-Z0-9_-]+$'
+    
+    def check_value(value, path=""):
+        """Recursively check values for suspicious patterns.
+        
+        Args:
+            value: The value to check
+            path: Current path in the nested structure for error reporting
+            
+        Returns:
+            True if valid, False otherwise
+        """
         if isinstance(value, str):
+            # Limit string length
+            if len(value) > 1024:  # 1KB limit per string
+                log_secure_info(
+                    "error",
+                    f"String value at {path} exceeds maximum allowed length"
+                )
+                return False
+                
+            # Check for suspicious patterns
             for pattern in suspicious_patterns:
                 if re.search(pattern, value):
+                    log_secure_info(
+                        "error",
+                        f"Suspicious pattern detected in value at {path}"
+                    )
                     return False
+                    
         elif isinstance(value, dict):
-            for v in value.values():
-                if not check_value(v):
+            # Limit nesting depth
+            if path.count('.') > 5:  # Max 5 levels of nesting
+                log_secure_info(
+                    "error",
+                    f"Dictionary at {path} exceeds maximum nesting depth"
+                )
+                return False
+                
+            # Limit number of keys
+            if len(value) > 50:  # Max 50 keys per dict
+                log_secure_info(
+                    "error",
+                    f"Dictionary at {path} exceeds maximum number of keys"
+                )
+                return False
+                
+            for k, v in value.items():
+                # Validate key format
+                if isinstance(k, str):
+                    if not re.match(allowed_key_pattern, k):
+                        log_secure_info(
+                            "error",
+                            f"Invalid key format at {path}: {k[:8]}"
+                        )
+                        return False
+                else:
+                    log_secure_info(
+                        "error",
+                        f"Non-string key at {path}"
+                    )
                     return False
+                    
+                # Recursively check nested value
+                if not check_value(v, f"{path}.{k}" if path else k):
+                    return False
+                    
         elif isinstance(value, list):
-            for item in value:
-                if not check_value(item):
+            # Limit list length
+            if len(value) > 100:  # Max 100 items per list
+                log_secure_info(
+                    "error",
+                    f"List at {path} exceeds maximum length"
+                )
+                return False
+                
+            for i, item in enumerate(value):
+                if not check_value(item, f"{path}[{i}]"):
                     return False
+                    
+        elif not isinstance(value, (int, float, bool, type(None))):
+            # Only allow primitive types
+            log_secure_info(
+                "error",
+                f"Unsupported value type at {path}: {type(value).__name__}"
+            )
+            return False
+            
         return True
     
     # Check all keys and values
-    for key, value in extra_vars.items():
-        # Check keys
-        if isinstance(key, str):
-            for pattern in suspicious_patterns:
-                if re.search(pattern, key):
-                    return False
-        
-        # Check values recursively
-        if not check_value(value):
-            return False
-    
-    return True
+    return check_value(extra_vars)
+
 
 
 def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
@@ -281,24 +421,40 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         # Validate file path to prevent directory traversal
         request_path_str = str(request_path)
         if '..' in request_path_str or not request_path_str.startswith('/'):
-            logger.error("Invalid request file path: possible directory traversal")
+            log_secure_info(
+                "error",
+                "Invalid request file path: possible directory traversal",
+                request_path_str[:8]
+            )
             return None
             
         # Ensure file exists and is a regular file
         if not os.path.isfile(request_path):
-            logger.error("Request path is not a regular file")
+            log_secure_info(
+                "error",
+                "Request path is not a regular file",
+                request_path_str[:8]
+            )
             return None
             
         with open(request_path, 'r', encoding='utf-8') as f:
             try:
                 request_data = json.load(f)
             except json.JSONDecodeError:
-                logger.error("Invalid JSON in request file")
+                log_secure_info(
+                    "error",
+                    "Invalid JSON in request file",
+                    request_path_str[:8]
+                )
                 return None
                 
         # Validate data type
         if not isinstance(request_data, dict):
-            logger.error("Request data is not a dictionary")
+            log_secure_info(
+                "error",
+                "Request data is not a dictionary",
+                request_path_str[:8]
+            )
             return None
 
         # Validate required fields
@@ -432,22 +588,48 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     
     # Strict validation for log path
     if not log_path_str.startswith('/') or '..' in log_path_str:
-        logger.error("Container log path must be absolute and cannot contain path traversal")
+        log_secure_info(
+            "error",
+            "Container log path must be absolute and cannot contain path traversal",
+            log_path_str[:8]
+        )
         raise ValueError("Invalid container log path")
         
     # Validate log path format using regex (alphanumeric, underscore, hyphen, forward slash, and dots)
     if not re.match(r'^[a-zA-Z0-9_\-/.]+$', log_path_str):
-        logger.error("Container log path contains invalid characters")
+        log_secure_info(
+            "error",
+            "Container log path contains invalid characters",
+            log_path_str[:8]
+        )
         raise ValueError("Invalid container log path format")
     
     # Build command as a list to prevent shell injection
     # Sanitize and validate extra_vars to prevent injection through JSON
     if not isinstance(extra_vars, dict):
-        logger.error("Extra vars must be a dictionary")
+        log_secure_info(
+            "error",
+            "Extra vars must be a dictionary"
+        )
         raise ValueError("Invalid extra_vars format")
+    
+    # Deep validation of extra_vars structure and content
+    if not validate_extra_vars(extra_vars):
+        log_secure_info(
+            "error",
+            "Invalid or potentially malicious content in extra_vars"
+        )
+        raise ValueError("Security validation failed for extra_vars")
         
     # Convert extra_vars to JSON string with strict validation
-    extra_vars_json = json.dumps(extra_vars) if extra_vars else "{}"
+    try:
+        extra_vars_json = json.dumps(extra_vars) if extra_vars else "{}"
+    except (TypeError, ValueError) as e:
+        log_secure_info(
+            "error",
+            "Failed to serialize extra_vars to JSON"
+        )
+        raise ValueError("Invalid extra_vars content")
     
     # Build command as a list with all validated components
     cmd = [
@@ -475,8 +657,39 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Execute playbook with timeout and custom log path
         timeout_seconds = timeout_minutes * 60
-        # Create a sanitized environment
-        safe_env = os.environ.copy()
+        # Create a sanitized environment with only necessary variables
+        safe_env = {
+            # Include only essential environment variables
+            'PATH': os.environ.get('PATH', ''),
+            'HOME': os.environ.get('HOME', ''),
+            'USER': os.environ.get('USER', ''),
+            'LANG': os.environ.get('LANG', 'en_US.UTF-8'),
+            'ANSIBLE_LOG_PATH': log_path_str
+        }
+        
+        # Final validation of command arguments
+        for arg in cmd:
+            if not isinstance(arg, str):
+                log_secure_info(
+                    "error",
+                    "Non-string argument in command"
+                )
+                raise ValueError("Invalid command argument type")
+                
+            # Check for any remaining shell metacharacters
+            if any(char in arg for char in ['\n', '\r', '\0']):
+                log_secure_info(
+                    "error",
+                    "Control characters detected in command argument"
+                )
+                raise ValueError("Invalid command argument content")
+        
+        # Log the command being executed (without sensitive details)
+        log_secure_info(
+            "debug",
+            "Executing command",
+            f"podman exec omnia_core ansible-playbook [playbook]"
+        )
         
         # Execute with explicit shell=False and validated arguments
         result = subprocess.run(
@@ -484,9 +697,10 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             capture_output=False,  # Don't capture to avoid duplication with ANSIBLE_LOG_PATH
             timeout=timeout_seconds,
             check=False,
-            env=safe_env,  # Pass sanitized environment variables
+            env=safe_env,  # Pass minimal sanitized environment
             shell=False,  # Explicitly set shell=False to prevent injection
-            text=False    # Don't interpret output as text to prevent encoding issues
+            text=False,   # Don't interpret output as text to prevent encoding issues
+            start_new_session=True  # Isolate the process from the parent session
         )
 
         # Log file is directly accessible via NFS share, no need to copy
