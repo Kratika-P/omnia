@@ -278,8 +278,28 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         Parsed request dictionary or None if invalid
     """
     try:
+        # Validate file path to prevent directory traversal
+        request_path_str = str(request_path)
+        if '..' in request_path_str or not request_path_str.startswith('/'):
+            logger.error("Invalid request file path: possible directory traversal")
+            return None
+            
+        # Ensure file exists and is a regular file
+        if not os.path.isfile(request_path):
+            logger.error("Request path is not a regular file")
+            return None
+            
         with open(request_path, 'r', encoding='utf-8') as f:
-            request_data = json.load(f)
+            try:
+                request_data = json.load(f)
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON in request file")
+                return None
+                
+        # Validate data type
+        if not isinstance(request_data, dict):
+            logger.error("Request data is not a dictionary")
+            return None
 
         # Validate required fields
         required_fields = ["job_id", "stage_name", "playbook_path"]
@@ -406,22 +426,37 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # Build podman command to execute playbook in omnia_core container
-    # Use a list to avoid shell injection and properly escape arguments
-    import shlex
+    # Build command as a list to prevent shell injection
+    # Ensure environment variable value is properly sanitized
+    log_path_str = str(container_log_file_path)
     
-    # Sanitize and validate the playbook path
-    if not playbook_path.startswith('/'):
-        logger.error("Playbook path must be absolute")
-        raise ValueError("Invalid playbook path")
+    # Strict validation for log path
+    if not log_path_str.startswith('/') or '..' in log_path_str:
+        logger.error("Container log path must be absolute and cannot contain path traversal")
+        raise ValueError("Invalid container log path")
+        
+    # Validate log path format using regex (alphanumeric, underscore, hyphen, forward slash, and dots)
+    if not re.match(r'^[a-zA-Z0-9_\-/.]+$', log_path_str):
+        logger.error("Container log path contains invalid characters")
+        raise ValueError("Invalid container log path format")
     
     # Build command as a list to prevent shell injection
+    # Sanitize and validate extra_vars to prevent injection through JSON
+    if not isinstance(extra_vars, dict):
+        logger.error("Extra vars must be a dictionary")
+        raise ValueError("Invalid extra_vars format")
+        
+    # Convert extra_vars to JSON string with strict validation
+    extra_vars_json = json.dumps(extra_vars) if extra_vars else "{}"
+    
+    # Build command as a list with all validated components
     cmd = [
         "podman", "exec",
-        "-e", f"ANSIBLE_LOG_PATH={container_log_file_path}",
+        "-e", f"ANSIBLE_LOG_PATH={log_path_str}",
         "omnia_core",
         "ansible-playbook",
         playbook_path,
-        "--extra-vars", json.dumps(extra_vars) if extra_vars else "{}",
+        "--extra-vars", extra_vars_json,
         "-v"
     ]
 
@@ -440,13 +475,18 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Execute playbook with timeout and custom log path
         timeout_seconds = timeout_minutes * 60
+        # Create a sanitized environment
+        safe_env = os.environ.copy()
+        
+        # Execute with explicit shell=False and validated arguments
         result = subprocess.run(
             cmd,
             capture_output=False,  # Don't capture to avoid duplication with ANSIBLE_LOG_PATH
             timeout=timeout_seconds,
             check=False,
-            env=os.environ.copy(),  # Pass environment variables
-            shell=False  # Explicitly set shell=False to prevent injection
+            env=safe_env,  # Pass sanitized environment variables
+            shell=False,  # Explicitly set shell=False to prevent injection
+            text=False    # Don't interpret output as text to prevent encoding issues
         )
 
         # Log file is directly accessible via NFS share, no need to copy

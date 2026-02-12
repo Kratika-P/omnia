@@ -16,7 +16,7 @@
 Description=Omnia Playbook Watcher Service for Build Stream
 Documentation=https://github.com/dell/omnia
 After=network.target
-ConditionPathExists=/opt/omnia/build_stream_enabled
+
 
 [Service]
 Type=simple
