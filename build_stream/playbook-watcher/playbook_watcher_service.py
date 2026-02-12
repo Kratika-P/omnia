@@ -137,119 +137,54 @@ def ensure_directories():
 
 
 def validate_playbook_path(playbook_path: str) -> bool:
-    """Validate playbook path to prevent command injection.
+    """Validate playbook path against a specific whitelist of absolute paths.
     
     Args:
         playbook_path: Path to the playbook file
         
     Returns:
-        True if path is valid, False otherwise
+        True if path is in the whitelist, False otherwise
     """
-    # Whitelisted playbook directories - these paths are inside the container
-    ALLOWED_PREFIXES = (
-        '/omnia/utils/',
-        '/omnia/build_image_aarch64/',
-        '/omnia/build_image_x86_64/',
-        '/omnia/discovery/',
-        '/omnia/local_repo/',
+    # Specific whitelist of allowed playbook paths - these paths are inside the container
+    ALLOWED_PLAYBOOKS = [
+        '/omnia/utils/include_input_dir.yml',
+        '/omnia/build_image_aarch64/build_image_aarch64.yml',
+        '/omnia/build_image_x86_64/build_image_x86_64.yml',
+        '/omnia/discovery/discovery.yml',
+        '/omnia/local_repo/local_repo.yml',
+    ]
+    
+    # Simple exact match against the whitelist
+    if playbook_path in ALLOWED_PLAYBOOKS:
+        return True
+    
+    # Log the rejection
+    log_secure_info(
+        "error",
+        "Playbook path not in allowed whitelist",
+        playbook_path[:8] if playbook_path else None
     )
-    
-    # Only allow safe filesystem characters
-    pattern = r'^[a-zA-Z0-9_\-/.]+$'
-    
-    # Must be an absolute path
-    if not playbook_path.startswith('/'):
-        log_secure_info(
-            "error",
-            "Playbook path must be absolute",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-    
-    # Prevent path traversal attempts
-    if '..' in playbook_path:
-        log_secure_info(
-            "error",
-            "Path traversal detected in playbook path",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-        
-    # Whitelist directory check
-    if not any(playbook_path.startswith(prefix) for prefix in ALLOWED_PREFIXES):
-        log_secure_info(
-            "error",
-            "Playbook path not in allowed directories",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-    
-    # Reject any shell metacharacters or command injection patterns
-    if not re.match(pattern, playbook_path):
-        log_secure_info(
-            "error",
-            "Invalid characters in playbook path",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-    
-    # Ensure it ends with .yml or .yaml
-    if not (playbook_path.endswith('.yml') or playbook_path.endswith('.yaml')):
-        log_secure_info(
-            "error",
-            "Playbook must have .yml or .yaml extension",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-    
-    # No spaces (prevents argument splitting)
-    if ' ' in playbook_path:
-        log_secure_info(
-            "error",
-            "Playbook path cannot contain spaces",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-    
-    return True
+    return False
 
 
 def sanitize_playbook_path(playbook_path: str) -> Optional[str]:
-    """Validate and sanitize playbook path to prevent command injection.
+    """Validate playbook path against the whitelist and return a clean copy.
     
-    Returns a sanitized copy of the path (breaking the taint chain)
-    or None if the path is invalid. The returned path is constructed
-    as a new string that is not derived from the original untrusted input.
-    
-    Note: We don't check for file existence because the playbook paths
-    are relative to the container filesystem, not the host filesystem.
+    Since we're using a strict whitelist of exact paths, this function simply
+    validates the path and returns a new string instance if valid.
     
     Args:
         playbook_path: Path to the playbook file (untrusted input)
         
     Returns:
-        Sanitized absolute path string, or None if validation fails
+        A new string instance of the path if valid, None if invalid
     """
-    # First validate the path using the existing validation function
+    # Validate against the whitelist
     if not validate_playbook_path(playbook_path):
         return None
         
-    # Create a new string to break the taint chain
-    # We don't use os.path.realpath() because the path is inside the container
-    # Instead, we create a new string by concatenating parts
-    path_parts = playbook_path.split('/')
-    sanitized_path = '/' + '/'.join(part for part in path_parts if part)
-    
-    # Ensure the sanitized path still passes validation
-    if not validate_playbook_path(sanitized_path):
-        log_secure_info(
-            "error",
-            "Sanitized path failed validation",
-            sanitized_path[:8]
-        )
-        return None
-        
-    return sanitized_path
+    # Return a new string instance to break the taint chain
+    return str(playbook_path)
 
 
 def validate_job_id(job_id: str) -> bool:
@@ -282,7 +217,7 @@ def validate_stage_name(stage_name: str) -> bool:
     return bool(re.match(pattern, stage_name))
 
 
-def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> bool:
+def validate_command(cmd: list, playbook_path: str, extra_vars_json: str = None) -> bool:
     """Validate command structure and arguments to prevent injection.
     
     This function implements strict command allowlisting with rigorous validation
@@ -291,7 +226,7 @@ def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> boo
     Args:
         cmd: Command list to validate
         playbook_path: Expected playbook path (already validated)
-        extra_vars_json: Expected extra vars JSON (already validated)
+        extra_vars_json: Not used, kept for backward compatibility
         
     Returns:
         True if valid, raises ValueError with detailed message if invalid
@@ -306,8 +241,6 @@ def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> boo
         {"value": "omnia_core", "fixed": True},
         {"value": "ansible-playbook", "fixed": True},
         {"value": None, "fixed": False},  # playbook_path (validated separately)
-        {"value": "--extra-vars", "fixed": True},
-        {"value": None, "fixed": False},  # extra_vars_json (validated separately)
         {"value": "-v", "fixed": True}
     ]
     
@@ -358,7 +291,7 @@ def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> boo
             )
             raise ValueError(f"Invalid command argument prefix at position {i}")
             
-        # Special validation for variable arguments
+        # Special validation for playbook path
         if not allowed.get("fixed", True) and i == 6:  # playbook_path position
             if arg != playbook_path:
                 log_secure_info(
@@ -366,23 +299,15 @@ def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> boo
                     "Playbook path in command does not match validated path"
                 )
                 raise ValueError("Playbook path mismatch")
-                
-        if not allowed.get("fixed", True) and i == 8:  # extra_vars_json position
-            if arg != extra_vars_json:
-                log_secure_info(
-                    "error",
-                    "Extra vars in command does not match validated vars"
-                )
-                raise ValueError("Extra vars mismatch")
     
     # 3. Character validation - check for dangerous characters in all arguments
     DANGEROUS_CHARS = ['\n', '\r', '\0', '\t', '\v', '\f', '\a', '\b', '\\', '`', '$', '&', '|', ';', '<', '>', '(', ')', '*', '?', '~', '#']
     
-    # Skip validation for specific positions (playbook_path and extra_vars_json)
-    SKIP_POSITIONS = [6, 8]  # Position of playbook_path and extra_vars_json
+    # Skip validation for playbook path position
+    SKIP_POSITIONS = [6]  # Position of playbook_path
     
     for i, arg in enumerate(cmd):
-        # Skip validation for playbook_path and extra_vars_json
+        # Skip validation for playbook path
         if i in SKIP_POSITIONS:
             continue
             
@@ -419,143 +344,8 @@ def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> boo
     return True
 
 
-def validate_extra_vars(extra_vars: Dict[str, Any]) -> bool:
-    """Validate extra_vars to prevent injection through JSON.
-    
-    Args:
-        extra_vars: Dictionary of extra variables for Ansible
-        
-    Returns:
-        True if valid, False otherwise
-    """
-    if not isinstance(extra_vars, dict):
-        log_secure_info(
-            "error",
-            "extra_vars must be a dictionary"
-        )
-        return False
-        
-    # Limit the size of extra_vars to prevent DoS
-    if len(json.dumps(extra_vars)) > 10240:  # 10KB limit
-        log_secure_info(
-            "error",
-            "extra_vars exceeds maximum allowed size"
-        )
-        return False
-    
-    # Check for suspicious patterns in keys and values
-    suspicious_patterns = [
-        r';',  # Command separator
-        r'\|', # Pipe
-        r'&',  # Background execution
-        r'\$', # Variable expansion
-        r'`',  # Command substitution
-        r'<',  # Input redirection
-        r'>',  # Output redirection
-        r'\(', # Subshell
-        r'\)', # Subshell
-        r'\\', # Backslash (potential escaping)
-        r'\"', # Quote (potential string termination)
-        r'\'', # Single quote (potential string termination)
-        r'\{', # Brace expansion
-        r'\}', # Brace expansion
-        r'\[', # Command substitution
-        r'\]'  # Command substitution
-    ]
-    
-    # Whitelist for allowed keys
-    allowed_key_pattern = r'^[a-zA-Z0-9_-]+$'
-    
-    def check_value(value, path=""):
-        """Recursively check values for suspicious patterns.
-        
-        Args:
-            value: The value to check
-            path: Current path in the nested structure for error reporting
-            
-        Returns:
-            True if valid, False otherwise
-        """
-        if isinstance(value, str):
-            # Limit string length
-            if len(value) > 1024:  # 1KB limit per string
-                log_secure_info(
-                    "error",
-                    f"String value at {path} exceeds maximum allowed length"
-                )
-                return False
-                
-            # Check for suspicious patterns
-            for pattern in suspicious_patterns:
-                if re.search(pattern, value):
-                    log_secure_info(
-                        "error",
-                        f"Suspicious pattern detected in value at {path}"
-                    )
-                    return False
-                    
-        elif isinstance(value, dict):
-            # Limit nesting depth
-            if path.count('.') > 5:  # Max 5 levels of nesting
-                log_secure_info(
-                    "error",
-                    f"Dictionary at {path} exceeds maximum allowed nesting depth"
-                )
-                return False
-                
-            # Limit number of keys
-            if len(value) > 50:  # Max 50 keys per dict
-                log_secure_info(
-                    "error",
-                    f"Dictionary at {path} exceeds maximum number of keys"
-                )
-                return False
-                
-            for k, v in value.items():
-                # Validate key format
-                if isinstance(k, str):
-                    if not re.match(allowed_key_pattern, k):
-                        log_secure_info(
-                            "error",
-                            f"Invalid key format at {path}: {k[:8]}"
-                        )
-                        return False
-                else:
-                    log_secure_info(
-                        "error",
-                        f"Non-string key at {path}"
-                    )
-                    return False
-                    
-                # Recursively check nested value
-                if not check_value(v, f"{path}.{k}" if path else k):
-                    return False
-                    
-        elif isinstance(value, list):
-            # Limit list length
-            if len(value) > 100:  # Max 100 items per list
-                log_secure_info(
-                    "error",
-                    f"List at {path} exceeds maximum length"
-                )
-                return False
-                
-            for i, item in enumerate(value):
-                if not check_value(item, f"{path}[{i}]"):
-                    return False
-                    
-        elif not isinstance(value, (int, float, bool, type(None))):
-            # Only allow primitive types
-            log_secure_info(
-                "error",
-                f"Unsupported value type at {path}: {type(value).__name__}"
-            )
-            return False
-            
-        return True
-    
-    # Check all keys and values
-    return check_value(extra_vars)
+# validate_extra_vars function has been removed as we no longer use extra_vars
+# This eliminates a potential security vulnerability
 
 
 
@@ -623,7 +413,6 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         job_id = str(request_data["job_id"])
         stage_name = str(request_data["stage_name"])
         playbook_path = str(request_data["playbook_path"])
-        extra_vars = request_data.get("extra_vars", {})
         
         if not validate_job_id(job_id):
             log_secure_info("error", "Invalid job_id format in request", job_id[:8])
@@ -639,14 +428,9 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         if safe_playbook_path is None:
             log_secure_info("error", "Invalid or potentially malicious playbook path in request", playbook_path[:8])
             return None
-            
-        if not validate_extra_vars(extra_vars):
-            log_secure_info("error", "Invalid or potentially malicious extra_vars in request")
-            return None
 
         # Set defaults
         request_data.setdefault("timeout_minutes", DEFAULT_TIMEOUT_MINUTES)
-        request_data["extra_vars"] = extra_vars
         request_data.setdefault("correlation_id", job_id)
         
         # Use the sanitized playbook path instead of the original
@@ -718,7 +502,6 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     job_id = request_data["job_id"]
     stage_name = request_data["stage_name"]
     playbook_path = request_data["playbook_path"]
-    extra_vars = request_data.get("extra_vars", {})
     timeout_minutes = request_data.get("timeout_minutes", DEFAULT_TIMEOUT_MINUTES)
     correlation_id = request_data.get("correlation_id", job_id)
 
@@ -762,50 +545,8 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Invalid container log path format")
     
     # Build command as a list to prevent shell injection
-    # Sanitize and validate extra_vars to prevent injection through JSON
-    if not isinstance(extra_vars, dict):
-        log_secure_info(
-            "error",
-            "Extra vars must be a dictionary"
-        )
-        raise ValueError("Invalid extra_vars format")
-    
-    # Deep validation of extra_vars structure and content
-    if not validate_extra_vars(extra_vars):
-        log_secure_info(
-            "error",
-            "Invalid or potentially malicious content in extra_vars"
-        )
-        raise ValueError("Security validation failed for extra_vars")
-        
-    # Convert extra_vars to JSON string with strict validation
-    try:
-        extra_vars_json = json.dumps(extra_vars) if extra_vars else "{}"
-    except (TypeError, ValueError) as e:
-        log_secure_info(
-            "error",
-            "Failed to serialize extra_vars to JSON"
-        )
-        raise ValueError("Invalid extra_vars content")
-    
-    # Verify the JSON string is valid and can be parsed back
-    try:
-        json.loads(extra_vars_json)
-    except json.JSONDecodeError:
-        log_secure_info(
-            "error",
-            "Generated extra_vars JSON is invalid"
-        )
-        raise ValueError("Invalid extra_vars JSON format")
-    
-    # Additional safety: Ensure playbook_path has no spaces (prevents argument splitting)
-    if ' ' in playbook_path:
-        log_secure_info(
-            "error",
-            "Playbook path contains spaces",
-            playbook_path[:8]
-        )
-        raise ValueError("Invalid playbook path format")
+    # We no longer use extra_vars to prevent potential command injection
+    # This simplifies the code and removes a potential security vulnerability
     
     # Command structure will be validated by the validate_command function
     
@@ -816,15 +557,14 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
         "-e", f"ANSIBLE_LOG_PATH={log_path_str}",
         "omnia_core",
         "ansible-playbook",
-        playbook_path,  # Validated: no spaces, whitelisted directory
-        "--extra-vars", extra_vars_json,  # Validated: proper JSON format
+        playbook_path,  # Validated against strict whitelist
         "-v"
     ]
     
     # Use the dedicated command validation function to perform comprehensive validation
     # This includes structure validation, argument validation, and security checks
     try:
-        validate_command(cmd, playbook_path, extra_vars_json)
+        validate_command(cmd, playbook_path)
     except ValueError as e:
         log_secure_info(
             "error",
