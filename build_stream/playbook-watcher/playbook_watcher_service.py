@@ -235,6 +235,15 @@ def validate_playbook_path(playbook_path: str) -> bool:
         )
         return False
     
+    # Additional check: Ensure no spaces that could cause argument splitting
+    if ' ' in playbook_path:
+        log_secure_info(
+            "error",
+            "Playbook path cannot contain spaces",
+            playbook_path[:8] if playbook_path else None
+        )
+        return False
+    
     return True
 
 
@@ -631,14 +640,34 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
         )
         raise ValueError("Invalid extra_vars content")
     
+    # Verify the JSON string is valid and can be parsed back
+    try:
+        json.loads(extra_vars_json)
+    except json.JSONDecodeError:
+        log_secure_info(
+            "error",
+            "Generated extra_vars JSON is invalid"
+        )
+        raise ValueError("Invalid extra_vars JSON format")
+    
+    # Additional safety: Ensure playbook_path has no spaces (prevents argument splitting)
+    if ' ' in playbook_path:
+        log_secure_info(
+            "error",
+            "Playbook path contains spaces",
+            playbook_path[:8]
+        )
+        raise ValueError("Invalid playbook path format")
+    
     # Build command as a list with all validated components
+    # Each element is a separate argument - no shell interpretation possible
     cmd = [
         "podman", "exec",
         "-e", f"ANSIBLE_LOG_PATH={log_path_str}",
         "omnia_core",
         "ansible-playbook",
-        playbook_path,
-        "--extra-vars", extra_vars_json,
+        playbook_path,  # Validated: no spaces, whitelisted directory, file exists
+        "--extra-vars", extra_vars_json,  # Validated: proper JSON format
         "-v"
     ]
 
