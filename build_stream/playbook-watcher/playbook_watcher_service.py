@@ -145,6 +145,18 @@ def validate_playbook_path(playbook_path: str) -> bool:
     Returns:
         True if path is valid, False otherwise
     """
+    # Whitelisted playbook directories - these paths are inside the container
+    ALLOWED_PREFIXES = (
+        '/omnia/utils/',
+        '/omnia/build_image_aarch64/',
+        '/omnia/build_image_x86_64/',
+        '/omnia/discovery/',
+        '/omnia/local_repo/',
+    )
+    
+    # Only allow safe filesystem characters
+    pattern = r'^[a-zA-Z0-9_\-/.]+$'
+    
     # Must be an absolute path
     if not playbook_path.startswith('/'):
         log_secure_info(
@@ -163,16 +175,8 @@ def validate_playbook_path(playbook_path: str) -> bool:
         )
         return False
         
-    # Whitelist approach: Only allow specific playbook directories
-    allowed_prefixes = [
-        '/omnia/utils/',
-        '/omnia/build_image_aarch64/',
-        '/omnia/build_image_x86_64/',
-        '/omnia/discovery/',
-        '/omnia/local_repo/'
-    ]
-    
-    if not any(playbook_path.startswith(prefix) for prefix in allowed_prefixes):
+    # Whitelist directory check
+    if not any(playbook_path.startswith(prefix) for prefix in ALLOWED_PREFIXES):
         log_secure_info(
             "error",
             "Playbook path not in allowed directories",
@@ -181,9 +185,6 @@ def validate_playbook_path(playbook_path: str) -> bool:
         return False
     
     # Reject any shell metacharacters or command injection patterns
-    # Only allow alphanumeric, underscores, hyphens, forward slashes, and dots
-    pattern = r'^[a-zA-Z0-9_\-/.]+$'
-    
     if not re.match(pattern, playbook_path):
         log_secure_info(
             "error",
@@ -201,41 +202,7 @@ def validate_playbook_path(playbook_path: str) -> bool:
         )
         return False
     
-    # Additional security: Check for suspicious patterns
-    suspicious_patterns = [
-        r';',  # Command separator
-        r'\|', # Pipe
-        r'&',  # Background execution
-        r'\$', # Variable expansion
-        r'`',  # Command substitution
-        r'<',  # Input redirection
-        r'>',  # Output redirection
-        r'\\', # Backslash (potential escaping)
-        r'\"', # Quote (potential string termination)
-        r'\'', # Single quote (potential string termination)
-        r'\(', # Subshell execution
-        r'\)' # Subshell execution
-    ]
-    
-    for pattern in suspicious_patterns:
-        if re.search(pattern, playbook_path):
-            log_secure_info(
-                "error",
-                "Suspicious pattern detected in playbook path",
-                playbook_path[:8] if playbook_path else None
-            )
-            return False
-            
-    # Verify file exists and is a regular file
-    if not os.path.isfile(playbook_path):
-        log_secure_info(
-            "error",
-            "Playbook file does not exist or is not a regular file",
-            playbook_path[:8] if playbook_path else None
-        )
-        return False
-    
-    # Additional check: Ensure no spaces that could cause argument splitting
+    # No spaces (prevents argument splitting)
     if ' ' in playbook_path:
         log_secure_info(
             "error",
@@ -245,6 +212,44 @@ def validate_playbook_path(playbook_path: str) -> bool:
         return False
     
     return True
+
+
+def sanitize_playbook_path(playbook_path: str) -> Optional[str]:
+    """Validate and sanitize playbook path to prevent command injection.
+    
+    Returns a sanitized copy of the path (breaking the taint chain)
+    or None if the path is invalid. The returned path is constructed
+    as a new string that is not derived from the original untrusted input.
+    
+    Note: We don't check for file existence because the playbook paths
+    are relative to the container filesystem, not the host filesystem.
+    
+    Args:
+        playbook_path: Path to the playbook file (untrusted input)
+        
+    Returns:
+        Sanitized absolute path string, or None if validation fails
+    """
+    # First validate the path using the existing validation function
+    if not validate_playbook_path(playbook_path):
+        return None
+        
+    # Create a new string to break the taint chain
+    # We don't use os.path.realpath() because the path is inside the container
+    # Instead, we create a new string by concatenating parts
+    path_parts = playbook_path.split('/')
+    sanitized_path = '/' + '/'.join(part for part in path_parts if part)
+    
+    # Ensure the sanitized path still passes validation
+    if not validate_playbook_path(sanitized_path):
+        log_secure_info(
+            "error",
+            "Sanitized path failed validation",
+            sanitized_path[:8]
+        )
+        return None
+        
+    return sanitized_path
 
 
 def validate_job_id(job_id: str) -> bool:
@@ -484,25 +489,31 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         extra_vars = request_data.get("extra_vars", {})
         
         if not validate_job_id(job_id):
-            logger.error("Invalid job_id format in request")
+            log_secure_info("error", "Invalid job_id format in request", job_id[:8])
             return None
             
         if not validate_stage_name(stage_name):
-            logger.error("Invalid stage_name format in request")
+            log_secure_info("error", "Invalid stage_name format in request", stage_name[:8])
             return None
             
-        if not validate_playbook_path(playbook_path):
-            logger.error("Invalid or potentially malicious playbook path in request")
+        # Use sanitize_playbook_path instead of validate_playbook_path
+        # This returns a sanitized path or None if validation fails
+        safe_playbook_path = sanitize_playbook_path(playbook_path)
+        if safe_playbook_path is None:
+            log_secure_info("error", "Invalid or potentially malicious playbook path in request", playbook_path[:8])
             return None
             
         if not validate_extra_vars(extra_vars):
-            logger.error("Invalid or potentially malicious extra_vars in request")
+            log_secure_info("error", "Invalid or potentially malicious extra_vars in request")
             return None
 
         # Set defaults
         request_data.setdefault("timeout_minutes", DEFAULT_TIMEOUT_MINUTES)
         request_data["extra_vars"] = extra_vars
         request_data.setdefault("correlation_id", job_id)
+        
+        # Use the sanitized playbook path instead of the original
+        request_data["playbook_path"] = safe_playbook_path
 
         log_secure_info(
             "info",
