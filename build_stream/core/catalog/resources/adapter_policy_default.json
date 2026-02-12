@@ -16,7 +16,7 @@
         }
       ]
     },
-    "nfs.json": {
+    "admin_debug_packages.json": {
       "transform": {
         "exclude_fields": ["architecture"]
       },
@@ -24,11 +24,7 @@
         {
           "source_file": "base_os.json",
           "pulls": [
-            {
-              "source_key": "Base OS",
-              "target_key": "nfs",
-              "filter": {"type": "substring", "field": "package", "values": ["nfs"], "case_sensitive": false}
-            }
+            {"source_key": "Base OS", "target_key": "admin_debug_packages"}
           ]
         }
       ]
@@ -72,19 +68,44 @@
         }
       ]
     },
+    "ucx.json": {
+      "transform": {
+        "exclude_fields": ["architecture"]
+      },
+      "sources": [
+        {
+          "source_file": "functional_layer.json",
+          "pulls": [
+            {"source_key": "login_compiler_node_x86_64", "target_key": "login_compiler_node"},
+            {"source_key": "login_compiler_node_aarch64", "target_key": "login_compiler_node"}
+          ]
+        }
+      ]
+    },
     "openmpi.json": {
       "transform": {
         "exclude_fields": ["architecture"]
       },
       "sources": [
         {
-          "source_file": "base_os.json",
+          "source_file": "functional_layer.json",
           "pulls": [
-            {
-              "source_key": "Base OS",
-              "target_key": "openmpi",
-              "filter": {"type": "substring", "field": "package", "values": ["openmpi"], "case_sensitive": false}
-            }
+            {"source_key": "login_compiler_node_x86_64", "target_key": "login_compiler_node"},
+            {"source_key": "login_compiler_node_aarch64", "target_key": "login_compiler_node"}
+          ]
+        }
+      ]
+    },
+    "ldms.json": {
+      "transform": {
+        "exclude_fields": ["architecture"]
+      },
+      "sources": [
+        {
+          "source_file": "functional_layer.json",
+          "pulls": [
+            {"source_key": "login_compiler_node_x86_64", "target_key": "login_compiler_node"},
+            {"source_key": "login_compiler_node_aarch64", "target_key": "login_compiler_node"}
           ]
         }
       ]
@@ -97,8 +118,8 @@
         {
           "source_file": "functional_layer.json",
           "pulls": [
-            {"source_key": "K8S Controller", "target_key": "service_kube_control_plane"},
-            {"source_key": "K8S Worker", "target_key": "service_kube_node"}
+            {"source_key": "service_kube_control_plane_x86_64", "target_key": "service_kube_control_plane"},
+            {"source_key": "service_kube_node_x86_64", "target_key": "service_kube_node"}
           ]
         }
       ],
@@ -122,10 +143,13 @@
         {
           "source_file": "functional_layer.json",
           "pulls": [
-            {"source_key": "Login Node", "target_key": "login_node"},
-            {"source_key": "Compiler", "target_key": "login_compiler_node"},
-            {"source_key": "Slurm Controller", "target_key": "slurm_control_node"},
-            {"source_key": "Slurm Worker", "target_key": "slurm_node"}
+            {"source_key": "login_node_x86_64", "target_key": "login_node"},
+            {"source_key": "login_node_aarch64", "target_key": "login_node"},
+            {"source_key": "login_compiler_node_x86_64", "target_key": "login_compiler_node"},
+            {"source_key": "login_compiler_node_aarch64", "target_key": "login_compiler_node"},
+            {"source_key": "slurm_control_node_x86_64", "target_key": "slurm_control_node"},
+            {"source_key": "slurm_node_x86_64", "target_key": "slurm_node"},
+            {"source_key": "slurm_node_aarch64", "target_key": "slurm_node"}
           ]
         }
       ],
@@ -141,6 +165,27 @@
         }
       ]
     },
+    "additional_packages.json": {
+      "transform": {
+        "exclude_fields": ["architecture"]
+      },
+      "sources": [
+        {
+          "source_file": "functional_layer.json",
+          "pulls": [
+            {"source_key": "login_node_x86_64", "target_key": "login_node"},
+            {"source_key": "login_node_aarch64", "target_key": "login_node"},
+            {"source_key": "login_compiler_node_x86_64", "target_key": "login_compiler_node"},
+            {"source_key": "login_compiler_node_aarch64", "target_key": "login_compiler_node"},
+            {"source_key": "slurm_control_node_x86_64", "target_key": "slurm_control_node"},
+            {"source_key": "slurm_node_x86_64", "target_key": "slurm_node"},
+            {"source_key": "slurm_node_aarch64", "target_key": "slurm_node"},
+            {"source_key": "service_kube_control_plane_x86_64", "target_key": "service_kube_control_plane"},
+            {"source_key": "service_kube_node_x86_64", "target_key": "service_kube_node"}
+          ]
+        }
+      ]
+    },
     "csi_driver_powerscale.json": {
       "transform": {
         "exclude_fields": ["architecture"]
@@ -150,19 +195,6 @@
           "source_file": "infrastructure.json",
           "pulls": [
             {"source_key": "csi", "target_key": "csi_driver_powerscale"}
-          ]
-        }
-      ]
-    },
-    "miscellaneous.json": {
-      "transform": {
-        "exclude_fields": ["architecture"]
-      },
-      "sources": [
-        {
-          "source_file": "miscellaneous.json",
-          "pulls": [
-            {"source_key": "Miscellaneous", "target_key": "miscellaneous"}
           ]
         }
       ]
