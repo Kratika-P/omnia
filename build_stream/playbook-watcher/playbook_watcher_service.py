@@ -486,6 +486,19 @@ def extract_playbook_name(full_playbook_path: str) -> str:
     return os.path.basename(full_playbook_path)
 
 
+def get_shortened_job_id(job_id: str) -> str:
+    """Extract the first 12 characters of the job_id.
+    
+    Args:
+        job_id: Full job identifier
+        
+    Returns:
+        The shortened job_id (first 12 characters)
+    """
+    # Return the first 12 characters of the job_id
+    return job_id[:12] if job_id else ""
+
+
 def _build_log_paths(job_id: str, playbook_path: str, started_at: datetime) -> tuple:
     """Build host and container log file paths.
 
@@ -500,8 +513,11 @@ def _build_log_paths(job_id: str, playbook_path: str, started_at: datetime) -> t
     # Extract playbook name from the full path
     playbook_name = extract_playbook_name(playbook_path)
     
-    # Create job-specific log directory on NFS share
-    host_log_dir = HOST_LOG_BASE_DIR / job_id
+    # Get shortened job_id for directory creation
+    shortened_job_id = get_shortened_job_id(job_id)
+    
+    # Create job-specific log directory on NFS share using shortened job_id
+    host_log_dir = HOST_LOG_BASE_DIR / shortened_job_id
     host_log_dir.mkdir(parents=True, exist_ok=True)
 
     # Create log file path with playbook name and timestamp
@@ -510,7 +526,7 @@ def _build_log_paths(job_id: str, playbook_path: str, started_at: datetime) -> t
 
     # Container log path (equivalent path in container)
     container_log_file_path = (
-        CONTAINER_LOG_BASE_DIR / job_id / f"{playbook_name}_{timestamp}.log"
+        CONTAINER_LOG_BASE_DIR / shortened_job_id / f"{playbook_name}_{timestamp}.log"
     )
 
     return host_log_file_path, container_log_file_path, host_log_dir
