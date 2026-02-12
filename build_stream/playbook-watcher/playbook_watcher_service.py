@@ -473,28 +473,44 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _build_log_paths(job_id: str, stage_name: str, started_at: datetime) -> tuple:
+def extract_playbook_name(full_playbook_path: str) -> str:
+    """Extract the playbook name from the full path.
+    
+    Args:
+        full_playbook_path: Full path to the playbook file
+        
+    Returns:
+        The playbook name (filename without path)
+    """
+    # Get the basename (filename with extension)
+    return os.path.basename(full_playbook_path)
+
+
+def _build_log_paths(job_id: str, playbook_path: str, started_at: datetime) -> tuple:
     """Build host and container log file paths.
 
     Args:
         job_id: Job identifier
-        stage_name: Stage name
+        playbook_path: Full path to the playbook file
         started_at: Start time for timestamp
 
     Returns:
         Tuple of (host_log_file_path, container_log_file_path, host_log_dir)
     """
+    # Extract playbook name from the full path
+    playbook_name = extract_playbook_name(playbook_path)
+    
     # Create job-specific log directory on NFS share
-    host_log_dir = HOST_LOG_BASE_DIR / job_id / stage_name
+    host_log_dir = HOST_LOG_BASE_DIR / job_id
     host_log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create log file path with timestamp
+    # Create log file path with playbook name and timestamp
     timestamp = started_at.strftime("%Y%m%d_%H%M%S")
-    host_log_file_path = host_log_dir / f"ansible_playbook_{timestamp}.log"
+    host_log_file_path = host_log_dir / f"{playbook_name}_{timestamp}.log"
 
     # Container log path (equivalent path in container)
     container_log_file_path = (
-        CONTAINER_LOG_BASE_DIR / job_id / stage_name / f"ansible_playbook_{timestamp}.log"
+        CONTAINER_LOG_BASE_DIR / job_id / f"{playbook_name}_{timestamp}.log"
     )
 
     return host_log_file_path, container_log_file_path, host_log_dir
@@ -536,7 +552,7 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
 
     started_at = datetime.now(timezone.utc)
     host_log_file_path, container_log_file_path, _ = _build_log_paths(
-        job_id, stage_name, started_at
+        job_id, playbook_path, started_at
     )
 
     # Build podman command to execute playbook in omnia_core container
