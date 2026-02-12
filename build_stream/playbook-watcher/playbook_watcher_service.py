@@ -486,24 +486,10 @@ def extract_playbook_name(full_playbook_path: str) -> str:
     return os.path.basename(full_playbook_path)
 
 
-def get_shortened_job_id(job_id: str) -> str:
-    """Extract the first 12 characters of the job_id.
-    
-    Args:
-        job_id: Full job identifier
-        
-    Returns:
-        The shortened job_id (first 12 characters)
-    """
-    # Return the first 12 characters of the job_id
-    return job_id[:12] if job_id else ""
-
-
-def _build_log_paths(job_id: str, playbook_path: str, started_at: datetime) -> tuple:
-    """Build host and container log file paths.
+def _build_log_paths(playbook_path: str, started_at: datetime) -> tuple:
+    """Build host and container log file paths without job_id.
 
     Args:
-        job_id: Job identifier
         playbook_path: Full path to the playbook file
         started_at: Start time for timestamp
 
@@ -513,23 +499,59 @@ def _build_log_paths(job_id: str, playbook_path: str, started_at: datetime) -> t
     # Extract playbook name from the full path
     playbook_name = extract_playbook_name(playbook_path)
     
-    # Get shortened job_id for directory creation
-    shortened_job_id = get_shortened_job_id(job_id)
-    
-    # Create job-specific log directory on NFS share using shortened job_id
-    host_log_dir = HOST_LOG_BASE_DIR / shortened_job_id
+    # Create base log directory on NFS share (no job-specific subdirectory)
+    host_log_dir = HOST_LOG_BASE_DIR
     host_log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create log file path with playbook name and timestamp
+    # Create log file path with playbook name and timestamp only (no job_id)
     timestamp = started_at.strftime("%Y%m%d_%H%M%S")
     host_log_file_path = host_log_dir / f"{playbook_name}_{timestamp}.log"
 
     # Container log path (equivalent path in container)
     container_log_file_path = (
-        CONTAINER_LOG_BASE_DIR / shortened_job_id / f"{playbook_name}_{timestamp}.log"
+        CONTAINER_LOG_BASE_DIR / f"{playbook_name}_{timestamp}.log"
     )
 
     return host_log_file_path, container_log_file_path, host_log_dir
+
+
+def move_log_to_job_directory(host_log_file_path: Path, job_id: str) -> Path:
+    """Move log file to a job-specific directory after completion.
+    
+    Args:
+        host_log_file_path: Current path of the log file
+        job_id: Job identifier for creating the job directory
+        
+    Returns:
+        New path of the log file in the job directory
+    """
+    # Create job-specific directory
+    job_dir = HOST_LOG_BASE_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Get the log filename
+    log_filename = host_log_file_path.name
+    
+    # New path in job directory
+    new_log_path = job_dir / log_filename
+    
+    # Move the log file
+    try:
+        shutil.move(str(host_log_file_path), str(new_log_path))
+        log_secure_info(
+            "info",
+            "Log file moved to job directory",
+            job_id[:12] if job_id else ""
+        )
+    except (OSError, IOError) as e:
+        log_secure_info(
+            "error",
+            "Failed to move log file to job directory"
+        )
+        # Return original path if move fails
+        return host_log_file_path
+    
+    return new_log_path
 
 
 def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -568,7 +590,7 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
 
     started_at = datetime.now(timezone.utc)
     host_log_file_path, container_log_file_path, _ = _build_log_paths(
-        job_id, playbook_path, started_at
+        playbook_path, started_at
     )
 
     # Build podman command to execute playbook in omnia_core container
@@ -671,6 +693,8 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 "Log file confirmed for job",
                 job_id
             )
+            # Move log file to job-specific directory after completion
+            host_log_file_path = move_log_to_job_directory(host_log_file_path, job_id)
         else:
             log_secure_info(
                 "warning",
