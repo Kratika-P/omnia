@@ -606,15 +606,9 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Execute playbook with timeout and custom log path
         timeout_seconds = timeout_minutes * 60
-        # Create a sanitized environment with only necessary variables
-        safe_env = {
-            # Include only essential environment variables
-            'PATH': os.environ.get('PATH', ''),
-            'HOME': os.environ.get('HOME', ''),
-            'USER': os.environ.get('USER', ''),
-            'LANG': os.environ.get('LANG', 'en_US.UTF-8'),
-            'ANSIBLE_LOG_PATH': log_path_str
-        }
+        # Only set ANSIBLE_LOG_PATH in the environment
+        # This is already passed as -e parameter to podman exec
+        # No need for a full sanitized environment
         
         # Log the command being executed (without sensitive details)
         log_secure_info(
@@ -629,7 +623,6 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             capture_output=False,  # Don't capture to avoid duplication with ANSIBLE_LOG_PATH
             timeout=timeout_seconds,
             check=False,
-            env=safe_env,  # Pass minimal sanitized environment
             shell=False,  # Explicitly set shell=False to prevent injection
             text=False,   # Don't interpret output as text to prevent encoding issues
             start_new_session=True  # Isolate the process from the parent session
