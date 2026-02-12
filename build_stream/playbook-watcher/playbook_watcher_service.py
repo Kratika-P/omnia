@@ -39,7 +39,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread, Semaphore
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 # Implicit logging utilities for secure logging
 def log_secure_info(level: str, message: str, identifier: Optional[str] = None) -> None:
@@ -282,6 +282,143 @@ def validate_stage_name(stage_name: str) -> bool:
     return bool(re.match(pattern, stage_name))
 
 
+def validate_command(cmd: list, playbook_path: str, extra_vars_json: str) -> bool:
+    """Validate command structure and arguments to prevent injection.
+    
+    This function implements strict command allowlisting with rigorous validation
+    of each command argument to prevent any possibility of command injection.
+    
+    Args:
+        cmd: Command list to validate
+        playbook_path: Expected playbook path (already validated)
+        extra_vars_json: Expected extra vars JSON (already validated)
+        
+    Returns:
+        True if valid, raises ValueError with detailed message if invalid
+    """
+    # Define the allowlisted command structure
+    # This defines the exact structure and position of each argument
+    ALLOWED_CMD_STRUCTURE = [
+        {"value": "podman", "fixed": True},
+        {"value": "exec", "fixed": True},
+        {"value": "-e", "fixed": True},
+        {"value": "ANSIBLE_LOG_PATH=", "prefix": True},  # Only the prefix is fixed, value is validated separately
+        {"value": "omnia_core", "fixed": True},
+        {"value": "ansible-playbook", "fixed": True},
+        {"value": None, "fixed": False},  # playbook_path (validated separately)
+        {"value": "--extra-vars", "fixed": True},
+        {"value": None, "fixed": False},  # extra_vars_json (validated separately)
+        {"value": "-v", "fixed": True}
+    ]
+    
+    # 1. Length check - command must have exactly the expected number of arguments
+    if len(cmd) != len(ALLOWED_CMD_STRUCTURE):
+        log_secure_info(
+            "error",
+            "Command structure length mismatch",
+            f"Expected {len(ALLOWED_CMD_STRUCTURE)}, got {len(cmd)}"
+        )
+        raise ValueError("Invalid command structure")
+    
+    # 2. Structure validation - each argument must match the allowlisted structure
+    for i, (arg, allowed) in enumerate(zip(cmd, ALLOWED_CMD_STRUCTURE)):
+        # Type check - must be string
+        if not isinstance(arg, str):
+            log_secure_info(
+                "error",
+                "Non-string argument in command",
+                f"Position: {i}"
+            )
+            raise ValueError("Invalid command argument type")
+        
+        # Length check - prevent excessively long arguments
+        if len(arg) > 4096:  # Reasonable maximum length
+            log_secure_info(
+                "error",
+                "Command argument exceeds maximum allowed length",
+                f"Position: {i}, Length: {len(arg)}"
+            )
+            raise ValueError("Command argument too long")
+            
+        # Fixed arguments must match exactly
+        if allowed.get("fixed", False) and arg != allowed.get("value", ""):
+            log_secure_info(
+                "error",
+                f"Command argument at position {i} does not match allowlist",
+                f"Expected '{allowed.get('value', '')}', got '{arg}'"
+            )
+            raise ValueError(f"Invalid command argument at position {i}")
+        
+        # Arguments with prefix must start with the specified prefix
+        if allowed.get("prefix") and not arg.startswith(allowed.get("value", "")):
+            log_secure_info(
+                "error",
+                f"Command argument at position {i} does not start with required prefix",
+                f"Expected prefix '{allowed.get('value', '')}', got '{arg}'"
+            )
+            raise ValueError(f"Invalid command argument prefix at position {i}")
+            
+        # Special validation for variable arguments
+        if not allowed.get("fixed", True) and i == 6:  # playbook_path position
+            if arg != playbook_path:
+                log_secure_info(
+                    "error",
+                    "Playbook path in command does not match validated path"
+                )
+                raise ValueError("Playbook path mismatch")
+                
+        if not allowed.get("fixed", True) and i == 8:  # extra_vars_json position
+            if arg != extra_vars_json:
+                log_secure_info(
+                    "error",
+                    "Extra vars in command does not match validated vars"
+                )
+                raise ValueError("Extra vars mismatch")
+    
+    # 3. Character validation - check for dangerous characters in all arguments
+    DANGEROUS_CHARS = ['\n', '\r', '\0', '\t', '\v', '\f', '\a', '\b', '\\', '`', '$', '&', '|', ';', '<', '>', '(', ')', '*', '?', '~', '#']
+    
+    # Skip validation for specific positions (playbook_path and extra_vars_json)
+    SKIP_POSITIONS = [6, 8]  # Position of playbook_path and extra_vars_json
+    
+    for i, arg in enumerate(cmd):
+        # Skip validation for playbook_path and extra_vars_json
+        if i in SKIP_POSITIONS:
+            continue
+            
+        for char in DANGEROUS_CHARS:
+            if char in arg:
+                log_secure_info(
+                    "error",
+                    "Dangerous character detected in command argument",
+                    f"Position: {i}, Character: {repr(char)}"
+                )
+                raise ValueError("Invalid command argument content")
+    
+    # 4. Shell binary check - prevent shell execution
+    SHELL_BINARIES = ["sh", "bash", "dash", "zsh", "ksh", "csh", "tcsh", "fish"]
+    for i, arg in enumerate(cmd):
+        if arg in SHELL_BINARIES:
+            log_secure_info(
+                "error",
+                "Shell binary detected in command argument",
+                f"Position: {i}, Value: {arg}"
+            )
+            raise ValueError("Shell binary not allowed in command")
+    
+    # 5. URL check - prevent remote resource fetching
+    for i, arg in enumerate(cmd):
+        if re.search(r'(https?|ftp|file)://', arg):
+            log_secure_info(
+                "error",
+                "URL detected in command argument",
+                f"Position: {i}, Value: {arg[:8]}"
+            )
+            raise ValueError("URLs not allowed in command arguments")
+    
+    return True
+
+
 def validate_extra_vars(extra_vars: Dict[str, Any]) -> bool:
     """Validate extra_vars to prevent injection through JSON.
     
@@ -362,7 +499,7 @@ def validate_extra_vars(extra_vars: Dict[str, Any]) -> bool:
             if path.count('.') > 5:  # Max 5 levels of nesting
                 log_secure_info(
                     "error",
-                    f"Dictionary at {path} exceeds maximum nesting depth"
+                    f"Dictionary at {path} exceeds maximum allowed nesting depth"
                 )
                 return False
                 
@@ -670,6 +807,8 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
         )
         raise ValueError("Invalid playbook path format")
     
+    # Command structure will be validated by the validate_command function
+    
     # Build command as a list with all validated components
     # Each element is a separate argument - no shell interpretation possible
     cmd = [
@@ -677,10 +816,22 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
         "-e", f"ANSIBLE_LOG_PATH={log_path_str}",
         "omnia_core",
         "ansible-playbook",
-        playbook_path,  # Validated: no spaces, whitelisted directory, file exists
+        playbook_path,  # Validated: no spaces, whitelisted directory
         "--extra-vars", extra_vars_json,  # Validated: proper JSON format
         "-v"
     ]
+    
+    # Use the dedicated command validation function to perform comprehensive validation
+    # This includes structure validation, argument validation, and security checks
+    try:
+        validate_command(cmd, playbook_path, extra_vars_json)
+    except ValueError as e:
+        log_secure_info(
+            "error",
+            "Command validation failed",
+            str(e)
+        )
+        raise ValueError(f"Command validation failed: {e}")
 
     # Don't log the full command with potentially sensitive paths
     log_secure_info(
@@ -706,23 +857,6 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             'LANG': os.environ.get('LANG', 'en_US.UTF-8'),
             'ANSIBLE_LOG_PATH': log_path_str
         }
-        
-        # Final validation of command arguments
-        for arg in cmd:
-            if not isinstance(arg, str):
-                log_secure_info(
-                    "error",
-                    "Non-string argument in command"
-                )
-                raise ValueError("Invalid command argument type")
-                
-            # Check for any remaining shell metacharacters
-            if any(char in arg for char in ['\n', '\r', '\0']):
-                log_secure_info(
-                    "error",
-                    "Control characters detected in command argument"
-                )
-                raise ValueError("Invalid command argument content")
         
         # Log the command being executed (without sensitive details)
         log_secure_info(
