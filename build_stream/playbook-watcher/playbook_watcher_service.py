@@ -145,20 +145,39 @@ def validate_playbook_path(playbook_path: str) -> bool:
     Returns:
         True if path is valid, False otherwise
     """
-    # Only allow alphanumeric, underscores, hyphens, forward slashes, and dots
-    # Reject any shell metacharacters or command injection patterns
-    pattern = r'^[a-zA-Z0-9_\-/.]+$'
-    
-    if not re.match(pattern, playbook_path):
+    # Must be an absolute path
+    if not playbook_path.startswith('/'):
         return False
     
     # Prevent path traversal attempts
     if '..' in playbook_path:
         return False
     
+    # Reject any shell metacharacters or command injection patterns
+    # Only allow alphanumeric, underscores, hyphens, forward slashes, and dots
+    pattern = r'^[a-zA-Z0-9_\-/.]+$'
+    
+    if not re.match(pattern, playbook_path):
+        return False
+    
     # Ensure it ends with .yml or .yaml
     if not (playbook_path.endswith('.yml') or playbook_path.endswith('.yaml')):
         return False
+    
+    # Additional security: Check for suspicious patterns
+    suspicious_patterns = [
+        r';',  # Command separator
+        r'\|', # Pipe
+        r'&',  # Background execution
+        r'\$', # Variable expansion
+        r'`',  # Command substitution
+        r'<',  # Input redirection
+        r'>',  # Output redirection
+    ]
+    
+    for pattern in suspicious_patterns:
+        if re.search(pattern, playbook_path):
+            return False
     
     return True
 
@@ -193,6 +212,62 @@ def validate_stage_name(stage_name: str) -> bool:
     return bool(re.match(pattern, stage_name))
 
 
+def validate_extra_vars(extra_vars: Dict[str, Any]) -> bool:
+    """Validate extra_vars to prevent injection through JSON.
+    
+    Args:
+        extra_vars: Dictionary of extra variables for Ansible
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not isinstance(extra_vars, dict):
+        return False
+    
+    # Check for suspicious patterns in keys and values
+    suspicious_patterns = [
+        r';',  # Command separator
+        r'\|', # Pipe
+        r'&',  # Background execution
+        r'\$', # Variable expansion
+        r'`',  # Command substitution
+        r'<',  # Input redirection
+        r'>',  # Output redirection
+        r'\(', # Subshell
+        r'\)', # Subshell
+    ]
+    
+    def check_value(value):
+        """Recursively check values for suspicious patterns."""
+        if isinstance(value, str):
+            for pattern in suspicious_patterns:
+                if re.search(pattern, value):
+                    return False
+        elif isinstance(value, dict):
+            for v in value.values():
+                if not check_value(v):
+                    return False
+        elif isinstance(value, list):
+            for item in value:
+                if not check_value(item):
+                    return False
+        return True
+    
+    # Check all keys and values
+    for key, value in extra_vars.items():
+        # Check keys
+        if isinstance(key, str):
+            for pattern in suspicious_patterns:
+                if re.search(pattern, key):
+                    return False
+        
+        # Check values recursively
+        if not check_value(value):
+            return False
+    
+    return True
+
+
 def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
     """Parse and validate request file.
 
@@ -221,6 +296,7 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         job_id = str(request_data["job_id"])
         stage_name = str(request_data["stage_name"])
         playbook_path = str(request_data["playbook_path"])
+        extra_vars = request_data.get("extra_vars", {})
         
         if not validate_job_id(job_id):
             logger.error("Invalid job_id format in request")
@@ -233,10 +309,14 @@ def parse_request_file(request_path: Path) -> Optional[Dict[str, Any]]:
         if not validate_playbook_path(playbook_path):
             logger.error("Invalid or potentially malicious playbook path in request")
             return None
+            
+        if not validate_extra_vars(extra_vars):
+            logger.error("Invalid or potentially malicious extra_vars in request")
+            return None
 
         # Set defaults
         request_data.setdefault("timeout_minutes", DEFAULT_TIMEOUT_MINUTES)
-        request_data.setdefault("extra_vars", {})
+        request_data["extra_vars"] = extra_vars
         request_data.setdefault("correlation_id", job_id)
 
         log_secure_info(
@@ -326,15 +406,21 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # Build podman command to execute playbook in omnia_core container
-    # Use shlex.quote to properly escape arguments and prevent command injection
+    # Use a list to avoid shell injection and properly escape arguments
     import shlex
     
+    # Sanitize and validate the playbook path
+    if not playbook_path.startswith('/'):
+        logger.error("Playbook path must be absolute")
+        raise ValueError("Invalid playbook path")
+    
+    # Build command as a list to prevent shell injection
     cmd = [
         "podman", "exec",
-        "-e", f"ANSIBLE_LOG_PATH={shlex.quote(str(container_log_file_path))}",
+        "-e", f"ANSIBLE_LOG_PATH={container_log_file_path}",
         "omnia_core",
         "ansible-playbook",
-        shlex.quote(playbook_path),
+        playbook_path,
         "--extra-vars", json.dumps(extra_vars) if extra_vars else "{}",
         "-v"
     ]
@@ -359,7 +445,8 @@ def execute_playbook(request_data: Dict[str, Any]) -> Dict[str, Any]:
             capture_output=False,  # Don't capture to avoid duplication with ANSIBLE_LOG_PATH
             timeout=timeout_seconds,
             check=False,
-            env=os.environ.copy()  # Pass environment variables
+            env=os.environ.copy(),  # Pass environment variables
+            shell=False  # Explicitly set shell=False to prevent injection
         )
 
         # Log file is directly accessible via NFS share, no need to copy
