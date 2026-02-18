@@ -35,6 +35,13 @@ from infra.repositories import (
     NfsPlaybookQueueRequestRepository,
     NfsPlaybookQueueResultRepository,
 )
+from infra.db.repositories import (
+    SqlJobRepository,
+    SqlStageRepository,
+    SqlIdempotencyRepository,
+    SqlAuditEventRepository,
+)
+from infra.db.session import SessionLocal
 from orchestrator.catalog.use_cases.generate_input_files import GenerateInputFilesUseCase
 from orchestrator.catalog.use_cases.parse_catalog import ParseCatalogUseCase
 from orchestrator.jobs.use_cases import CreateJobUseCase
@@ -244,8 +251,7 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     """Production profile container.
 
-    Currently uses mock repositories (same as dev).
-    TODO: Replace with PostgreSQL repositories when SQL implementation is ready.
+    Uses PostgreSQL-backed SQL repositories for persistent storage.
 
     Activated when ENV=prod.
     """
@@ -275,11 +281,14 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
         value=_DEFAULT_SCHEMA_PATH,
     )
 
-    # --- Jobs repositories ---
-    job_repository = providers.Singleton(InMemoryJobRepository)
-    stage_repository = providers.Singleton(InMemoryStageRepository)
-    idempotency_repository = providers.Singleton(InMemoryIdempotencyRepository)
-    audit_repository = providers.Singleton(InMemoryAuditEventRepository)
+    # --- Database session factory ---
+    db_session = providers.Factory(SessionLocal)
+
+    # --- Jobs repositories (PostgreSQL-backed) ---
+    job_repository = providers.Factory(SqlJobRepository, session=db_session)
+    stage_repository = providers.Factory(SqlStageRepository, session=db_session)
+    idempotency_repository = providers.Factory(SqlIdempotencyRepository, session=db_session)
+    audit_repository = providers.Factory(SqlAuditEventRepository, session=db_session)
 
     # --- Consolidated input repository ---
     input_repository = providers.Singleton(
