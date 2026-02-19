@@ -112,12 +112,15 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     wiring_config = containers.WiringConfiguration(
         modules=[
+            "api.dependencies",
             "api.jobs.routes",
             "api.jobs.dependencies",
             "api.local_repo.routes",
             "api.local_repo.dependencies",
             "api.build_image.routes",
             "api.build_image.dependencies",
+            "api.parse_catalog.routes",
+            "api.parse_catalog.dependencies",
         ]
     )
 
@@ -258,12 +261,15 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     wiring_config = containers.WiringConfiguration(
         modules=[
+            "api.dependencies",
             "api.jobs.routes",
             "api.jobs.dependencies",
             "api.local_repo.routes",
             "api.local_repo.dependencies",
             "api.build_image.routes",
             "api.build_image.dependencies",
+            "api.parse_catalog.routes",
+            "api.parse_catalog.dependencies",
         ]
     )
 
