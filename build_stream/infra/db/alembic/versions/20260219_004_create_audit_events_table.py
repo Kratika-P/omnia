@@ -2,7 +2,7 @@
 
 Revision ID: 004
 Revises: 003
-Create Date: 2026-01-26
+Create Date: 2026-02-19
 
 """
 from typing import Sequence, Union
@@ -30,8 +30,10 @@ def upgrade() -> None:
         sa.Column("timestamp", sa.DateTime(timezone=True), nullable=False),
         sa.Column("details", JSONB, nullable=True),
         sa.CheckConstraint(
-            "event_type IN ('job_created', 'job_retrieved', 'job_deleted', "
-            "'stage_invoked', 'stage_completed')",
+            "event_type IN ("
+            "'JOB_CREATED', 'JOB_RETRIEVED', 'JOB_DELETED', "
+            "'STAGE_STARTED', 'STAGE_INVOKED', 'STAGE_COMPLETED', 'STAGE_FAILED'"
+            ")",
             name="ck_audit_event_type",
         ),
     )
@@ -42,7 +44,6 @@ def upgrade() -> None:
     op.create_index("ix_audit_client_id", "audit_events", ["client_id"])
     op.create_index("ix_audit_timestamp", "audit_events", ["timestamp"])
     op.create_index("ix_audit_job_timestamp", "audit_events", ["job_id", "timestamp"])
-    op.create_index("ix_audit_correlation", "audit_events", ["correlation_id"])
     op.create_index(
         "ix_audit_client_timestamp",
         "audit_events",
@@ -52,7 +53,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_audit_client_timestamp", table_name="audit_events")
-    op.drop_index("ix_audit_correlation", table_name="audit_events")
     op.drop_index("ix_audit_job_timestamp", table_name="audit_events")
     op.drop_index("ix_audit_timestamp", table_name="audit_events")
     op.drop_index("ix_audit_client_id", table_name="audit_events")

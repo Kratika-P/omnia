@@ -282,6 +282,9 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     )
 
     # --- Database session factory ---
+    # Note: In prod, each repository gets its own session from this factory.
+    # For shared sessions within a request, use FastAPI dependencies to inject
+    # a single session and build repositories manually (see api/jobs/dependencies.py).
     db_session = providers.Factory(SessionLocal)
 
     # --- Jobs repositories (PostgreSQL-backed) ---

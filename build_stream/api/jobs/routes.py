@@ -16,8 +16,11 @@
 
 import logging
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+
+from api.dependencies import verify_token
 
 from core.jobs.exceptions import (
     IdempotencyConflictError,
@@ -84,7 +87,7 @@ def _build_error_response(
 async def create_job(
     request: CreateJobRequest,
     response: Response,
-    client_id: ClientId = Depends(get_client_id),
+    token_data: Annotated[dict, Depends(verify_token)],
     correlation_id: CorrelationId = Depends(get_correlation_id),
     idempotency_key: str = Depends(get_idempotency_key),
     use_case: CreateJobUseCase = Depends(get_create_job_use_case),
@@ -92,6 +95,8 @@ async def create_job(
 ) -> CreateJobResponse:
     """Create a job, handling idempotency and domain errors."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
+    client_id = ClientId(token_data["client_id"])
+    
     logger.info(
         "Create job request: client_id=%s, correlation_id=%s, idempotency_key=%s",
         client_id.value,
@@ -169,10 +174,13 @@ async def create_job(
 )
 async def get_job(
     job_id: str,
-    client_id: ClientId = Depends(get_client_id),
+    token_data: Annotated[dict, Depends(verify_token)],
     correlation_id: CorrelationId = Depends(get_correlation_id),
 ) -> GetJobResponse:
     """Return a job if it exists for the requesting client."""
+
+    client_id = ClientId(token_data["client_id"])
+
     logger.info(
         "Get job request: job_id=%s, client_id=%s, correlation_id=%s",
         job_id,
@@ -261,10 +269,12 @@ async def get_job(
 )
 async def delete_job(
     job_id: str,
-    client_id: ClientId = Depends(get_client_id),
+    token_data: Annotated[dict, Depends(verify_token)],
     correlation_id: CorrelationId = Depends(get_correlation_id),
 ) -> None:
     """Delete (tombstone) a job for the requesting client if it exists."""
+    client_id = ClientId(token_data["client_id"])
+
     logger.info(
         "Delete job request: job_id=%s, client_id=%s, correlation_id=%s",
         job_id,
