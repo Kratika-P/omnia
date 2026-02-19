@@ -29,7 +29,7 @@ from core.jobs.value_objects import ClientId, CorrelationId
 from infra.id_generator import JobUUIDGenerator
 from orchestrator.jobs.use_cases import CreateJobUseCase
 
-_ENV = os.getenv("ENV", "dev")
+_ENV = os.getenv("ENV", "prod")
 
 
 def _get_container():

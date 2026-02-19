@@ -107,7 +107,7 @@ class DevContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     Uses in-memory mock repositories for fast development and testing.
     No external dependencies (database, S3, etc.) required.
 
-    Activated when ENV=dev (default).
+    Activated when ENV=dev.
     """
 
     wiring_config = containers.WiringConfiguration(
@@ -253,7 +253,7 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
 
     Uses PostgreSQL-backed SQL repositories for persistent storage.
 
-    Activated when ENV=prod.
+    Activated when ENV=prod (default).
     """
 
     wiring_config = containers.WiringConfiguration(
@@ -410,29 +410,29 @@ def get_container_class():
     """Select container class based on ENV environment variable.
 
     Returns:
-        DevContainer if ENV=dev (default)
-        ProdContainer if ENV=prod
+        ProdContainer if ENV=prod (default)
+        DevContainer if ENV=dev
 
     Usage:
         # Set environment variable before running
-        ENV=prod python main.py
+        ENV=dev python main.py
 
         # Or set in code before importing
-        os.environ['ENV'] = 'prod'
+        os.environ['ENV'] = 'dev'
 
         # Or set in shell
-        export ENV=prod
+        export ENV=dev
         python main.py
 
         # Windows PowerShell
-        $env:ENV = "prod"
+        $env:ENV = "dev"
         python main.py
 
         # Windows Command Prompt
-        set ENV=prod
+        set ENV=dev
         python main.py
     """
-    env = os.getenv("ENV", "dev").lower()
+    env = os.getenv("ENV", "prod").lower()
 
     if env == "prod":
         return ProdContainer
