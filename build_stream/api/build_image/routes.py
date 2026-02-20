@@ -16,12 +16,12 @@
 
 import logging
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.build_image.dependencies import (
     get_create_build_image_use_case,
-    get_build_image_client_id,
     get_build_image_correlation_id,
 )
 from api.dependencies import verify_token, require_job_write
@@ -82,9 +82,8 @@ def _build_error_response(
 def create_build_image(
     job_id: str,
     request_body: CreateBuildImageRequest,
-    token_data: dict = Depends(verify_token),
+    token_data: Annotated[dict, Depends(verify_token)] = None,  # pylint: disable=unused-argument
     use_case: CreateBuildImageUseCase = Depends(get_create_build_image_use_case),
-    client_id: ClientId = Depends(get_build_image_client_id),
     correlation_id: CorrelationId = Depends(get_build_image_correlation_id),
     _: None = Depends(require_job_write),
 ) -> CreateBuildImageResponse:
@@ -93,6 +92,9 @@ def create_build_image(
     Accepts the request synchronously and returns 202 Accepted.
     The playbook execution is handled by the NFS queue watcher service.
     """
+    # Extract client_id from validated token data
+    client_id = ClientId(token_data["client_id"])
+    
     logger.info(
         "Create build image request: job_id=%s, arch=%s, image_key=%s, "
         "client_id=%s, correlation_id=%s",
