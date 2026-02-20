@@ -37,7 +37,6 @@ from orchestrator.jobs.commands import CreateJobCommand
 from orchestrator.jobs.use_cases import CreateJobUseCase
 
 from api.jobs.dependencies import (
-    get_client_id,
     get_correlation_id,
     get_create_job_use_case,
     get_idempotency_key,

@@ -18,23 +18,12 @@ This module re-exports job-specific dependencies from the main dependencies modu
 to maintain backward compatibility.
 """
 
-# Re-export all dependencies from the main dependencies file
+# Re-export only the dependencies that are actually used
 from api.dependencies import (
-    # Authentication & Authorization
-    verify_token,
-    require_catalog_read,
-    require_catalog_write,
-    require_job_write,
-    
-    # Database & Repositories
-    get_db_session,
-    get_job_repo,
-    get_stage_repo,
-    
     # Job-specific
-    get_id_generator,
-    get_client_id,
     get_correlation_id,
     get_idempotency_key,
     get_create_job_use_case,
+    get_job_repo,
+    get_stage_repo,
 )
