@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column('tags', sa.JSON(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-        sa.ForeignKeyConstraint(['job_id'], ['jobs.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['job_id'], ['jobs.job_id'], ondelete='CASCADE'),
     )
     
     # Create indexes for performance

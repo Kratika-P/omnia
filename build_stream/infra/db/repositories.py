@@ -32,6 +32,7 @@ from core.jobs.exceptions import OptimisticLockError
 from core.jobs.value_objects import IdempotencyKey, JobId, StageName
 from core.artifacts.ports import ArtifactMetadataRepository
 from core.artifacts.entities import ArtifactRecord, ArtifactRef, ArtifactKind
+from core.artifacts.value_objects import ArtifactKey, ArtifactDigest
 from .mappers import (
     AuditEventMapper,
     IdempotencyRecordMapper,
@@ -328,11 +329,10 @@ class SqlArtifactMetadataRepository(ArtifactMetadataRepository):
             stage_name=record.stage_name.value,
             label=record.label,
             artifact_ref={
-                "id": record.artifact_ref.id,
-                "namespace": record.artifact_ref.namespace,
-                "storage_path": record.artifact_ref.storage_path,
+                "key": str(record.artifact_ref.key),
+                "digest": str(record.artifact_ref.digest),
                 "size_bytes": record.artifact_ref.size_bytes,
-                "checksum": record.artifact_ref.checksum,
+                "uri": record.artifact_ref.uri,
             },
             kind=record.kind.value,
             content_type=record.content_type,
@@ -378,11 +378,10 @@ class SqlArtifactMetadataRepository(ArtifactMetadataRepository):
         
         artifact_ref_data = db_record.artifact_ref
         artifact_ref = ArtifactRef(
-            id=artifact_ref_data["id"],
-            namespace=artifact_ref_data["namespace"],
-            storage_path=artifact_ref_data["storage_path"],
+            key=ArtifactKey(artifact_ref_data["key"]),
+            digest=ArtifactDigest(artifact_ref_data["digest"]),
             size_bytes=artifact_ref_data["size_bytes"],
-            checksum=artifact_ref_data["checksum"],
+            uri=artifact_ref_data["uri"],
         )
         
         return ArtifactRecord(
