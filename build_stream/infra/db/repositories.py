@@ -360,6 +360,30 @@ class SqlArtifactMetadataRepository(ArtifactMetadataRepository):
             
         return self._db_record_to_entity(db_record)
 
+    def find_by_job_stage_and_label(
+        self,
+        job_id: JobId,
+        stage_name: StageName,
+        label: str,
+    ) -> Optional[ArtifactRecord]:
+        """Find an artifact record by job, stage, and label."""
+        from infra.db.models import ArtifactMetadata
+        
+        db_record = (
+            self._session.query(ArtifactMetadata)
+            .filter(
+                ArtifactMetadata.job_id == str(job_id),
+                ArtifactMetadata.stage_name == stage_name.value,
+                ArtifactMetadata.label == label,
+            )
+            .first()
+        )
+        
+        if not db_record:
+            return None
+            
+        return self._db_record_to_entity(db_record)
+
     def list_by_job_id(self, job_id: JobId) -> List[ArtifactRecord]:
         """List all artifact records for a job."""
         from infra.db.models import ArtifactMetadata
