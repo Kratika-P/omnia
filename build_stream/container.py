@@ -40,6 +40,7 @@ from infra.db.repositories import (
     SqlStageRepository,
     SqlIdempotencyRepository,
     SqlAuditEventRepository,
+    SqlArtifactMetadataRepository,
 )
 from infra.db.session import SessionLocal
 from orchestrator.catalog.use_cases.generate_input_files import GenerateInputFilesUseCase
@@ -354,8 +355,9 @@ class ProdContainer(containers.DeclarativeContainer):  # pylint: disable=R0903
     # --- Use cases ---
     artifact_store = providers.Singleton(_create_artifact_store)
 
-    artifact_metadata_repository = providers.Singleton(
-        InMemoryArtifactMetadataRepository,
+    artifact_metadata_repository = providers.Factory(
+        SqlArtifactMetadataRepository,
+        session=db_session,
     )
 
     create_job_use_case = providers.Factory(

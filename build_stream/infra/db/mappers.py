@@ -100,7 +100,7 @@ class StageMapper:
         """
         return StageModel(
             job_id=str(stage.job_id),
-            stage_name=str(stage.stage_name),
+            stage_name=stage.stage_name.value,
             stage_state=stage.stage_state.value,
             attempt=stage.attempt,
             started_at=stage.started_at,

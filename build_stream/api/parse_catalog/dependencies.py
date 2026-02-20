@@ -40,16 +40,15 @@ def get_parse_catalog_use_case(
 ) -> ParseCatalogUseCase:
     """Provide parse-catalog use case with shared session in prod."""
     if _ENV == "prod":
-        from infra.artifact_store.in_memory_artifact_store import InMemoryArtifactStore
-        from infra.artifact_store.in_memory_artifact_metadata import InMemoryArtifactMetadataRepository
+        from infra.db.repositories import SqlArtifactMetadataRepository
         
         container = _get_container()
         return ParseCatalogUseCase(
             job_repo=_create_sql_job_repo(db_session),
             stage_repo=_create_sql_stage_repo(db_session),
             audit_repo=_create_sql_audit_repo(db_session),
-            artifact_store=InMemoryArtifactStore(),
-            artifact_metadata_repo=InMemoryArtifactMetadataRepository(),
+            artifact_store=container.artifact_store(),
+            artifact_metadata_repo=SqlArtifactMetadataRepository(db_session),
             uuid_generator=container.uuid_generator(),
         )
     return _get_container().parse_catalog_use_case()

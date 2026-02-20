@@ -30,6 +30,8 @@ from core.jobs.entities.job import Job
 from core.jobs.entities.stage import Stage
 from core.jobs.exceptions import OptimisticLockError
 from core.jobs.value_objects import IdempotencyKey, JobId, StageName
+from core.artifacts.ports import ArtifactMetadataRepository
+from core.artifacts.entities import ArtifactRecord, ArtifactRef, ArtifactKind
 from .mappers import (
     AuditEventMapper,
     IdempotencyRecordMapper,
@@ -147,15 +149,15 @@ class SqlStageRepository:
         """
         stmt = select(StageModel).where(
             StageModel.job_id == str(stage.job_id),
-            StageModel.stage_name == str(stage.stage_name),
+            StageModel.stage_name == stage.stage_name.value,
         )
         existing = self.session.execute(stmt).scalar_one_or_none()
-
+        
         if existing:
             if existing.version != stage.version - 1:
                 raise OptimisticLockError(
                     entity_type="Stage",
-                    entity_id=f"{stage.job_id}/{stage.stage_name}",
+                    entity_id=f"{stage.job_id}/{stage.stage_name.value}",
                     expected_version=stage.version - 1,
                     actual_version=existing.version,
                 )
@@ -307,3 +309,89 @@ class SqlAuditEventRepository:
         )
         event_models = self.session.execute(stmt).scalars().all()
         return [AuditEventMapper.to_domain(model) for model in event_models]
+
+
+class SqlArtifactMetadataRepository(ArtifactMetadataRepository):
+    """SQL implementation of artifact metadata repository."""
+
+    def __init__(self, session: Session):
+        """Initialize with a SQLAlchemy session."""
+        self._session = session
+
+    def save(self, record: ArtifactRecord) -> None:
+        """Save an artifact record to the database."""
+        from infra.db.models import ArtifactMetadata
+        
+        db_record = ArtifactMetadata(
+            id=record.id,
+            job_id=str(record.job_id),
+            stage_name=record.stage_name.value,
+            label=record.label,
+            artifact_ref={
+                "id": record.artifact_ref.id,
+                "namespace": record.artifact_ref.namespace,
+                "storage_path": record.artifact_ref.storage_path,
+                "size_bytes": record.artifact_ref.size_bytes,
+                "checksum": record.artifact_ref.checksum,
+            },
+            kind=record.kind.value,
+            content_type=record.content_type,
+            tags=record.tags,
+        )
+        self._session.add(db_record)
+
+    def get_by_job_id_and_label(
+        self, job_id: JobId, label: str
+    ) -> Optional[ArtifactRecord]:
+        """Get artifact record by job ID and label."""
+        from infra.db.models import ArtifactMetadata
+        
+        db_record = (
+            self._session.query(ArtifactMetadata)
+            .filter(
+                ArtifactMetadata.job_id == str(job_id),
+                ArtifactMetadata.label == label,
+            )
+            .first()
+        )
+        
+        if not db_record:
+            return None
+            
+        return self._db_record_to_entity(db_record)
+
+    def list_by_job_id(self, job_id: JobId) -> List[ArtifactRecord]:
+        """List all artifact records for a job."""
+        from infra.db.models import ArtifactMetadata
+        
+        db_records = (
+            self._session.query(ArtifactMetadata)
+            .filter(ArtifactMetadata.job_id == str(job_id))
+            .all()
+        )
+        
+        return [self._db_record_to_entity(r) for r in db_records]
+
+    def _db_record_to_entity(self, db_record) -> ArtifactRecord:
+        """Convert database record to domain entity."""
+        from infra.db.models import ArtifactMetadata
+        
+        artifact_ref_data = db_record.artifact_ref
+        artifact_ref = ArtifactRef(
+            id=artifact_ref_data["id"],
+            namespace=artifact_ref_data["namespace"],
+            storage_path=artifact_ref_data["storage_path"],
+            size_bytes=artifact_ref_data["size_bytes"],
+            checksum=artifact_ref_data["checksum"],
+        )
+        
+        return ArtifactRecord(
+            id=db_record.id,
+            job_id=JobId(db_record.job_id),
+            stage_name=StageName(db_record.stage_name),
+            label=db_record.label,
+            artifact_ref=artifact_ref,
+            kind=ArtifactKind(db_record.kind),
+            content_type=db_record.content_type,
+            tags=db_record.tags or {},
+        )

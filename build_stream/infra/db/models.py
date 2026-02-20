@@ -18,6 +18,7 @@ ORM models are infrastructure-only and never exposed outside this layer.
 Domain ↔ ORM conversion is handled by mappers in mappers.py.
 """
 
+# Third-party imports
 from sqlalchemy import (
     Boolean,
     Column,
@@ -27,6 +28,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, relationship
@@ -173,4 +175,37 @@ class AuditEventModel(Base):
         Index("ix_audit_job_timestamp", "job_id", "timestamp"),
         Index("ix_audit_correlation", "correlation_id"),
         Index("ix_audit_client_timestamp", "client_id", "timestamp"),
+    )
+
+
+class ArtifactMetadata(Base):
+    """
+    SQLAlchemy model for artifact metadata storage.
+    
+    Maps to ArtifactRecord domain entity via SqlArtifactMetadataRepository.
+    """
+
+    __tablename__ = "artifact_metadata"
+
+    # Primary key
+    id = Column(String(36), primary_key=True, nullable=False)
+
+    # Foreign key to jobs table
+    job_id = Column(String(36), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Business attributes
+    stage_name = Column(String(50), nullable=False)
+    label = Column(String(100), nullable=False)
+    artifact_ref = Column(JSONB, nullable=False)
+    kind = Column(String(20), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    tags = Column(JSONB, nullable=True)
+
+    # Timestamp
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Composite indexes
+    __table_args__ = (
+        Index("idx_artifact_metadata_job_id", "job_id"),
+        Index("idx_artifact_metadata_job_label", "job_id", "label"),
     )

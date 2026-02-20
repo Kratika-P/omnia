@@ -18,13 +18,14 @@ Provides ORM models, mappers, SQL repository implementations,
 and session management for PostgreSQL persistence.
 """
 
-from .models import Base, JobModel, StageModel, IdempotencyKeyModel, AuditEventModel
+from .models import Base, JobModel, StageModel, IdempotencyKeyModel, AuditEventModel, ArtifactMetadata
 from .mappers import JobMapper, StageMapper, IdempotencyRecordMapper, AuditEventMapper
 from .repositories import (
     SqlJobRepository,
     SqlStageRepository,
     SqlIdempotencyRepository,
     SqlAuditEventRepository,
+    SqlArtifactMetadataRepository,
 )
 from .session import get_db_session, get_db, SessionLocal
 
@@ -34,6 +35,7 @@ __all__ = [
     "StageModel",
     "IdempotencyKeyModel",
     "AuditEventModel",
+    "ArtifactMetadata",
     "JobMapper",
     "StageMapper",
     "IdempotencyRecordMapper",
@@ -42,6 +44,7 @@ __all__ = [
     "SqlStageRepository",
     "SqlIdempotencyRepository",
     "SqlAuditEventRepository",
+    "SqlArtifactMetadataRepository",
     "get_db_session",
     "get_db",
     "SessionLocal",
