@@ -1,7 +1,7 @@
 """Create artifact_metadata table
 
-Revision ID: 20260219_005
-Revises: 20260219_004
+Revision ID: 005
+Revises: 004
 Create Date: 2026-02-19 13:45:00.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '20260219_005'
-down_revision: Union[str, None] = '20260219_004'
+revision: str = '005'
+down_revision: Union[str, None] = '004'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
