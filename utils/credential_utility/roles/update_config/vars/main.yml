@@ -67,12 +67,7 @@ omnia_credentials:
   gitlab:
     mandatory:
       - { password: gitlab_root_password }
-  
-    conditional_mandatory:
-      - username: build_stream_auth_username
-        password: build_stream_auth_password
-        condition: "{{ enable_build_stream | default(false) | bool }}"
-        file: "{{ credential_files[1].file_path }}"
+      
   prepare_oim:
     optional:
       - { username: docker_username, password: docker_password }
