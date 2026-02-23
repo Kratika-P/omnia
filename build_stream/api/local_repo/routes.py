@@ -16,13 +16,13 @@
 
 import logging
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.dependencies import verify_token, require_job_write
 from api.local_repo.dependencies import (
     get_create_local_repo_use_case,
-    get_local_repo_client_id,
     get_local_repo_correlation_id,
 )
 from api.local_repo.schemas import CreateLocalRepoResponse, LocalRepoErrorResponse
@@ -78,9 +78,8 @@ def _build_error_response(
 )
 def create_local_repository(
     job_id: str,
-    token_data: dict = Depends(verify_token),
+    token_data: Annotated[dict, Depends(verify_token)] = None,  # pylint: disable=unused-argument
     use_case: CreateLocalRepoUseCase = Depends(get_create_local_repo_use_case),
-    client_id: ClientId = Depends(get_local_repo_client_id),
     correlation_id: CorrelationId = Depends(get_local_repo_correlation_id),
     _: None = Depends(require_job_write),
 ) -> CreateLocalRepoResponse:
@@ -89,6 +88,9 @@ def create_local_repository(
     Accepts the request synchronously and returns 202 Accepted.
     The playbook execution is handled by the NFS queue watcher service.
     """
+    # Extract client_id from validated token data
+    client_id = ClientId(token_data["client_id"])
+    
     logger.info(
         "Create local repo request: job_id=%s, client_id=%s, correlation_id=%s",
         job_id,

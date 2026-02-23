@@ -12,6 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+<<<<<<< dev/postgres-jobid-integration
+"""FastAPI dependency providers for Jobs API.
+
+This module re-exports job-specific dependencies from the main dependencies module
+to maintain backward compatibility.
+"""
+
+# Re-export only the dependencies that are actually used
+from api.dependencies import (
+    # Job-specific
+    get_correlation_id,
+    get_idempotency_key,
+    get_create_job_use_case,
+    get_job_repo,
+    get_stage_repo,
+)
+=======
 """FastAPI dependency providers for Jobs API."""
 
 from typing import Optional
@@ -128,3 +145,4 @@ def get_idempotency_key(
         )
 
     return key
+>>>>>>> pub/build_stream
