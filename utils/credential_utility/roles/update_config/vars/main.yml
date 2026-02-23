@@ -58,10 +58,6 @@ docker_hub_warning: |
   Proceed to enter your Docker credentials if you want to avoid pull rate limits.
   Press Enter.
 
-# GitLab password change messages
-gitlab_password_change_fail_msg: "Failed to change GitLab root password. Please check GitLab logs and try again."
-gitlab_password_change_success_msg: "GitLab root password changed successfully!"
-
 omnia_credentials:
   provision:
     mandatory:
