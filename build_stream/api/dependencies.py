@@ -256,6 +256,12 @@ def get_stage_repo(db_session: Session = Depends(get_db_session)):
         return _create_sql_stage_repo(db_session)
     return _get_container().stage_repository()
 
+def get_audit_repo(db_session: Session = Depends(get_db_session)):
+    """Provide audit event repository."""
+    if _ENV == "prod":
+        return _create_sql_audit_repo(db_session)
+    return _get_container().audit_repository()
+
 
 # ------------------------------------------------------------------
 # Job-Specific Dependencies

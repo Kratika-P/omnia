@@ -40,11 +40,7 @@ from orchestrator.jobs.use_cases import CreateJobUseCase
 
 from api.dependencies import verify_token
 from api.jobs.dependencies import (
-<<<<<<< dev/postgres-jobid-integration
-=======
     get_audit_repo,
-    get_client_id,
->>>>>>> pub/build_stream
     get_correlation_id,
     get_create_job_use_case,
     get_idempotency_key,
@@ -193,29 +189,16 @@ async def create_job(
 )
 async def get_job(
     job_id: str,
-<<<<<<< dev/postgres-jobid-integration
     token_data: Annotated[dict, Depends(verify_token)],
-=======
-    token_data: dict = Depends(verify_token),
-    client_id: ClientId = Depends(get_client_id),
->>>>>>> pub/build_stream
     correlation_id: CorrelationId = Depends(get_correlation_id),
     job_repo = Depends(get_job_repo),
     stage_repo = Depends(get_stage_repo),
+    audit_repo = Depends(get_audit_repo),
 ) -> GetJobResponse:
-<<<<<<< dev/postgres-jobid-integration
     """Return a job if it exists for the requesting client."""
 
     client_id = ClientId(token_data["client_id"])
 
-=======
-    """Return job status with state, timestamps, and step breakdown.
-    
-    Requires valid OAuth 2.0 token for authentication. Returns job state 
-    (PENDING, RUNNING, SUCCEEDED, FAILED, CLEANED), timestamps for each 
-    state change, and step breakdown with stage details.
-    """
->>>>>>> pub/build_stream
     logger.info(
         "Get job request: job_id=%s, client_id=%s, correlation_id=%s",
         job_id,
@@ -235,13 +218,6 @@ async def get_job(
             ).model_dump(),
         ) from e
 
-<<<<<<< dev/postgres-jobid-integration
-=======
-    job_repo = get_job_repo()
-    stage_repo = get_stage_repo()
-    audit_repo = get_audit_repo()
-
->>>>>>> pub/build_stream
     try:
         job = job_repo.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None or job.tombstoned:
