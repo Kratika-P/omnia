@@ -63,7 +63,7 @@ omnia_credentials:
     mandatory:
       - { password: provision_password }
       - { username: bmc_username, password: bmc_password }
-  
+
   gitlab:
     mandatory:
       - { password: gitlab_root_password }
