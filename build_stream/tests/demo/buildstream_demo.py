@@ -33,7 +33,6 @@ Usage:
 import argparse
 import base64
 import json
-import os
 import shutil
 import subprocess
 import time
@@ -58,62 +57,63 @@ CATALOG_FILE = Path("/opt/omnia/windsurf/working_dir/demo/catalog_rhel.json")
 
 class ParseCatalogDemo:
     """Complete demo class for parse-catalog functionality."""
-    
+
     def __init__(self, cleanup=False):
         self.base_url = BASE_URL
-        
+
         # Client configuration
         self.client_name = CLIENT_NAME
 
         # Build Stream artifact root
         self.build_stream_artifact_root = BUILD_STREAM_ARTIFACT_ROOT
-        
+
         # Authentication credentials for build_stream registration
         # These are the credentials used to register new OAuth clients
         self.auth_username = AUTH_USERNAME
         self.auth_password = AUTH_PASSWORD
 
-        # Creates this file if it doesn't exist, for future use, if exists it use the client_id and client_secret from it
+        # Creates this file if it doesn't exist, for future use,
+        # if exists it uses the client_id and client_secret from it
         self.credentials_file = CREDENTIALS_FILE
-        
+
         self.catalog_file = CATALOG_FILE
 
         # Load existing credentials or set to None
         self.client_id = None
         self.client_secret = None
         self.load_credentials()
-        
+
         self.access_token = None
         self.job_id = None
         self.correlation_id = str(uuid.uuid4())
         self.cleanup = cleanup
-        
+
     def wait_for_enter(self, message="Press ENTER to continue..."):
         """Wait for user to press enter."""
         input(f"\n⏸️  {message}")
-    
+
     def load_credentials(self):
         """Load client credentials from file if exists."""
         if self.credentials_file.exists():
             try:
-                with open(self.credentials_file, 'r') as f:
+                with open(self.credentials_file, 'r', encoding='utf-8') as f:
                     credentials = json.load(f)
                     client_id = credentials.get('client_id')
                     client_secret = credentials.get('client_secret')
-                    
+
                     # Only update if values are not empty
                     if client_id:
                         self.client_id = client_id
                     if client_secret:
                         self.client_secret = client_secret
-                        
+
                     print(f"📁 Loaded existing credentials from {self.credentials_file}")
                     return True
-            except Exception as e:
+            except (json.JSONDecodeError, IOError) as e:
                 print(f"⚠️  Error loading credentials: {e}")
                 return False
         return False
-    
+
     def save_credentials(self, client_id, client_secret):
         """Save client credentials to file."""
         try:
@@ -122,32 +122,32 @@ class ParseCatalogDemo:
                 'client_secret': client_secret,
                 'created_at': time.strftime('%Y-%m-%d %H:%M:%S')
             }
-            with open(self.credentials_file, 'w') as f:
+            with open(self.credentials_file, 'w', encoding='utf-8') as f:
                 json.dump(credentials, f, indent=2)
             print(f"💾 Saved credentials to {self.credentials_file}")
             return True
-        except Exception as e:
+        except (json.JSONDecodeError, IOError) as e:
             print(f"⚠️  Error saving credentials: {e}")
             return False
-    
+
     def cleanup_artifacts(self):
         """Delete all contents inside build_stream_artifact_root."""
         print("\n" + "="*60)
         print("🧹 CLEANUP: Removing Existing Artifacts")
         print("="*60)
-        
+
         artifacts_path = Path(self.build_stream_artifact_root)
-        
+
         if not artifacts_path.exists():
             print(f"📂 Artifacts directory does not exist: {artifacts_path}")
-            print(f"✅ Nothing to clean up")
+            print("✅ Nothing to clean up")
             return
-        
+
         print(f"� Artifacts Directory: {artifacts_path}")
-        print(f"⚠️  This will delete all contents inside the artifacts directory")
-        
+        print("⚠️  This will delete all contents inside the artifacts directory")
+
         self.wait_for_enter("Press ENTER to proceed with cleanup...")
-        
+
         try:
             # Delete all contents inside the directory
             deleted_count = 0
@@ -160,22 +160,22 @@ class ParseCatalogDemo:
                     print(f"🗑️  Removing file: {item.name}")
                     item.unlink()
                     deleted_count += 1
-            
+
             print(f"\n✅ Cleanup completed: {deleted_count} items removed")
-            
-        except Exception as e:
+
+        except (OSError, shutil.Error) as e:
             print(f"\n❌ Cleanup failed: {e}")
-            print(f"⚠️  Continuing with demo...")
-    
+            print("⚠️  Continuing with demo...")
+
     def check_server_health(self):
         """Check if the server is running."""
         print("\n" + "="*60)
         print("🏥 STEP 0: Health Check")
         print("="*60)
         print(f"📡 Endpoint: GET {self.base_url}/health")
-        
+
         self.wait_for_enter("Press ENTER to check server health...")
-        
+
         try:
             response = requests.get(f"{self.base_url}/health", timeout=5, verify=False)
             print(f"\n✅ Response Status: {response.status_code}")
@@ -185,47 +185,48 @@ class ParseCatalogDemo:
             print(f"\n❌ Server not running at {self.base_url}")
             print("   Start server with: uvicorn main:app --host 0.0.0.0 --port 8010")
             return False
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             print(f"\n❌ Error: {e}")
             return False
-    
+
     def register_client(self):
         """Register OAuth client or use existing one."""
         print("\n" + "="*60)
         print("📝 STEP 1: Register OAuth Client")
         print("="*60)
-        
+
         # If we already have credentials, skip registration
         if self.client_secret:
-            print(f"✅ Using provided credentials!")
+            print("✅ Using provided credentials!")
             print(f"   Client ID: {self.client_id}")
             print(f"   Client Secret: {self.client_secret}")
-            print(f"\n💡 Skipping registration - using existing credentials")
+            print("\n💡 Skipping registration - using existing credentials")
             return True
-        
+
         # Authentication credentials for build_stream registration
         # These are the credentials used to register new OAuth clients
         # The vault shows: username="build_stream_register" with password_hash for "dell1234"
         # But the actual system might be using different credentials
-        print(f"🔐 Using auth credentials: {self.auth_username}:{self.auth_password}")
+        print(f"🔐 Using auth credentials: {self.auth_username}:"
+              f"{self.auth_password}")
         auth_header = base64.b64encode(f"{self.auth_username}:{self.auth_password}".encode()).decode()
-        
+
         client_data = {
             "client_id": self.client_id,
             "client_name": self.client_name,
             "allowed_scopes": ["catalog:read", "catalog:write","job:write"],
             "grant_types": ["client_credentials"]
         }
-        
+
         print(f"📡 Endpoint: POST {self.base_url}/api/v1/auth/register")
-        print(f"📝 Headers:")
-        print(f"   Content-Type: application/json")
+        print("📝 Headers:")
+        print("   Content-Type: application/json")
         print(f"   Authorization: Basic {auth_header}")
-        print(f"📝 Request Body:")
+        print("📝 Request Body:")
         print(json.dumps(client_data, indent=2))
-        
+
         self.wait_for_enter("Press ENTER to register client...")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/api/v1/auth/register",
@@ -234,163 +235,166 @@ class ParseCatalogDemo:
                     "Content-Type": "application/json",
                     "Authorization": f"Basic {auth_header}"
                 },
+                timeout=30,
                 verify=False
             )
-            
+
             print(f"\n✅ Response Status: {response.status_code}")
-            
+
             if response.status_code in [200, 201]:
                 client_info = response.json()
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 # Mask the secret for display
                 display_info = client_info.copy()
                 if 'client_secret' in display_info:
                     display_info['client_secret'] = display_info['client_secret'][:8] + "..." + display_info['client_secret'][-4:]
                 print(json.dumps(display_info, indent=2))
-                
+
                 self.client_secret = client_info.get('client_secret')
                 self.client_id = client_info.get('client_id')  # Use server-assigned ID
-                print(f"\n✅ Client registered successfully!")
+                print("\n✅ Client registered successfully!")
                 print(f"   Client ID: {self.client_id}")
                 print(f"   Client Secret: {self.client_secret}")
-                
+
                 # Save credentials to file for future use
                 self.save_credentials(self.client_id, self.client_secret)
-                
+
                 print(f"\n💡 Credentials saved to {self.credentials_file}")
-                print(f"💡 Next run will automatically use these credentials!")
+                print("💡 Next run will automatically use these credentials!")
                 return True
             elif response.status_code == 409:
                 # Client already exists, try to use existing one
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n⚠️  Client registration failed (max clients reached)")
-                print(f"💡 Attempting to use existing client...")
-                
+                print("\n⚠️  Client registration failed (max clients reached)")
+                print("💡 Attempting to use existing client...")
+
                 # Try to get token with a known existing client
                 existing_client_id = "bld_daa6c90eff86b1036c9f922a098562e5"
                 existing_client_secret = "bld_s_bUrHRr663yUldYraSQ1sDEWyR7x2x_6gPrVomUpnFtw"
-                
+
                 # Test if existing client works
                 token_data = {
                     "grant_type": "client_credentials",
                     "client_id": existing_client_id,
                     "client_secret": existing_client_secret
                 }
-                
+
                 token_response = requests.post(
                     f"{self.base_url}/api/v1/auth/token",
                     data=token_data,
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    timeout=30,
                     verify=False
                 )
-                
+
                 if token_response.status_code == 200:
                     self.client_id = existing_client_id
                     self.client_secret = existing_client_secret
-                    print(f"✅ Using existing client!")
+                    print("✅ Using existing client!")
                     print(f"   Client ID: {self.client_id}")
                     print(f"   Client Secret: {self.client_secret}")
-                    print(f"\n💡 These credentials are working for this session")
+                    print("\n💡 These credentials are working for this session")
                     return True
                 else:
-                    print(f"❌ Existing client also failed")
+                    print("❌ Existing client also failed")
                     return False
             else:
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n❌ Registration failed")
+                print("\n❌ Registration failed")
                 return False
-                
+
         except Exception as e:
             print(f"\n❌ Error: {e}")
             return False
-    
+
     def get_access_token(self):
         """Get JWT access token."""
         print("\n" + "="*60)
         print("🔑 STEP 2: Get Access Token")
         print("="*60)
-        
+
         token_data = {
             "grant_type": "client_credentials",
             "client_id": self.client_id,
             "client_secret": self.client_secret
         }
-        
+
         print(f"📡 Endpoint: POST {self.base_url}/api/v1/auth/token")
-        print(f"📋 Headers:")
-        print(f"   Content-Type: application/x-www-form-urlencoded")
-        print(f"📋 Request Body:")
-        print(f"   grant_type=client_credentials")
+        print("📋 Headers:")
+        print("   Content-Type: application/x-www-form-urlencoded")
+        print("📋 Request Body:")
+        print("   grant_type=client_credentials")
         print(f"   client_id={self.client_id}")
         print(f"   client_secret={self.client_secret[:8]}...{self.client_secret[-4:]}")
-        
+
         self.wait_for_enter("Press ENTER to get access token...")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/api/v1/auth/token",
                 data=token_data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=30,
                 verify=False
             )
-            
+
             print(f"\n✅ Response Status: {response.status_code}")
-            
+
             if response.status_code in [200, 201]:
                 token_info = response.json()
                 self.access_token = token_info.get("access_token")
-                
+
                 # Mask token for display
                 display_info = token_info.copy()
                 if 'access_token' in display_info:
                     display_info['access_token'] = display_info['access_token'][:20] + "..." + display_info['access_token'][-10:]
-                
-                print(f"📋 Response Body:")
+
+                print("📋 Response Body:")
                 print(json.dumps(display_info, indent=2))
-                print(f"\n✅ Access token obtained!")
+                print("\n✅ Access token obtained!")
                 return True
             else:
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n❌ Token request failed")
-                
+                print("\n❌ Token request failed")
+
                 # Check if this is an authentication error (401/403)
                 if response.status_code in [401, 403]:
-                    print(f"\n🔄 The access token request failed with authentication error.")
-                    print(f"💡 This might be due to expired or invalid client credentials.")
+                    print("\n🔄 The access token request failed with authentication error.")
+                    print("💡 This might be due to expired or invalid client credentials.")
                     return "retry_register"
-                
+
                 return False
-                
+
         except Exception as e:
             print(f"\n❌ Error: {e}")
             return False
-    
+
     def create_job(self):
         """Create a job for parse-catalog."""
         print("\n" + "="*60)
         print("🧾 STEP 3: Create Job")
         print("="*60)
-        
+
         job_data = {
             "correlation_id": self.correlation_id,
             "client_id": self.client_id
         }
-        
+
         idempotency_key = str(uuid.uuid4())
-        
+
         print(f"📡 Endpoint: POST {self.base_url}/api/v1/jobs")
-        print(f"📋 Headers:")
-        print(f"   Content-Type: application/json")
+        print("📋 Headers:")
+        print("   Content-Type: application/json")
         print(f"   Authorization: Bearer {self.access_token[:20]}...{self.access_token[-10:]}")
         print(f"   Idempotency-Key: {idempotency_key}")
-        print(f"📋 Request Body:")
+        print("📋 Request Body:")
         print(json.dumps(job_data, indent=2))
-        
+
         self.wait_for_enter("Press ENTER to create job...")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/api/v1/jobs",
@@ -400,94 +404,100 @@ class ParseCatalogDemo:
                     "Authorization": f"Bearer {self.access_token}",
                     "Idempotency-Key": idempotency_key
                 },
+                timeout=30,
                 verify=False
             )
-            
+
             print(f"\n✅ Response Status: {response.status_code}")
-            
+
             if response.status_code in [200, 201]:
                 job_info = response.json()
                 self.job_id = job_info.get("job_id")
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(json.dumps(job_info, indent=2))
                 print(f"\n✅ Job created: {self.job_id}")
                 return True
             else:
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n❌ Job creation failed")
+                print("\n❌ Job creation failed")
                 return False
-                
+
         except Exception as e:
             print(f"\n❌ Error: {e}")
             return False
-    
+
     def get_job_info(self):
         """Get job information using GET /api/v1/jobs/{job_id}."""
         print("\n" + "="*60)
         print("📋 Job Status Check")
         print("="*60)
-        
+
         print(f"📡 Endpoint: GET {self.base_url}/api/v1/jobs/{self.job_id}")
-        print(f"📋 Headers:")
+        print("📋 Headers:")
         print(f"   Authorization: Bearer {self.access_token[:20]}...{self.access_token[-10:]}")
-        
+
         try:
             response = requests.get(
                 f"{self.base_url}/api/v1/jobs/{self.job_id}",
                 headers={"Authorization": f"Bearer {self.access_token}"},
+                timeout=30,
                 verify=False
             )
-            
+
             print(f"\n✅ Response Status: {response.status_code}")
-            
+
             if response.status_code == 200:
                 job_info = response.json()
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(json.dumps(job_info, indent=2))
-                
+
                 # Show stage summary
                 stages = job_info.get("stages", [])
-                print(f"\n📊 Stage Summary:")
+                print("\n📊 Stage Summary:")
                 for stage in stages:
                     status_emoji = "✅" if stage.get("stage_state") == "COMPLETED" else "⏳" if stage.get("stage_state") == "PENDING" else "❌"
-                    print(f"   {status_emoji} {stage.get('stage_name')}: {stage.get('stage_state')}")
-                
+                    status_emoji = (
+                        "✅" if stage.get("stage_state") == "COMPLETED"
+                        else "⏳" if stage.get("stage_state") == "PENDING"
+                        else "❌"
+                    )
+
                 return job_info
             else:
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n❌ Failed to get job info")
+                print("\n❌ Failed to get job info")
                 return None
-                
+
         except Exception as e:
             print(f"\n❌ Error: {e}")
             return None
-    
+
     def parse_catalog(self):
         """Parse the catalog file."""
         print("\n" + "="*60)
         print("📝 STEP 4: Parse Catalog")
         print("="*60)
-        
+
         # Use the configured catalog file
         catalog_file = self.catalog_file
-        
+
         if not catalog_file.exists():
             print(f"❌ Catalog file not found: {catalog_file}")
             return False
-        
+
         print(f"ðŸ“ Catalog File: {catalog_file}")
         print(f"📊 File Size: {catalog_file.stat().st_size:,} bytes")
-        
+
         print(f"\n📡 Endpoint: POST {self.base_url}/api/v1/jobs/{self.job_id}/stages/parse-catalog")
-        print(f"📋 Headers:")
+        print("📋 Headers:")
         print(f"   Authorization: Bearer {self.access_token[:20]}...{self.access_token[-10:]}")
-        print(f"📋 Files:")
+        print("📋 Files:")
         print(f"   file=@{catalog_file.name}")
-        
+
         self.wait_for_enter("Press ENTER to parse catalog...")
-        
+
         try:
             with open(catalog_file, 'rb') as f:
                 files = {'file': (catalog_file.name, f, 'application/json')}
@@ -495,87 +505,89 @@ class ParseCatalogDemo:
                     f"{self.base_url}/api/v1/jobs/{self.job_id}/stages/parse-catalog",
                     files=files,
                     headers={"Authorization": f"Bearer {self.access_token}"},
+                    timeout=60,  # Longer timeout for file upload
                     verify=False
                 )
-            
-            print(f"\n✅ Response Status: {response.status_code}")
-            
-            if response.status_code in [200, 201]:
-                result = response.json()
-                print(f"📋 Response Body:")
-                print(json.dumps(result, indent=2))
-                print(f"\n✅ Parse catalog successful!")
-                
-                # Get job info after parse catalog
-                self.get_job_info()
-                return True
-            else:
-                print(f"📋 Response Body:")
-                print(response.text)
-                print(f"\n❌ Parse catalog failed")
-                return False
-                
-        except Exception as e:
-            print(f"\n❌ Error: {e}")
+
+                print(f"\n✅ Response Status: {response.status_code}")
+
+                if response.status_code in [200, 201]:
+                    result = response.json()
+                    print("📋 Response Body:")
+                    print(json.dumps(result, indent=2))
+                    print("\n✅ Parse catalog successful!")
+
+                    # Get job info after parse catalog
+                    self.get_job_info()
+                    return True
+                else:
+                    print("📋 Response Body:")
+                    print(response.text)
+                    print("\n❌ Parse catalog failed!")
+                    return False
+
+        except Exception as exc:
+            print(f"\n❌ Error: {exc}")
             return False
-    
+
     def generate_input_files(self):
         """Generate input files using the parsed catalog."""
         print("\n" + "="*60)
         print("⚙️  STEP 5: Generate Input Files")
         print("="*60)
-        
+
         print(f"\n📡 Endpoint: POST {self.base_url}/api/v1/jobs/{self.job_id}/stages/generate-input-files")
-        print(f"📋 Headers:")
+        print("📋 Headers:")
         print(f"   Authorization: Bearer {self.access_token[:20]}...{self.access_token[-10:]}")
-        print(f"📋 Request Body: (empty, uses default adapter policy)")
-        
+        print("📋 Request Body: (empty, uses default adapter policy)")
+
         self.wait_for_enter("Press ENTER to generate input files...")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/api/v1/jobs/{self.job_id}/stages/generate-input-files",
                 headers={"Authorization": f"Bearer {self.access_token}"},
+                timeout=30,
                 verify=False
             )
-            
+
             print(f"\n✅ Response Status: {response.status_code}")
-            
+
             if response.status_code in [200, 201]:
                 result = response.json()
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(json.dumps(result, indent=2))
-                print(f"\n✅ Generate input files successful!")
-                
+                print("\n✅ Generate input files successful!")
+
                 # Get job info after generate input files
                 self.get_job_info()
                 return True
             else:
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n❌ Generate input files failed")
+                print("\n❌ Generate input files failed")
                 return False
-                
+
         except Exception as e:
             print(f"\n❌ Error: {e}")
             return False
-    
+
     def show_artifacts(self):
         """Show generated artifacts using tree command."""
         print("\n" + "="*60)
         print("📦 STEP 6: View Generated Artifacts")
         print("="*60)
-        
+
         catalog_artifact_path = Path(self.build_stream_artifact_root) / "catalog"
         input_files_artifact_path = Path(self.build_stream_artifact_root) / "input-files"
         job_id_artifact_path = Path(self.build_stream_artifact_root) / self.job_id
-        
+
         print(f"📂 Catalog artifacts: {catalog_artifact_path}")
         print(f"📂 Input files artifacts: {input_files_artifact_path}")
         print(f"📂 Job ID artifacts: {job_id_artifact_path}")
-        
+
         self.wait_for_enter("Press ENTER to view artifacts...")
-        
+
         # Show catalog artifacts
         if catalog_artifact_path.exists():
             print("\n📦 Catalog Artifacts:")
@@ -583,7 +595,8 @@ class ParseCatalogDemo:
                 result = subprocess.run(
                     ["tree", "-L", "2", "-h", str(catalog_artifact_path)],
                     capture_output=True,
-                    text=True
+                    text=True,
+                    check=True
                 )
                 if result.returncode == 0:
                     print(result.stdout)
@@ -593,7 +606,7 @@ class ParseCatalogDemo:
                 self._fallback_artifact_list(catalog_artifact_path)
         else:
             print("\n❌ No catalog artifacts directory found")
-        
+
         # Show input files artifacts
         if input_files_artifact_path.exists():
             print("\n📦 Input Files Artifacts:")
@@ -601,7 +614,8 @@ class ParseCatalogDemo:
                 result = subprocess.run(
                     ["tree", "-L", "2", "-h", str(input_files_artifact_path)],
                     capture_output=True,
-                    text=True
+                    text=True,
+                    check=True
                 )
                 if result.returncode == 0:
                     print(result.stdout)
@@ -611,7 +625,7 @@ class ParseCatalogDemo:
                 self._fallback_artifact_list(input_files_artifact_path)
         else:
             print("\n❌ No input files artifacts directory found")
-        
+
         # Show job ID artifacts
         if job_id_artifact_path.exists():
             print("\n📦 Job ID Artifacts:")
@@ -629,10 +643,10 @@ class ParseCatalogDemo:
                 self._fallback_artifact_list(job_id_artifact_path)
         else:
             print(f"\n❌ Job ID artifacts directory not found: {job_id_artifact_path}")
-        
+
         # Show content preview of the most recent artifacts
         self._show_latest_artifacts_preview(catalog_artifact_path, input_files_artifact_path)
-    
+
     def _fallback_artifact_list(self, artifact_path):
         """Fallback method to list artifacts when tree command is not available."""
         artifacts = sorted(artifact_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
@@ -642,7 +656,7 @@ class ParseCatalogDemo:
                 for f in artifact_dir.iterdir():
                     size = f.stat().st_size
                     print(f"   📝 {f.name} ({size:,} bytes)")
-    
+
     def _show_latest_artifacts_preview(self, catalog_path, input_files_path):
         """Show content preview of the most recent artifacts."""
         # Show latest catalog artifact
@@ -651,7 +665,7 @@ class ParseCatalogDemo:
             if catalog_artifacts:
                 latest_catalog = catalog_artifacts[0]
                 print(f"\n📋 Latest Catalog Artifact: {latest_catalog.name}")
-                
+
                 for f in latest_catalog.iterdir():
                     if f.name.endswith('.bin'):
                         print(f"\n📝 Content preview of {f.name}:")
@@ -674,14 +688,14 @@ class ParseCatalogDemo:
                                 print(result.stdout)
                         except:
                             print("   [unable to list archive contents]")
-        
+
         # Show latest input files artifact
         if input_files_path.exists():
             input_artifacts = sorted(input_files_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
             if input_artifacts:
                 latest_input = input_artifacts[0]
                 print(f"\n📋 Latest Input Files Artifact: {latest_input.name}")
-                
+
                 for f in latest_input.iterdir():
                     if f.name.endswith('.zip'):
                         print(f"\n📦 Archive contents of {f.name}:")
@@ -695,48 +709,49 @@ class ParseCatalogDemo:
                                 print(result.stdout)
                         except:
                             print("   [unable to list archive contents]")
-    
+
     def create_local_repository(self):
         """Create local repository using the generated input files."""
         print("\n" + "="*60)
         print("🏗️  STEP 7: Create Local Repository")
         print("="*60)
-        
+
         print(f"\n📡 Endpoint: POST {self.base_url}/api/v1/jobs/{self.job_id}/stages/create-local-repository")
-        print(f"📋 Headers:")
+        print("📋 Headers:")
         print(f"   Authorization: Bearer {self.access_token[:20]}...{self.access_token[-10:]}")
-        print(f"📋 Request Body: (empty, uses job context from previous stages)")
-        
+        print("📋 Request Body: (empty, uses job context from previous stages)")
+
         self.wait_for_enter("Press ENTER to create local repository...")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/api/v1/jobs/{self.job_id}/stages/create-local-repository",
                 headers={"Authorization": f"Bearer {self.access_token}"},
+                timeout=30,
                 verify=False
             )
-            
+
             print(f"\n✅ Response Status: {response.status_code}")
-            
+
             if response.status_code in [200, 201, 202]:
                 result = response.json()
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(json.dumps(result, indent=2))
-                print(f"\n✅ Create local repository successful!")
-                
+                print("\n✅ Create local repository successful!")
+
                 # Get job info after create local repository
                 self.get_job_info()
                 return True
             else:
-                print(f"📋 Response Body:")
+                print("📋 Response Body:")
                 print(response.text)
-                print(f"\n❌ Create local repository failed")
+                print("\n❌ Create local repository failed")
                 return False
-                
+
         except Exception as e:
             print(f"\n❌ Error: {e}")
             return False
-    
+
     def _trigger_build_image_stage(self, step_label: str, architecture: str, functional_groups, inventory_host: str | None):
         print("\n" + "="*60)
         print(step_label)
@@ -748,7 +763,7 @@ class ParseCatalogDemo:
 
         payload = {
             "architecture": architecture,
-            "image_key": f"demo-build-image",
+            "image_key": "demo-build-image",
             "functional_groups": functional_groups,
         }
 
@@ -768,6 +783,7 @@ class ParseCatalogDemo:
                 f"{self.base_url}/api/v1/jobs/{self.job_id}/stages/build-image",
                 json=payload,
                 headers={"Authorization": f"Bearer {self.access_token}"},
+                timeout=60,  # Longer timeout for build operations
                 verify=False,
             )
 
@@ -789,6 +805,7 @@ class ParseCatalogDemo:
             return False
 
     def trigger_build_image_x86_64_stage(self):
+        """Trigger build image stage for x86_64 architecture."""
         groups = [
             "service_kube_control_plane_first_x86_64",
             "service_kube_control_plane_x86_64",
@@ -806,6 +823,7 @@ class ParseCatalogDemo:
         )
 
     def trigger_build_image_aarch64_stage(self):
+        """Trigger build image stage for aarch64 architecture."""
         groups = [
             "slurm_node_aarch64",
             "login_node_aarch64",
@@ -823,28 +841,28 @@ class ParseCatalogDemo:
         print("\n" + "="*60)
         print("🚀 Parse-Catalog Interactive Demo")
         print("="*60)
-        print(f"📋 This demo will execute the complete parse-catalog workflow")
-        print(f"📋 using the real catalog_rhel.json file")
-        print(f"  Press ENTER at each step to proceed")
+        print("📋 This demo will execute the complete parse-catalog workflow")
+        print("📋 using the real catalog_rhel.json file")
+        print("  Press ENTER at each step to proceed")
         print("="*60)
         print(f"\n🔑 Demo Client ID: {self.client_id}")
         print(f"🔑 Correlation ID: {self.correlation_id}")
-        
+
         try:
             # Cleanup artifacts if requested
             if self.cleanup:
                 self.cleanup_artifacts()
-            
+
             # Step 0: Health check
             if not self.check_server_health():
                 return
-            
+
             # Step 1: Register client (with retry loop)
             while True:
                 # Step 1: Register client
                 if not self.register_client():
                     return
-                
+
                 # Step 2: Get access token
                 token_result = self.get_access_token()
                 if token_result == True:
@@ -857,35 +875,35 @@ class ParseCatalogDemo:
                         if user_input in ['yes', 'y', 'no', 'n']:
                             break
                         print("   Please enter 'yes' or 'no'")
-                    
+
                     if user_input in ['yes', 'y']:
-                        print(f"\n🔄 Attempting to register new client...")
+                        print("\n🔄 Attempting to register new client...")
                         # Clear existing credentials and continue the loop to retry
                         self.client_id = None
                         self.client_secret = None
                         continue
                     else:
-                        print(f"\n⚠️  Continuing without valid credentials - demo cannot proceed.")
+                        print("\n⚠️  Continuing without valid credentials - demo cannot proceed.")
                         return
                 else:
                     # Other failure, exit
                     return
-            
+
             # Step 3: Create job
             if not self.create_job():
                 return
-            
+
             # Step 4: Parse catalog
             if not self.parse_catalog():
                 return
-            
+
             # Step 5: Generate input files
             if not self.generate_input_files():
                 return
-            
+
             # Step 6: Show artifacts
             self.show_artifacts()
-            
+
             # Step 7: Create local repository
             if not self.create_local_repository():
                 return
@@ -906,10 +924,10 @@ class ParseCatalogDemo:
             print(f"📊 Correlation ID: {self.correlation_id}")
             print(f"📦 Catalog Artifacts: {Path(self.build_stream_artifact_root) / 'catalog'}/")
             print(f"📦 Input Files Artifacts: {Path(self.build_stream_artifact_root) / 'input-files'}/")
-            print(f"📦 Local Repository: Created via Ansible playbook")
-            print(f"📦 Build Image Stage: Submitted for both x86_64 and aarch64")
+            print("📦 Local Repository: Created via Ansible playbook")
+            print("📦 Build Image Stage: Submitted for both x86_64 and aarch64")
             print("="*60)
-            
+
         except KeyboardInterrupt:
             print("\n\n⚠️ Demo interrupted by user")
         except Exception as e:
@@ -925,20 +943,20 @@ def main():
 Examples:
     # Register a new client
     python buildstream_demo.py
-    
+
     # Clean artifacts and register new client
     python buildstream_demo.py --cleanup
      """
     )
-    
+
     parser.add_argument(
         "--cleanup",
         action="store_true",
         help="Delete all contents in /opt/omnia/build_stream/artifacts before starting demo"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Create and run demo
     demo = ParseCatalogDemo(cleanup=args.cleanup)
     demo.run_demo()
@@ -946,5 +964,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
-
