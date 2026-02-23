@@ -64,7 +64,7 @@
   ansible.builtin.file:
     path: "/etc/gitlab/initial_root_password"
     state: absent
-  when: 
-    - gitlab_root_password is defined 
+  when:
+    - gitlab_root_password is defined
     - gitlab_root_password | length > 0
   no_log: true
