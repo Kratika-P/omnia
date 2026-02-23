@@ -70,7 +70,6 @@ omnia_credentials:
   prepare_provision:
     mandatory:
       - { username: provision_username }
-      - { password: provision_password }
     conditional_mandatory:
       - username: build_stream_auth_username
         password: build_stream_auth_password
@@ -118,6 +117,3 @@ omnia_credentials:
   ldms:
     mandatory:
       - { password: ldms_sampler_password }
-  gitlab:
-    mandatory:
-      - { password: gitlab_root_password }
