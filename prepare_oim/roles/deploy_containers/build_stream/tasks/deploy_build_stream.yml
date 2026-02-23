@@ -261,17 +261,17 @@
       containers.podman.podman_container_exec:
         name: "{{ build_stream_container_name }}"
         command: >
-          python -m alembic -c /opt/omnia/build_stream/infra/db/alembic.ini upgrade head
+          python -m alembic -c {{ bs_rsync_destination }}infra/db/alembic.ini upgrade head
         env:
           DATABASE_URL: "postgresql://{{ postgres_user }}:{{ postgres_password }}@{{ admin_ip }}:5432/{{ postgres_db_name }}"
-          PYTHONPATH: "/opt/omnia/build_stream"
+          PYTHONPATH: "{{ bs_rsync_destination }}"
       register: alembic_result
       changed_when: "'Running upgrade' in alembic_result.stdout"
 
     - name: Display migration result
       ansible.builtin.debug:
         msg: "Database migrations completed: {{ alembic_result.stdout }}"
-        verbosity: 1
+        verbosity: 2
 
     - name: Configure firewall for omnia_build_stream
       block:
