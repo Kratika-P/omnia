@@ -89,7 +89,16 @@
           Options:
             1. Press Ctrl+C then 'A' to abort
             2. Press Enter to force removal (jobs will be killed)
-      when: not force_scancel_node
+      when: 
+        - not force_scancel_node
+        - not (enable_build_stream | default(false) | bool)
+
+    - name: Auto-force removal when build stream is enabled
+      ansible.builtin.debug:
+        msg: "Build stream is enabled, automatically forcing removal of node {{ node_to_remove }} (jobs will be killed)."
+      when: 
+        - not force_scancel_node
+        - enable_build_stream | default(false) | bool
 
     - name: Force cancel jobs if timeout reached
       ansible.builtin.command: scancel -f -w {{ node_to_remove }}
