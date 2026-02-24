@@ -141,8 +141,7 @@ class NfsInputRepository(BuildStreamConfigRepository, BuildImageInventoryReposit
                 logger.warning("Empty build_stream_config.yml for job %s", job_id)
                 return None
                 
-            # Try both key names for backward compatibility
-            inventory_host = config.get("aarch64_inventory_host_ip") or config.get("aarch64_inventory_host")
+            inventory_host = config.get("aarch64_inventory_host_ip")
             if inventory_host:
                 logger.info(
                     "Retrieved inventory_host for job %s: %s",
