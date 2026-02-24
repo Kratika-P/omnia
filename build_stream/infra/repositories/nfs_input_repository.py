@@ -141,7 +141,8 @@ class NfsInputRepository(BuildStreamConfigRepository, BuildImageInventoryReposit
                 logger.warning("Empty build_stream_config.yml for job %s", job_id)
                 return None
                 
-            inventory_host = config.get("aarch64_inventory_host")
+            # Try both key names for backward compatibility
+            inventory_host = config.get("aarch64_inventory_host_ip") or config.get("aarch64_inventory_host")
             if inventory_host:
                 logger.info(
                     "Retrieved inventory_host for job %s: %s",
@@ -150,7 +151,7 @@ class NfsInputRepository(BuildStreamConfigRepository, BuildImageInventoryReposit
                 )
                 return InventoryHost(str(inventory_host))
             
-            logger.info("No aarch64_inventory_host configured for job %s", job_id)
+            logger.info("No aarch64_inventory_host_ip configured for job %s", job_id)
             return None
             
         except yaml.YAMLError as exc:
