@@ -27,6 +27,14 @@
     mode: push
     archive: true
     checksum: true
+    rsync_opts:
+      - "--exclude=.venv"
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=.pytest_cache"
+      - "--exclude=.mypy_cache"
+      - "--exclude=.coverage"
+      - "--exclude=htmlcov"
   delegate_to: localhost
 
 - name: Enable playbook watcher service
