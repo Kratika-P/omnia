@@ -14,7 +14,6 @@
 
 """FastAPI routes for job lifecycle operations."""
 
-import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -39,6 +38,7 @@ from orchestrator.jobs.commands import CreateJobCommand
 from orchestrator.jobs.use_cases import CreateJobUseCase
 
 from api.dependencies import verify_token
+from api.logging_utils import create_job_log_file, log_secure_info, remove_job_logger
 from api.jobs.dependencies import (
     get_audit_repo,
     get_correlation_id,
@@ -54,8 +54,6 @@ from api.jobs.schemas import (
     GetJobResponse,
     StageResponse,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -111,12 +109,11 @@ async def create_job(
     """Create a job, handling idempotency and domain errors."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     client_id = ClientId(token_data["client_id"])
-    
-    logger.info(
-        "Create job request: client_id=%s, correlation_id=%s, idempotency_key=%s",
-        client_id.value,
-        correlation_id.value,
-        idempotency_key,
+    log_secure_info(
+        "info",
+        f"Create job request: client_name={request.client_name}, "
+        f"correlation_id={correlation_id.value}",
+        identifier=idempotency_key,
     )
 
     try:
@@ -127,12 +124,33 @@ async def create_job(
             correlation_id=correlation_id,
             idempotency_key=IdempotencyKey(idempotency_key),
         )
+        log_secure_info(
+            "debug",
+            f"Create job executing: client_id={client_id.value}, "
+            f"client_name={request.client_name}, idempotency_key={idempotency_key}",
+        )
         result = use_case.execute(command)
         # Set status code based on whether job was newly created
         if result.is_new:
             response.status_code = status.HTTP_201_CREATED
+            log_path = create_job_log_file(result.job_id)
+            log_secure_info(
+                "info",
+                f"Job created: job_id={result.job_id}, "
+                f"client_name={request.client_name}, log_file={log_path}",
+                identifier=correlation_id.value,
+                job_id=result.job_id,
+            )
         else:
             response.status_code = status.HTTP_200_OK
+            log_secure_info(
+                "info",
+                f"Idempotent replay: job_id={result.job_id}, "
+                f"job_state={result.job_state}",
+                identifier=correlation_id.value,
+                job_id=result.job_id,
+            )
+
         stages_entities = stage_repo.find_all_by_job(JobId(result.job_id))  # pylint: disable=no-member
         stages = [
             StageResponse(
@@ -145,6 +163,13 @@ async def create_job(
             )
             for s in stages_entities
         ]
+        log_secure_info(
+            "info",
+            f"Create job response: job_id={result.job_id}, "
+            f"job_state={result.job_state}, status=201",
+            job_id=result.job_id,
+            end_section=True,
+        )
         return CreateJobResponse(
             job_id=result.job_id,
             correlation_id=correlation_id.value,
@@ -154,7 +179,7 @@ async def create_job(
         )
 
     except IdempotencyConflictError as e:
-        logger.warning("Idempotency conflict occurred")
+        log_secure_info("warning", f"Create job failed: reason=idempotency_conflict, status=409", job_id=None, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_response(
@@ -165,7 +190,7 @@ async def create_job(
         ) from e
 
     except Exception as e:
-        logger.exception("Unexpected error creating job")
+        log_secure_info("error", "Create job failed: reason=unexpected_error, status=500", exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(
@@ -199,11 +224,11 @@ async def get_job(
 
     client_id = ClientId(token_data["client_id"])
 
-    logger.info(
-        "Get job request: job_id=%s, client_id=%s, correlation_id=%s",
-        job_id,
-        client_id.value,
-        correlation_id.value,
+    log_secure_info(
+        "info",
+        f"Get job request: job_id={job_id}, correlation_id={correlation_id.value}",
+        identifier=client_id.value,
+        job_id=job_id,
     )
 
     try:
@@ -219,6 +244,11 @@ async def get_job(
         ) from e
 
     try:
+        log_secure_info(
+            "debug",
+            f"Get job lookup: job_id={job_id}, client_id={client_id.value}",
+            job_id=job_id,
+        )
         job = job_repo.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None or job.tombstoned:
             raise JobNotFoundError(job_id, correlation_id.value)
@@ -239,7 +269,7 @@ async def get_job(
             )
             for s in stages_entities
         ]
-        
+
         # Get audit events for state change timestamps
         audit_events = audit_repo.find_by_job(validated_job_id)  # pylint: disable=no-member
         state_timestamps = {}
@@ -248,11 +278,17 @@ async def get_job(
                 state_name = event.event_type.replace("JOB_", "")
                 if state_name in ["CREATED", "IN_PROGRESS", "COMPLETED", "FAILED", "CANCELLED"]:
                     state_timestamps[state_name] = event.timestamp.isoformat() + "Z"
-        
+
         # Always include creation timestamp
         if "CREATED" not in state_timestamps and job.created_at:
             state_timestamps["CREATED"] = job.created_at.isoformat() + "Z"
-        
+
+        log_secure_info(
+            "info",
+            f"Get job success: job_id={job_id}, job_state={_map_job_state_to_api_state(job.job_state)}, status=200",
+            job_id=job_id,
+            end_section=True,
+        )
         return GetJobResponse(
             job_id=str(job.job_id),
             correlation_id=correlation_id.value,
@@ -265,7 +301,7 @@ async def get_job(
         )
 
     except JobNotFoundError as e:
-        logger.warning("Job not found: %s", job_id)
+        log_secure_info("warning", f"Get job failed: job_id={job_id}, reason=not_found, status=404", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_build_error_response(
@@ -276,7 +312,7 @@ async def get_job(
         ) from e
 
     except Exception as e:
-        logger.exception("Unexpected error retrieving job")
+        log_secure_info("error", f"Get job failed: job_id={job_id}, reason=unexpected_error, status=500", job_id=job_id, exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(
@@ -308,11 +344,11 @@ async def delete_job(
     """Delete (tombstone) a job for the requesting client if it exists."""
     client_id = ClientId(token_data["client_id"])
 
-    logger.info(
-        "Delete job request: job_id=%s, client_id=%s, correlation_id=%s",
-        job_id,
-        client_id.value,
-        correlation_id.value,
+    log_secure_info(
+        "info",
+        f"Delete job request: job_id={job_id}, correlation_id={correlation_id.value}",
+        identifier=client_id.value,
+        job_id=job_id,
     )
 
     try:
@@ -328,6 +364,11 @@ async def delete_job(
         ) from e
 
     try:
+        log_secure_info(
+            "debug",
+            f"Delete job lookup: job_id={job_id}, client_id={client_id.value}",
+            job_id=job_id,
+        )
         job = job_repo.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None:
             raise JobNotFoundError(job_id, correlation_id.value)
@@ -339,13 +380,24 @@ async def delete_job(
         job_repo.save(job)  # pylint: disable=no-member
 
         stages_entities = stage_repo.find_all_by_job(validated_job_id)  # pylint: disable=no-member
+        cancelled_count = 0
         for stage in stages_entities:
             if not stage.stage_state.is_terminal():
                 stage.cancel()
                 stage_repo.save(stage)  # pylint: disable=no-member
+                cancelled_count += 1
+
+        log_secure_info(
+            "info",
+            f"Delete job success: job_id={job_id}, "
+            f"stages_cancelled={cancelled_count}, status=204",
+            job_id=job_id,
+            end_section=True,
+        )
+        remove_job_logger(job_id)
 
     except JobNotFoundError as e:
-        logger.warning("Job not found: %s", job_id)
+        log_secure_info("warning", f"Delete job failed: job_id={job_id}, reason=not_found, status=404", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_build_error_response(
@@ -356,7 +408,7 @@ async def delete_job(
         ) from e
 
     except InvalidStateTransitionError as e:
-        logger.warning("Invalid state transition occurred")
+        log_secure_info("warning", f"Delete job failed: job_id={job_id}, reason=invalid_state_transition, status=400", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_response(
@@ -367,7 +419,7 @@ async def delete_job(
         ) from e
 
     except Exception as e:
-        logger.exception("Unexpected error deleting job")
+        log_secure_info("error", f"Delete job failed: job_id={job_id}, reason=unexpected_error, status=500", job_id=job_id, exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(

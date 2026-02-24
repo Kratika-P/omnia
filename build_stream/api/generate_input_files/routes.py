@@ -14,15 +14,15 @@
 
 """FastAPI routes for GenerateInputFiles API."""
 
-import logging
 import uuid
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 
 from api.dependencies import require_catalog_read, verify_token
-from api.generate_input_files.dependencies import get_generate_input_files_use_case
 from container import container
+from api.generate_input_files.dependencies import get_generate_input_files_use_case
+from api.logging_utils import log_secure_info
 from core.artifacts.exceptions import ArtifactNotFoundError
 from core.artifacts.value_objects import SafePath
 from core.catalog.exceptions import (
@@ -47,8 +47,6 @@ from api.generate_input_files.schemas import (
     GenerateInputFilesRequest,
     GenerateInputFilesResponse,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Input File Generation"])
 
@@ -85,15 +83,21 @@ async def generate_input_files(
         GenerateInputFilesResponse with generated config details.
     """
     correlation_id = str(uuid.uuid4())
-    logger.info(
-        "Received generate-input-files request for job: %s (correlation: %s)",
-        job_id,
-        correlation_id,
+
+    adapter_path_str = (
+        request_body.adapter_policy_path if request_body and request_body.adapter_policy_path else "default"
+    )
+    log_secure_info(
+        "info",
+        f"Generate-input-files request: job_id={job_id}, "
+        f"adapter_policy={adapter_path_str}, correlation_id={correlation_id}",
+        job_id=job_id,
     )
 
     try:
         validated_job_id = JobId(job_id)
     except ValueError as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=invalid_job_id, status=400", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "INVALID_JOB_ID", "message": str(e)},
@@ -106,6 +110,7 @@ async def generate_input_files(
                 request_body.adapter_policy_path
             )
         except ValueError as e:
+            log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=invalid_policy_path, status=400", job_id=job_id, end_section=True)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": "INVALID_POLICY_PATH", "message": str(e)},
@@ -118,7 +123,22 @@ async def generate_input_files(
     )
 
     try:
+        use_case = container.generate_input_files_use_case()
         result = use_case.execute(command)
+        log_secure_info(
+            "debug",
+            f"Generate-input-files executing: job_id={job_id}, "
+            f"adapter_policy={adapter_path_str}, correlation_id={correlation_id}",
+            job_id=job_id,
+        )
+
+        log_secure_info(
+            "info",
+            f"Generate-input-files success: job_id={job_id}, "
+            f"config_file_count={result.config_file_count}, stage_state={result.stage_state}, status=200",
+            job_id=job_id,
+            end_section=True,
+        )
 
         return GenerateInputFilesResponse(
             job_id=result.job_id,
@@ -136,24 +156,28 @@ async def generate_input_files(
         )
 
     except JobNotFoundError as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=job_not_found, status=404", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "JOB_NOT_FOUND", "message": e.message},
         ) from e
 
     except TerminalStateViolationError as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=terminal_state, status=409", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "TERMINAL_STATE", "message": e.message},
         ) from e
 
     except StageAlreadyCompletedError as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=stage_already_completed, status=409", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "STAGE_ALREADY_COMPLETED", "message": e.message},
         ) from e
 
     except UpstreamStageNotCompletedError as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=upstream_not_completed, status=422", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -163,6 +187,7 @@ async def generate_input_files(
         ) from e
 
     except ArtifactNotFoundError as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=upstream_artifact_not_found, status=422", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -172,13 +197,14 @@ async def generate_input_files(
         ) from e
 
     except (AdapterPolicyValidationError, ConfigGenerationError) as e:
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=config_generation_failed, status=500", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "CONFIG_GENERATION_FAILED", "message": e.message},
         ) from e
 
     except Exception as e:
-        logger.exception("Unexpected error in generate-input-files")
+        log_secure_info("error", f"Generate-input-files failed: job_id={job_id}, reason=unexpected_error, status=500", job_id=job_id, exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "INTERNAL_ERROR", "message": "An unexpected error occurred"},
