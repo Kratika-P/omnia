@@ -192,7 +192,7 @@ class NfsInputRepository(BuildStreamConfigRepository, BuildImageInventoryReposit
             inventory_file = inventory_dir / "inv"
 
             # Create inventory content
-            inventory_content = f"[build_hosts]\n{inventory_host.value}\n"
+            inventory_content = f"[admin_aarch64]\n{inventory_host.value}\n"
 
             # Write inventory file
             with open(inventory_file, "w", encoding="utf-8") as f:
