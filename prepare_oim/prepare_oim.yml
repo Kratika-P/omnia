@@ -64,7 +64,6 @@
               }} | unique
 
         - name: Check telemetry configuration and add idrac_telemetry tag if enabled
-          when: "'telemetry' in sw_names"
           block:
             - name: Check if telemetry_config.yml exists
               ansible.builtin.stat:
