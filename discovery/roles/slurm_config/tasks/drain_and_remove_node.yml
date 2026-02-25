@@ -89,14 +89,14 @@
           Options:
             1. Press Ctrl+C then 'A' to abort
             2. Press Enter to force removal (jobs will be killed)
-      when: 
+      when:
         - not force_scancel_node
         - not (enable_build_stream | default(false) | bool)
 
     - name: Auto-force removal when build stream is enabled
       ansible.builtin.debug:
-        msg: "Build stream is enabled, automatically forcing removal of node {{ node_to_remove }} (jobs will be killed)."
-      when: 
+        msg: "{{ build_stream_auto_force_node_msg }}"
+      when:
         - not force_scancel_node
         - enable_build_stream | default(false) | bool
 
