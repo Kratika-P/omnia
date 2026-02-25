@@ -52,14 +52,13 @@
         - name: Add service-specific tags based on software presence
           ansible.builtin.set_fact:
             omnia_run_tags: >-
-              {{
-                (omnia_run_tags | default([])) +
-                (['openldap'] if 'openldap' in sw_names else []) +
-                (['slurm'] if 'slurm' in sw_names else []) +
-                (['slurm_custom'] if 'slurm_custom' in sw_names else []) +
-                (['csi_driver_powerscale'] if 'csi_driver_powerscale' in sw_names else []) +
-                (['ldms'] if 'ldms' in sw_names else [])
-              }} | unique
+              {%- set tags = omnia_run_tags | default([]) | list -%}
+              {%- if 'openldap' in sw_names %}{% set _ = tags.append('openldap') %}{% endif -%}
+              {%- if 'slurm' in sw_names %}{% set _ = tags.append('slurm') %}{% endif -%}
+              {%- if 'slurm_custom' in sw_names %}{% set _ = tags.append('slurm_custom') %}{% endif -%}
+              {%- if 'csi_driver_powerscale' in sw_names %}{% set _ = tags.append('csi_driver_powerscale') %}{% endif -%}
+              {%- if 'ldms' in sw_names %}{% set _ = tags.append('ldms') %}{% endif -%}
+              {{ tags | unique }}
 
         - name: Check telemetry configuration and add idrac_telemetry tag if enabled
           block:
@@ -78,7 +77,7 @@
               ansible.builtin.set_fact:
                 omnia_run_tags: >-
                   {{
-                    (omnia_run_tags | default([]) + ['idrac_telemetry']) | unique
+                    (omnia_run_tags | default([]) | list + ['idrac_telemetry']) | unique
                   }}
               when:
                 - telemetry_config_stat.stat.exists
