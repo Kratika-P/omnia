@@ -27,7 +27,6 @@
   tags: always
   tasks:
     - name: Set dynamic run tags including 'prepare_oim'
-      when: not config_file_status | default(false) | bool
       ansible.builtin.set_fact:
         omnia_run_tags: >-
           {{
@@ -39,7 +38,6 @@
         cacheable: true
 
     - name: Read software_config.json to check for additional services
-      when: not config_file_status | default(false) | bool
       block:
         - name: Load software_config.json
           ansible.builtin.include_vars:
