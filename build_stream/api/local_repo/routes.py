@@ -14,7 +14,6 @@
 
 """FastAPI routes for local repository stage operations."""
 
-import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -41,8 +40,6 @@ from core.localrepo.exceptions import (
 )
 from orchestrator.local_repo.commands import CreateLocalRepoCommand
 from orchestrator.local_repo.use_cases import CreateLocalRepoUseCase
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Local Repository"])
 
@@ -90,12 +87,12 @@ def create_local_repository(
     """
     # Extract client_id from validated token data
     client_id = ClientId(token_data["client_id"])
-    
-    logger.info(
-        "Create local repo request: job_id=%s, client_id=%s, correlation_id=%s",
-        job_id,
-        client_id.value,
-        correlation_id.value,
+
+    log_secure_info(
+        "info",
+        f"Create local repo request: job_id={job_id}, correlation_id={correlation_id.value}",
+        identifier=str(client_id.value),
+        job_id=job_id,
     )
 
     try:
@@ -116,7 +113,21 @@ def create_local_repository(
             client_id=client_id,
             correlation_id=correlation_id,
         )
+        log_secure_info(
+            "debug",
+            f"Local repo executing: job_id={job_id}, client_id={client_id.value}, "
+            f"correlation_id={correlation_id.value}",
+            job_id=job_id,
+        )
         result = use_case.execute(command)
+
+        log_secure_info(
+            "info",
+            f"Local repo success: job_id={job_id}, "
+            f"stage={result.stage_name}, stage_status={result.status}, status=202",
+            job_id=job_id,
+            end_section=True,
+        )
 
         return CreateLocalRepoResponse(
             job_id=result.job_id,
@@ -127,7 +138,7 @@ def create_local_repository(
         )
 
     except JobNotFoundError as exc:
-        logger.warning("Job not found: %s", job_id)
+        log_secure_info("warning", f"Local repo failed: job_id={job_id}, reason=job_not_found, status=404", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_build_error_response(
@@ -140,14 +151,15 @@ def create_local_repository(
     except InvalidStateTransitionError as exc:
         log_secure_info(
             "warning",
-            f"Invalid state transition for job {job_id}",
-            str(correlation_id.value),
+            f"Local repo failed: job_id={job_id}, reason=invalid_state_transition, status=409",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_response(
                 "INVALID_STATE_TRANSITION",
-                f"Job {job_id}: {exc.message}",
+                exc.message,
                 correlation_id.value,
             ).model_dump(),
         ) from exc
@@ -155,15 +167,15 @@ def create_local_repository(
     except TerminalStateViolationError as exc:
         log_secure_info(
             "warning",
-            f"Terminal state violation for job {job_id}",
-            str(correlation_id.value),
+            f"Local repo failed: job_id={job_id}, reason=terminal_state, status=412",
+            job_id=job_id,
+            end_section=True,
         )
-        # Provide helpful message for terminal state violations
         if exc.state == "FAILED":
             message = f"Job {job_id} stage is in {exc.state} state and cannot be retried. Please create a new job to proceed."
         else:
             message = f"Job {job_id} stage is in {exc.state} state and cannot be modified."
-        
+
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,
             detail=_build_error_response(
@@ -176,8 +188,9 @@ def create_local_repository(
     except InputFilesMissingError as exc:
         log_secure_info(
             "warning",
-            f"Input files missing for job {job_id}",
-            str(correlation_id.value),
+            f"Local repo failed: job_id={job_id}, reason=input_files_missing, status=400",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -191,8 +204,9 @@ def create_local_repository(
     except InputDirectoryInvalidError as exc:
         log_secure_info(
             "warning",
-            f"Input directory invalid for job {job_id}",
-            str(correlation_id.value),
+            f"Local repo failed: job_id={job_id}, reason=input_directory_invalid, status=400",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -206,8 +220,9 @@ def create_local_repository(
     except QueueUnavailableError as exc:
         log_secure_info(
             "error",
-            f"Queue unavailable for job {job_id}",
-            str(correlation_id.value),
+            f"Local repo failed: job_id={job_id}, reason=queue_unavailable, status=503",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -221,8 +236,9 @@ def create_local_repository(
     except LocalRepoDomainError as exc:
         log_secure_info(
             "error",
-            f"Local repo domain error for job {job_id}",
-            str(correlation_id.value),
+            f"Local repo failed: job_id={job_id}, reason=domain_error, status=500",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -234,7 +250,13 @@ def create_local_repository(
         ) from exc
 
     except Exception as exc:
-        logger.exception("Unexpected error creating local repository stage")
+        log_secure_info(
+            "error",
+            f"Local repo failed: job_id={job_id}, reason=unexpected_error, status=500",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(

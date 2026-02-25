@@ -14,7 +14,6 @@
 
 """FastAPI routes for ParseCatalog API."""
 
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -30,14 +29,13 @@ from api.parse_catalog.service import (
 from core.catalog.exceptions import (
     CatalogParseError,
 )
+from api.logging_utils import log_secure_info
 from core.jobs.exceptions import (
     InvalidStateTransitionError,
     JobNotFoundError,
     StageAlreadyCompletedError,
     TerminalStateViolationError,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Catalog Parsing"])
 
@@ -100,24 +98,36 @@ async def parse_catalog(
     Raises:
         HTTPException: With appropriate status code on failure.
     """
-    logger.info(
-    "Received parse catalog request for file: %s (job: %s)",
-    file.filename,
-    job_id,
-)
-
     try:
         contents = await file.read()
-        
+        log_secure_info(
+            "info",
+            f"Parse-catalog request: job_id={job_id}, "
+            f"filename={file.filename}, size_bytes={len(contents)}",
+            job_id=job_id,
+        )
+        log_secure_info(
+            "debug",
+            f"Parse-catalog executing: job_id={job_id}, "
+            f"filename={file.filename}, size_bytes={len(contents)}, content_type={file.content_type}",
+            job_id=job_id,
+        )
+
         # Create service with injected use case
         service = ParseCatalogService(parse_catalog_use_case=parse_catalog_use_case)
-        
+
         result = await service.parse_catalog(
             filename=file.filename or "unknown.json",
             contents=contents,
             job_id=job_id,  # Pass job_id to service
         )
 
+        log_secure_info(
+            "info",
+            f"Parse-catalog success: job_id={job_id}, status=200",
+            job_id=job_id,
+            end_section=True,
+        )
         response_data = {
             "status": ParseCatalogStatus.SUCCESS.value,
             "message": result.message,
@@ -128,7 +138,7 @@ async def parse_catalog(
         # Handle job_id format validation errors
         error_msg = str(e)
         if "Invalid UUID format" in error_msg or "Invalid job_id format" in error_msg:
-            logger.warning("Invalid job_id format: %s", job_id)
+            log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=invalid_job_id, status=400", job_id=job_id, end_section=True)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -139,7 +149,7 @@ async def parse_catalog(
             ) from e
 
         # Re-raise other ValueError as internal error
-        logger.exception("Unexpected ValueError processing file: %s", file.filename)
+        log_secure_info("error", f"Parse-catalog failed: job_id={job_id}, reason=unexpected_value_error, status=500", job_id=job_id, exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -150,7 +160,7 @@ async def parse_catalog(
         ) from e
 
     except JobNotFoundError as e:
-        logger.warning("Job not found: %s", job_id)
+        log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=job_not_found, status=404", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -161,24 +171,18 @@ async def parse_catalog(
         ) from e
 
     except TerminalStateViolationError as e:
-        logger.warning("Job in terminal state: %s", job_id)
-        # Provide helpful message for terminal state violations
-        if e.state == "FAILED":
-            message = f"Job {job_id} is in {e.state} state and cannot be retried. Reset the job using /jobs/{job_id}/reset endpoint."
-        else:
-            message = f"Job {job_id} is in {e.state} state and cannot be modified."
-        
+        log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=terminal_state, status=412", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,
             detail={
                 "error_code": "PRECONDITION_FAILED",
-                "message": message,
+                "message": f"Job is in terminal state: {job_id}",
                 "correlation_id": "test-correlation-id"
             },
         ) from e
 
     except StageAlreadyCompletedError as e:
-        logger.warning("Stage already completed: %s", job_id)
+        log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=stage_already_completed, status=409", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -189,18 +193,18 @@ async def parse_catalog(
         ) from e
 
     except InvalidStateTransitionError as e:
-        logger.warning("Invalid state transition: %s", str(e))
+        log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=invalid_state_transition, status=409", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "INVALID_STATE_TRANSITION",
-                "message": f"Job {job_id}: {str(e)}",
+                "message": str(e),
                 "correlation_id": "test-correlation-id"
             },
         ) from e
 
     except InvalidFileFormatError as e:
-        logger.warning("Invalid file format: %s", file.filename)
+        log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=invalid_file_format, status=400", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -211,7 +215,7 @@ async def parse_catalog(
         ) from e
 
     except InvalidJSONError as e:
-        logger.warning("Invalid JSON content in file: %s", file.filename)
+        log_secure_info("warning", f"Parse-catalog failed: job_id={job_id}, reason=invalid_json, status=400", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -222,7 +226,7 @@ async def parse_catalog(
         ) from e
 
     except CatalogParseError as e:
-        logger.error("Catalog parsing failed for file: %s", file.filename)
+        log_secure_info("error", f"Parse-catalog failed: job_id={job_id}, reason=catalog_parse_error, status=500", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -233,7 +237,7 @@ async def parse_catalog(
         ) from e
 
     except Exception as e:
-        logger.exception("Unexpected error processing file: %s", file.filename)
+        log_secure_info("error", f"Parse-catalog failed: job_id={job_id}, reason=unexpected_error, status=500", job_id=job_id, exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
