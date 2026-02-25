@@ -14,13 +14,12 @@
 
 """FastAPI routes for OAuth2 authentication endpoints."""
 
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from api.logging_utils import log_secure_info
+from api.logging_utils import log_auth_info
 from api.vault_client import VaultError
 from api.auth.schemas import (
     AuthErrorResponse,
@@ -40,8 +39,6 @@ from api.auth.service import (
     RegistrationDisabledError,
     TokenCreationError,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -74,8 +71,10 @@ def _verify_basic_auth(
             credentials.username,
             credentials.password,
         )
+        log_auth_info("info", "Register auth: credentials verified")
         return credentials
     except AuthenticationError:
+        log_auth_info("error", "Register auth: invalid credentials, status=401", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -85,6 +84,7 @@ def _verify_basic_auth(
             headers={"WWW-Authenticate": "Basic"},
         ) from None
     except RegistrationDisabledError:
+        log_auth_info("warning", "Register auth: registration disabled, status=503", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
@@ -93,7 +93,7 @@ def _verify_basic_auth(
             },
         ) from None
     except Exception:
-        logger.exception("Unexpected error during authentication")
+        log_auth_info("error", "Register auth: unexpected error during credential verification", exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -169,7 +169,10 @@ async def register_client(
     Raises:
         HTTPException: With appropriate status code on failure.
     """
-    logger.info("Client registration request received")
+    log_auth_info(
+        "info",
+        f"Register request: client_name={request.client_name}",
+    )
 
     try:
         registered_client = auth_service.register_client(
@@ -178,7 +181,13 @@ async def register_client(
             allowed_scopes=request.allowed_scopes,
         )
 
-        logger.info("Client registered successfully")
+        log_auth_info(
+            "info",
+            f"Register success: client_name={request.client_name}, "
+            f"client_id={registered_client.client_id}, "
+            f"scopes={registered_client.allowed_scopes}, status=201",
+            end_section=True,
+        )
 
         return ClientRegistrationResponse(
             client_id=registered_client.client_id,
@@ -190,7 +199,7 @@ async def register_client(
         )
 
     except MaxClientsReachedError as e:
-        log_secure_info("warning", "Client registration failed - max clients reached")
+        log_auth_info("warning", f"Register failed: client_name={request.client_name}, reason=max_clients_reached, status=409", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -199,7 +208,7 @@ async def register_client(
             },
         ) from None
     except ClientExistsError:
-        log_secure_info("warning", "Client registration failed - client exists")
+        log_auth_info("warning", f"Register failed: client_name={request.client_name}, reason=client_exists, status=409", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -208,7 +217,7 @@ async def register_client(
             },
         ) from None
     except VaultError:
-        log_secure_info("error", "Client registration failed - vault error", identifier=request.client_name)
+        log_auth_info("error", f"Register failed: client_name={request.client_name}, reason=vault_error, status=500", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -217,9 +226,11 @@ async def register_client(
             },
         ) from None
     except Exception as e:
-        log_secure_info(
+        log_auth_info(
             "error",
-            "Unexpected error during client registration"
+            f"Register failed: client_name={request.client_name}, reason=unexpected_error, status=500",
+            exc_info=True,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -280,10 +291,15 @@ async def request_token(
     Raises:
         HTTPException: With appropriate status code on failure.
     """
-    logger.info("Token request received")
+    client_id_short = request.client_id if request.client_id else "None"
+    log_auth_info(
+        "info",
+        f"Token request: client_id={client_id_short}, "
+        f"grant_type={request.grant_type}, scope={request.scope}",
+    )
 
     if request.client_id is None or request.client_secret is None:
-        logger.warning("Token request missing client credentials")
+        log_auth_info("warning", f"Token failed: client_id={client_id_short}, reason=missing_credentials, status=400", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -299,7 +315,13 @@ async def request_token(
             requested_scope=request.scope,
         )
 
-        logger.info("Token generated successfully")
+        log_auth_info(
+            "info",
+            f"Token success: client_id={client_id_short}, "
+            f"scope={token_result.scope}, "
+            f"expires_in={token_result.expires_in}s, status=200",
+            end_section=True,
+        )
 
         return TokenResponse(
             access_token=token_result.access_token,
@@ -309,7 +331,7 @@ async def request_token(
         )
 
     except InvalidClientError:
-        logger.warning("Token request failed - invalid client")
+        log_auth_info("warning", f"Token failed: client_id={client_id_short}, reason=invalid_client, status=401", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -319,7 +341,7 @@ async def request_token(
         ) from None
 
     except ClientDisabledError:
-        logger.warning("Token request failed - client disabled")
+        log_auth_info("warning", f"Token failed: client_id={client_id_short}, reason=client_disabled, status=403", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -329,7 +351,7 @@ async def request_token(
         ) from None
 
     except InvalidScopeError as e:
-        logger.warning("Token request failed - invalid scope")
+        log_auth_info("warning", f"Token failed: client_id={client_id_short}, reason=invalid_scope, detail={e}, status=400", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -339,7 +361,7 @@ async def request_token(
         ) from None
 
     except TokenCreationError:
-        logger.error("Token request failed - token creation error")
+        log_auth_info("error", f"Token failed: client_id={client_id_short}, reason=token_creation_error, status=500", end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -349,7 +371,7 @@ async def request_token(
         ) from None
 
     except Exception:
-        logger.exception("Unexpected error during token request")
+        log_auth_info("error", f"Token failed: client_id={client_id_short}, reason=unexpected_error, status=500", exc_info=True, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={

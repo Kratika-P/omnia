@@ -14,7 +14,6 @@
 
 """FastAPI routes for build image stage operations."""
 
-import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -46,8 +45,6 @@ from core.jobs.exceptions import (
 from core.jobs.value_objects import ClientId, CorrelationId, JobId
 from orchestrator.build_image.commands import CreateBuildImageCommand
 from orchestrator.build_image.use_cases import CreateBuildImageUseCase
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Build Image"])
 
@@ -95,15 +92,13 @@ def create_build_image(
     """
     # Extract client_id from validated token data
     client_id = ClientId(token_data["client_id"])
-    
-    logger.info(
-        "Create build image request: job_id=%s, arch=%s, image_key=%s, "
-        "client_id=%s, correlation_id=%s",
-        job_id,
-        request_body.architecture,
-        request_body.image_key,
-        client_id.value,
-        correlation_id.value,
+
+    log_secure_info(
+        "info",
+        f"Create build image request: job_id={job_id}, arch={request_body.architecture}, "
+        f"image_key={request_body.image_key}, correlation_id={correlation_id.value}",
+        identifier=str(client_id.value),
+        job_id=job_id,
     )
 
     try:
@@ -126,9 +121,26 @@ def create_build_image(
             architecture=request_body.architecture,
             image_key=request_body.image_key,
             functional_groups=request_body.functional_groups,
-            inventory_host=None,  # Will be handled automatically by use case
+            inventory_host=request_body.inventory_host,
+        )
+        log_secure_info(
+            "debug",
+            f"Build image executing: job_id={job_id}, arch={request_body.architecture}, "
+            f"image_key={request_body.image_key}, "
+            f"functional_groups={request_body.functional_groups}, "
+            f"inventory_host={request_body.inventory_host}",
+            job_id=job_id,
         )
         result = use_case.execute(command)
+
+        log_secure_info(
+            "info",
+            f"Build image success: job_id={job_id}, "
+            f"arch={result.architecture}, image_key={result.image_key}, "
+            f"stage={result.stage_name}, stage_status={result.status}, status=202",
+            job_id=job_id,
+            end_section=True,
+        )
 
         return CreateBuildImageResponse(
             job_id=result.job_id,
@@ -142,7 +154,7 @@ def create_build_image(
         )
 
     except JobNotFoundError as exc:
-        logger.warning("Job not found: %s", job_id)
+        log_secure_info("warning", f"Build image failed: job_id={job_id}, reason=job_not_found, status=404", job_id=job_id, end_section=True)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_build_error_response(
@@ -155,14 +167,15 @@ def create_build_image(
     except InvalidStateTransitionError as exc:
         log_secure_info(
             "warning",
-            f"Invalid state transition for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=invalid_state_transition, status=409",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_response(
                 "INVALID_STATE_TRANSITION",
-                f"Job {job_id}: {exc.message}",
+                exc.message,
                 correlation_id.value,
             ).model_dump(),
         ) from exc
@@ -170,15 +183,15 @@ def create_build_image(
     except TerminalStateViolationError as exc:
         log_secure_info(
             "warning",
-            f"Terminal state violation for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=terminal_state_violation, status=412",
+            job_id=job_id,
+            end_section=True,
         )
-        # Provide helpful message for terminal state violations
         if exc.state == "FAILED":
             message = f"Job {job_id} stage is in {exc.state} state and cannot be retried. Reset the stage using /stages/build-image/reset endpoint."
         else:
             message = f"Job {job_id} stage is in {exc.state} state and cannot be modified."
-        
+
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,
             detail=_build_error_response(
@@ -191,8 +204,10 @@ def create_build_image(
     except InvalidArchitectureError as exc:
         log_secure_info(
             "warning",
-            f"Invalid architecture for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=invalid_architecture, "
+            f"arch={request_body.architecture}, status=400",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -206,8 +221,10 @@ def create_build_image(
     except InvalidImageKeyError as exc:
         log_secure_info(
             "warning",
-            f"Invalid image key for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=invalid_image_key, "
+            f"image_key={request_body.image_key}, status=400",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -221,8 +238,9 @@ def create_build_image(
     except InvalidFunctionalGroupsError as exc:
         log_secure_info(
             "warning",
-            f"Invalid functional groups for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=invalid_functional_groups, status=400",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -236,8 +254,9 @@ def create_build_image(
     except InventoryHostMissingError as exc:
         log_secure_info(
             "warning",
-            f"Inventory host missing for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=inventory_host_missing, status=400",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -251,8 +270,9 @@ def create_build_image(
     except BuildImageDomainError as exc:
         log_secure_info(
             "error",
-            f"Build image domain error for job {job_id}",
-            str(correlation_id.value),
+            f"Build image failed: job_id={job_id}, reason=domain_error, status=500",
+            job_id=job_id,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -264,7 +284,13 @@ def create_build_image(
         ) from exc
 
     except Exception as exc:
-        logger.exception("Unexpected error creating build image stage")
+        log_secure_info(
+            "error",
+            f"Build image failed: job_id={job_id}, reason=unexpected_error, status=500",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_response(
