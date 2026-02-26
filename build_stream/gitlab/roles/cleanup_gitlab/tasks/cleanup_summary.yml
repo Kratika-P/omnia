@@ -12,17 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Omnia Catalog CI/CD Pipeline
-# Triggered on catalog_rhel.json changes or via API trigger.
-stages:
-  - process
-process_catalog:
-  stage: process
-  script:
-    - echo "Pipeline running"
-    - echo "Commit $CI_COMMIT_SHA"
-    - cat catalog_rhel.json
-  rules:
-    - changes:
-        - catalog_rhel.json
-    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+---
+
+- name: Display cleanup summary and quick verification tests
+  ansible.builtin.debug:
+    msg: "{{ gitlab_cleanup_complete_msg }}"
