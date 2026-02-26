@@ -160,9 +160,18 @@
       },
       "sources": [
         {
-          "source_file": "functional_layer.json",
+          "source_file": "miscellaneous.json",
           "pulls": [
-            {"source_key": "login_node_x86_64", "target_key": "login_node"}
+            {"source_key": "slurm_control_node_x86_64", "target_key": "slurm_control_node"},
+            {"source_key": "slurm_node_x86_64", "target_key": "slurm_node"},
+            {"source_key": "slurm_node_aarch64", "target_key": "slurm_node"},
+            {"source_key": "login_node_x86_64", "target_key": "login_node"},
+            {"source_key": "login_node_aarch64", "target_key": "login_node"},
+            {"source_key": "login_compiler_node_x86_64", "target_key": "login_compiler_node"},
+            {"source_key": "login_compiler_node_aarch64", "target_key": "login_compiler_node"},
+            {"source_key": "service_kube_control_plane_x86_64", "target_key": "service_kube_control_plane"},
+            {"source_key": "service_kube_control_plane_x86_64", "target_key": "service_kube_control_plane_first"},
+            {"source_key": "service_kube_node_x86_64", "target_key": "service_kube_node"}
           ]
         }
       ]
