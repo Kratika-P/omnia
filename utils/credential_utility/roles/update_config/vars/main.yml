@@ -58,12 +58,15 @@ docker_hub_warning: |
   Proceed to enter your Docker credentials if you want to avoid pull rate limits.
   Press Enter.
 
+# Build stream automation messages
+build_stream_auto_force_node_msg: "Build stream is enabled, automatically forcing removal of node {{ node_to_remove }} (jobs will be killed)."
+build_stream_auto_accept_metadata_msg: "Build stream is enabled, automatically accepting metadata changes."
+
 omnia_credentials:
   provision:
     mandatory:
       - { password: provision_password }
       - { username: bmc_username, password: bmc_password }
-
   gitlab:
     mandatory:
       - { password: gitlab_root_password }
@@ -93,8 +96,6 @@ omnia_credentials:
   openldap:
     mandatory:
       - { username: openldap_db_username, password: openldap_db_password }
-      - { username: openldap_config_username, password: openldap_config_password }
-      - { password: openldap_monitor_password }
   idrac_telemetry:
     mandatory:
       - { username: bmc_username, password: bmc_password }
