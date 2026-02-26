@@ -12,15 +12,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- name: Ensure runner image is present
-  containers.podman.podman_image:
-    name: "{{ gitlab_runner_image }}"
-    state: present
-
 - name: Determine SELinux volume suffix and helper image arch
   ansible.builtin.set_fact:
     gitlab_runner_volume_suffix: "{{ ':z' if ansible_selinux is defined and ansible_selinux.status == 'enabled' else '' }}"
     gitlab_runner_helper_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
+
+- name: Resolve helper image tag
+  ansible.builtin.set_fact:
+    gitlab_runner_helper_image_resolved: >-
+      {{ gitlab_runner_helper_image_registry }}:{{ gitlab_runner_helper_arch
+        }}-{{ gitlab_runner_image | regex_search('v[0-9]+\.[0-9]+\.[0-9]+') | default(gitlab_runner_helper_image_version) }}
+
+- name: Check if runner container is currently running
+  containers.podman.podman_container_info:
+    name: "{{ gitlab_runner_container_name }}"
+  register: runner_container_info
+  failed_when: false
+
+- name: Set runner image force-pull flag
+  ansible.builtin.set_fact:
+    _runner_force_pull: >-
+      {{ (force_re_register_runner | bool)
+         or (runner_container_info.containers | default([]) | length == 0)
+         or (runner_container_info.containers[0].State.Status | default('') != 'running') }}
+
+- name: Pull GitLab runner image (force if container not running or flag set)
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_image }}"
+    state: present
+    force: "{{ _runner_force_pull | bool }}"
+
+- name: Pull GitLab runner helper image (always force to avoid stale cache)
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_helper_image_resolved }}"
+    state: present
+    force: true
+
+- name: Pull default CI job image
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_default_image }}"
+    state: present
 
 - name: Ensure runner config directory exists
   ansible.builtin.file:
@@ -37,13 +68,6 @@
   containers.podman.podman_container:
     name: "{{ gitlab_runner_container_name }}"
     state: absent
-  when: not gitlab_runner_config_stat.stat.exists
-
-- name: Set runner helper image
-  ansible.builtin.set_fact:
-    gitlab_runner_helper_image_resolved: >-
-      {{ gitlab_runner_helper_image_registry }}:{{ gitlab_runner_helper_arch
-        }}-{{ gitlab_runner_image | regex_search('v[0-9]+\.[0-9]+\.[0-9]+') | default(gitlab_runner_helper_image_version) }}
   when: not gitlab_runner_config_stat.stat.exists
 
 - name: Register GitLab runner with authentication token
@@ -75,33 +99,6 @@
       - "{{ gitlab_runner_config_path }}:/etc/gitlab-runner{{ gitlab_runner_volume_suffix | default('') }}"
   when: not gitlab_runner_config_stat.stat.exists
 
-- name: Resolve helper image for existing runner config patch
-  ansible.builtin.set_fact:
-    gitlab_runner_helper_image_resolved: >-
-      {{ gitlab_runner_helper_image_registry }}:{{ gitlab_runner_helper_arch
-        }}-{{ gitlab_runner_image | regex_search('v[0-9]+\.[0-9]+\.[0-9]+') | default(gitlab_runner_helper_image_version) }}
-  when: gitlab_runner_helper_image_resolved is not defined
-
-- name: Ensure helper_image is set in runner config.toml
-  ansible.builtin.lineinfile:
-    path: "{{ gitlab_runner_config_file }}"
-    regexp: '^\s*helper_image\s*='
-    insertafter: '\[runners\.docker\]'
-    line: "  helper_image = \"{{ gitlab_runner_helper_image_resolved }}\""
-    state: present
-  register: gitlab_runner_helper_patched
-  when: gitlab_runner_config_stat.stat.exists
-
-- name: Ensure disable_cache is set in runner config.toml
-  ansible.builtin.lineinfile:
-    path: "{{ gitlab_runner_config_file }}"
-    regexp: '^\s*disable_cache\s*='
-    insertafter: '\[runners\.docker\]'
-    line: "  disable_cache = true"
-    state: present
-  register: gitlab_runner_cache_patched
-  when: gitlab_runner_config_stat.stat.exists
-
 - name: Ensure runner container is started
   containers.podman.podman_container:
     name: "{{ gitlab_runner_container_name }}"
@@ -110,15 +107,7 @@
     restart_policy: "{{ gitlab_restart_policy }}"
     volumes:
       - "{{ gitlab_runner_config_path }}:/etc/gitlab-runner{{ gitlab_runner_volume_suffix | default('') }}"
-      - "{{ podman_socket_path }}:{{ docker_socket_path }}:Z"
-
-- name: Restart runner container to apply config changes
-  containers.podman.podman_container:
-    name: "{{ gitlab_runner_container_name }}"
-    state: stopped
-  when: >-
-    (gitlab_runner_helper_patched is defined and gitlab_runner_helper_patched.changed | default(false))
-    or (gitlab_runner_cache_patched is defined and gitlab_runner_cache_patched.changed | default(false))
+      - "{{ podman_socket_path }}:{{ docker_socket_path }}{{ gitlab_runner_volume_suffix | default('') }}"
 
 - name: Wait for an online project runner after deployment
   ansible.builtin.uri:

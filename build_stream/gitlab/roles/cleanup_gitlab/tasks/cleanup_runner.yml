@@ -1,76 +1,60 @@
-# Copyright 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 ---
 
-- name: Check if Podman is available
-  ansible.builtin.command: which podman
-  register: podman_check
-  failed_when: false
-  changed_when: false
-
 - name: Stop and remove GitLab runner container
-  ansible.builtin.command: "{{ item }}"
-  loop:
-    - "podman stop {{ gitlab_runner_container_name }}"
-    - "podman rm {{ gitlab_runner_container_name }}"
-  register: runner_container_removal
-  when: podman_check.rc == 0
+  containers.podman.podman_container:
+    name: "{{ gitlab_runner_container_name }}"
+    state: absent
   failed_when: false
-  changed_when: false
-
-- name: Check if Docker is available
-  ansible.builtin.command: which docker
-  register: docker_check
-  failed_when: false
-  changed_when: false
 
 - name: Remove GitLab runner registration container
-  ansible.builtin.command: "{{ item }}"
-  loop:
-    - "docker stop {{ gitlab_runner_container_name }}"
-    - "docker rm {{ gitlab_runner_container_name }}"
-  register: runner_docker_removal
-  when: docker_check.rc == 0
+  containers.podman.podman_container:
+    name: gitlab-runner-register
+    state: absent
+  failed_when: false
+
+- name: Remove GitLab runner image
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_image }}"
+    state: absent
+    force: true
+  failed_when: false
+
+- name: Remove default CI job image
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_default_image }}"
+    state: absent
+    force: true
+  failed_when: false
+
+- name: Remove GitLab runner helper image
+  containers.podman.podman_image:
+    name: >-
+      {{ gitlab_runner_helper_image_registry }}:{{
+        'arm64' if ansible_architecture == 'aarch64' else 'x86_64'
+      }}-{{ gitlab_runner_helper_image_version }}
+    state: absent
+    force: true
+  failed_when: false
+
+- name: Remove named runner volumes by filter
+  ansible.builtin.shell: |
+    podman volume ls --filter name=runner -q | xargs -r podman volume rm --force
   failed_when: false
   changed_when: false
 
-- name: Remove GitLab runner image (Podman)
-  ansible.builtin.command: "podman rmi {{ gitlab_runner_image }}"
-  register: runner_image_removal
-  when: podman_check.rc == 0
+- name: Prune all stopped containers (frees anonymous job volumes)
+  ansible.builtin.command: podman container prune --force
   failed_when: false
   changed_when: false
 
-- name: Remove default CI job image (Podman)
-  ansible.builtin.command: "podman rmi {{ gitlab_runner_default_image }}"
-  when: podman_check.rc == 0
-  failed_when: false
-  changed_when: false
-
-- name: Remove GitLab runner helper image (Podman)
-  ansible.builtin.command: >-
-    podman rmi {{ gitlab_runner_helper_image_registry }}:{{
-      'arm64' if ansible_architecture == 'aarch64' else 'x86_64'
-    }}-{{ gitlab_runner_helper_image_version }}
-  when: podman_check.rc == 0
+- name: Prune all remaining unused volumes
+  ansible.builtin.command: podman volume prune --force
   failed_when: false
   changed_when: false
 
 - name: Remove GitLab runner configuration directory
   ansible.builtin.file:
-    path: "{{ gitlab_runner_config_path | default('/srv/gitlab-runner/config') }}"
+    path: "{{ gitlab_runner_config_path }}"
     state: absent
   failed_when: false
 
@@ -79,19 +63,15 @@
 
 - name: Remove GitLab runner systemd service
   ansible.builtin.systemd:
-    name: gitlab-runner
+    name: "{{ gitlab_runner_service_name }}"
     state: stopped
     enabled: false
-  when: "'gitlab-runner.service' in ansible_facts.services"
-
-- name: Check if gitlab-runner service file exists
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/gitlab-runner.service"
-  register: gitlab_runner_service_file
+  when: "(gitlab_runner_service_name + '.service') in ansible_facts.services"
+  failed_when: false
 
 - name: Remove GitLab runner systemd service file
   ansible.builtin.file:
-    path: "/etc/systemd/system/gitlab-runner.service"
+    path: "{{ gitlab_runner_systemd_service_file }}"
     state: absent
-  when: gitlab_runner_service_file.stat.exists
+  failed_when: false
 
