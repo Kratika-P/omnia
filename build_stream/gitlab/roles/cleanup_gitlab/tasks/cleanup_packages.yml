@@ -35,7 +35,5 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
-  loop:
-    - "/etc/pki/rpm-gpg/RPM-GPG-KEY-gitlab"
-    - "/etc/apt/trusted.gpg.d/gitlab.gpg"
+  loop: "{{ gitlab_gpg_key_files }}"
   failed_when: false

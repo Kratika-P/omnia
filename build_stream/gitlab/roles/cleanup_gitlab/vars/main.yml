@@ -39,11 +39,6 @@ gitlab_runner_systemd_service_file: "/etc/systemd/system/gitlab-runner.service"
 gitlab_runner_config_path: "/srv/gitlab-runner/config"
 gitlab_runner_registration_token_path: "/etc/gitlab/runner-registration-token"
 
-# GitLab ports
-gitlab_http_port: "80"
-gitlab_https_port: "443"
-gitlab_ssh_port: "22"
-
 # GitLab CI/CD
 gitlab_ci_templates_path: "/opt/gitlab/ci_templates"
 
@@ -238,6 +233,7 @@ gitlab_gpg_key_files:
   - "/etc/pki/rpm-gpg/RPM-GPG-KEY-gitlab"
   - "/etc/pki/rpm-gpg/RPM-GPG-KEY-gitlab-ce"
   - "/etc/pki/rpm-gpg/RPM-GPG-KEY-gitlab-ee"
+  - "/etc/apt/trusted.gpg.d/gitlab.gpg"
 gitlab_cleanup_find_roots:
   - /opt
   - /etc
