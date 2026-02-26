@@ -362,8 +362,6 @@
         msg: "{{ build_stream_https_failure_msg }}"
       when: (curl_status.stdout | trim) != "200"
 
-
-
 # --------------------------------------------------------------------
 # 8) Validate health API endpoint https://{{ admin_ip }}:{{ build_stream_port }}/health"
 # -------------------------------------------------------------------
