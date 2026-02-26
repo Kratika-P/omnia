@@ -116,6 +116,7 @@
   failed_when: false
 
 - name: Create runner authentication token via API
+  when: not gitlab_runner_config_stat_check.stat.exists
   block:
     - name: Request runner authentication token
       ansible.builtin.uri:
@@ -139,7 +140,6 @@
     - name: Fail when runner token API call fails
       ansible.builtin.fail:
         msg: "{{ gitlab_runner_token_failure_msg }}"
-  when: not gitlab_runner_config_stat_check.stat.exists
 
 - name: Set runner authentication token fact
   ansible.builtin.set_fact:
