@@ -19,8 +19,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from api.dependencies import verify_token
-
 from core.jobs.exceptions import (
     IdempotencyConflictError,
     InvalidStateTransitionError,
@@ -37,6 +35,7 @@ from core.jobs.value_objects import (
 from orchestrator.jobs.commands import CreateJobCommand
 from orchestrator.jobs.use_cases import CreateJobUseCase
 
+from api.logging_utils import create_job_log_file, log_secure_info, remove_job_logger
 from api.dependencies import verify_token
 from api.logging_utils import create_job_log_file, log_secure_info, remove_job_logger
 from api.jobs.dependencies import (
@@ -109,6 +108,7 @@ async def create_job(
     """Create a job, handling idempotency and domain errors."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     client_id = ClientId(token_data["client_id"])
+
     log_secure_info(
         "info",
         f"Create job request: client_name={request.client_name}, "
@@ -129,8 +129,13 @@ async def create_job(
             f"Create job executing: client_id={client_id.value}, "
             f"client_name={request.client_name}, idempotency_key={idempotency_key}",
         )
+        log_secure_info(
+            "debug",
+            f"Create job executing: client_id={client_id.value}, "
+            f"client_name={request.client_name}, idempotency_key={idempotency_key}",
+        )
         result = use_case.execute(command)
-        # Set status code based on whether job was newly created
+
         if result.is_new:
             response.status_code = status.HTTP_201_CREATED
             log_path = create_job_log_file(result.job_id)
@@ -141,8 +146,24 @@ async def create_job(
                 identifier=correlation_id.value,
                 job_id=result.job_id,
             )
+            log_path = create_job_log_file(result.job_id)
+            log_secure_info(
+                "info",
+                f"Job created: job_id={result.job_id}, "
+                f"client_name={request.client_name}, log_file={log_path}",
+                identifier=correlation_id.value,
+                job_id=result.job_id,
+            )
         else:
             response.status_code = status.HTTP_200_OK
+            log_secure_info(
+                "info",
+                f"Idempotent replay: job_id={result.job_id}, "
+                f"job_state={result.job_state}",
+                identifier=correlation_id.value,
+                job_id=result.job_id,
+            )
+
             log_secure_info(
                 "info",
                 f"Idempotent replay: job_id={result.job_id}, "
@@ -163,6 +184,13 @@ async def create_job(
             )
             for s in stages_entities
         ]
+        log_secure_info(
+            "info",
+            f"Create job response: job_id={result.job_id}, "
+            f"job_state={result.job_state}, status=201",
+            job_id=result.job_id,
+            end_section=True,
+        )
         log_secure_info(
             "info",
             f"Create job response: job_id={result.job_id}, "
@@ -249,6 +277,11 @@ async def get_job(
             f"Get job lookup: job_id={job_id}, client_id={client_id.value}",
             job_id=job_id,
         )
+        log_secure_info(
+            "debug",
+            f"Get job lookup: job_id={job_id}, client_id={client_id.value}",
+            job_id=job_id,
+        )
         job = job_repo.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None or job.tombstoned:
             raise JobNotFoundError(job_id, correlation_id.value)
@@ -269,7 +302,7 @@ async def get_job(
             )
             for s in stages_entities
         ]
-
+        
         # Get audit events for state change timestamps
         audit_events = audit_repo.find_by_job(validated_job_id)  # pylint: disable=no-member
         state_timestamps = {}
@@ -278,11 +311,17 @@ async def get_job(
                 state_name = event.event_type.replace("JOB_", "")
                 if state_name in ["CREATED", "IN_PROGRESS", "COMPLETED", "FAILED", "CANCELLED"]:
                     state_timestamps[state_name] = event.timestamp.isoformat() + "Z"
-
+        
         # Always include creation timestamp
         if "CREATED" not in state_timestamps and job.created_at:
             state_timestamps["CREATED"] = job.created_at.isoformat() + "Z"
-
+        
+        log_secure_info(
+            "info",
+            f"Get job success: job_id={job_id}, job_state={_map_job_state_to_api_state(job.job_state)}, status=200",
+            job_id=job_id,
+            end_section=True,
+        )
         log_secure_info(
             "info",
             f"Get job success: job_id={job_id}, job_state={_map_job_state_to_api_state(job.job_state)}, status=200",
@@ -369,6 +408,11 @@ async def delete_job(
             f"Delete job lookup: job_id={job_id}, client_id={client_id.value}",
             job_id=job_id,
         )
+        log_secure_info(
+            "debug",
+            f"Delete job lookup: job_id={job_id}, client_id={client_id.value}",
+            job_id=job_id,
+        )
         job = job_repo.find_by_id(validated_job_id)  # pylint: disable=no-member
         if job is None:
             raise JobNotFoundError(job_id, correlation_id.value)
@@ -381,10 +425,21 @@ async def delete_job(
 
         stages_entities = stage_repo.find_all_by_job(validated_job_id)  # pylint: disable=no-member
         cancelled_count = 0
+        cancelled_count = 0
         for stage in stages_entities:
             if not stage.stage_state.is_terminal():
                 stage.cancel()
                 stage_repo.save(stage)  # pylint: disable=no-member
+                cancelled_count += 1
+
+        log_secure_info(
+            "info",
+            f"Delete job success: job_id={job_id}, "
+            f"stages_cancelled={cancelled_count}, status=204",
+            job_id=job_id,
+            end_section=True,
+        )
+        remove_job_logger(job_id)
                 cancelled_count += 1
 
         log_secure_info(
