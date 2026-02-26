@@ -114,7 +114,14 @@ async def get_catalog_roles(
     try:
         validated_job_id = JobId(job_id)
     except ValueError as exc:
-        log_secure_info("warning", f"Get catalog roles failed: job_id={job_id}, reason=invalid_job_id, detail={exc}, status=400", job_id=job_id, exc_info=True, end_section=True)
+        log_secure_info(
+            "warning",
+            f"Get catalog roles failed: job_id={job_id}, reason=invalid_job_id,"
+            f" detail={exc}, status=400",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -146,7 +153,14 @@ async def get_catalog_roles(
         )
 
     except ParseCatalogNotCompletedError as exc:
-        log_secure_info("warning", f"Get catalog roles failed: job_id={job_id}, reason=parse_catalog_not_completed, detail={exc}, status=404", job_id=job_id, exc_info=True, end_section=True)
+        log_secure_info(
+            "warning",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=parse_catalog_not_completed, detail={exc}, status=404",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -156,7 +170,14 @@ async def get_catalog_roles(
         ) from exc
 
     except RolesNotFoundError as exc:
-        log_secure_info("error", f"Get catalog roles failed: job_id={job_id}, reason=roles_not_found, detail={exc}, status=404", job_id=job_id, exc_info=True, end_section=True)
+        log_secure_info(
+            "error",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=roles_not_found, detail={exc}, status=404",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -166,7 +187,14 @@ async def get_catalog_roles(
         ) from exc
 
     except JobNotFoundError as exc:
-        log_secure_info("warning", f"Get catalog roles failed: job_id={job_id}, reason=job_not_found, detail={exc}, status=404", job_id=job_id, exc_info=True, end_section=True)
+        log_secure_info(
+            "warning",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=job_not_found, detail={exc}, status=404",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -176,7 +204,14 @@ async def get_catalog_roles(
         ) from exc
 
     except Exception as exc:
-        log_secure_info("error", f"Get catalog roles failed: job_id={job_id}, reason=unexpected_error, status=500", job_id=job_id, exc_info=True, end_section=True)
+        log_secure_info(
+            "error",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=unexpected_error, status=500",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
