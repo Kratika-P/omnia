@@ -12,19 +12,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- name: Ensure runner container is absent before redeploy
-  containers.podman.podman_container:
-    name: "{{ gitlab_runner_container_name }}"
-    state: absent
+- name: Determine SELinux volume suffix and helper image arch
+  ansible.builtin.set_fact:
+    gitlab_runner_volume_suffix: "{{ ':z' if ansible_selinux is defined and ansible_selinux.status == 'enabled' else '' }}"
+    gitlab_runner_helper_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
 
-- name: Ensure runner image is present
+- name: Resolve helper image tag
+  ansible.builtin.set_fact:
+    gitlab_runner_helper_image_resolved: >-
+      {{ gitlab_runner_helper_image_registry }}:{{ gitlab_runner_helper_arch
+        }}-{{ gitlab_runner_image | regex_search('v[0-9]+\.[0-9]+\.[0-9]+') | default(gitlab_runner_helper_image_version) }}
+
+- name: Check if runner container is currently running
+  containers.podman.podman_container_info:
+    name: "{{ gitlab_runner_container_name }}"
+  register: runner_container_info
+  failed_when: false
+
+- name: Set runner image force-pull flag
+  ansible.builtin.set_fact:
+    _runner_force_pull: >-
+      {{ (force_re_register_runner | bool)
+         or (runner_container_info.containers | default([]) | length == 0)
+         or (runner_container_info.containers[0].State.Status | default('') != 'running') }}
+
+- name: Pull GitLab runner image (force if container not running or flag set)
   containers.podman.podman_image:
     name: "{{ gitlab_runner_image }}"
     state: present
+    force: "{{ _runner_force_pull | bool }}"
 
-- name: Determine SELinux volume suffix
-  ansible.builtin.set_fact:
-    gitlab_runner_volume_suffix: "{{ ':Z' if ansible_selinux is defined and ansible_selinux.status == 'enabled' else '' }}"
+- name: Pull GitLab runner helper image (always force to avoid stale cache)
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_helper_image_resolved }}"
+    state: present
+    force: true
+
+- name: Pull default CI job image
+  containers.podman.podman_image:
+    name: "{{ gitlab_runner_default_image }}"
+    state: present
 
 - name: Ensure runner config directory exists
   ansible.builtin.file:
@@ -36,6 +63,12 @@
   ansible.builtin.stat:
     path: "{{ gitlab_runner_config_file }}"
   register: gitlab_runner_config_stat
+
+- name: Ensure runner container is absent before first registration
+  containers.podman.podman_container:
+    name: "{{ gitlab_runner_container_name }}"
+    state: absent
+  when: not gitlab_runner_config_stat.stat.exists
 
 - name: Register GitLab runner with authentication token
   containers.podman.podman_container:
@@ -57,11 +90,13 @@
       - "{{ gitlab_runner_default_image }}"
       - --docker-pull-policy
       - "{{ gitlab_runner_pull_policy }}"
+      - --docker-helper-image
+      - "{{ gitlab_runner_helper_image_resolved }}"
+      - --docker-disable-cache
       - --description
       - "{{ gitlab_runner_description }}"
     volume:
       - "{{ gitlab_runner_config_path }}:/etc/gitlab-runner{{ gitlab_runner_volume_suffix | default('') }}"
-  no_log: true
   when: not gitlab_runner_config_stat.stat.exists
 
 - name: Ensure runner container is started
@@ -72,4 +107,40 @@
     restart_policy: "{{ gitlab_restart_policy }}"
     volumes:
       - "{{ gitlab_runner_config_path }}:/etc/gitlab-runner{{ gitlab_runner_volume_suffix | default('') }}"
-      - "{{ podman_socket_path }}:{{ docker_socket_path }}:Z"
+      - "{{ podman_socket_path }}:{{ docker_socket_path }}{{ gitlab_runner_volume_suffix | default('') }}"
+
+- name: Wait for an online project runner after deployment
+  ansible.builtin.uri:
+    url: "{{ gitlab_external_url_computed }}/api/v4/projects/{{ gitlab_project_id }}/runners"
+    method: GET
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_root_token }}"
+    validate_certs: false
+    status_code: "{{ gitlab_default_status_codes.project_runners_list }}"
+  register: gitlab_project_runners_online
+  retries: "{{ gitlab_runner_online_check_retries }}"
+  delay: "{{ gitlab_runner_online_check_delay }}"
+  until: >-
+    (
+      gitlab_project_runners_online.json
+      | selectattr('status', 'equalto', 'online')
+      | list
+      | length
+    ) > 0
+  when: gitlab_runner_require_online_after_deploy | bool
+  no_log: true
+
+- name: Fail when no online runner is assigned to project
+  ansible.builtin.fail:
+    msg: "{{ gitlab_runner_online_failure_msg }}"
+  when:
+    - gitlab_runner_require_online_after_deploy | bool
+    - gitlab_project_runners_online is defined
+    - >-
+      (
+        gitlab_project_runners_online.json
+        | default([])
+        | selectattr('status', 'equalto', 'online')
+        | list
+        | length
+      ) == 0

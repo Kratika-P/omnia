@@ -14,6 +14,10 @@
 
 ---
 
+# GitLab Comprehensive Cleanup Playbook
+# This playbook removes ALL GitLab configurations created by gitlab.yml
+# Usage: ansible-playbook cleanup_gitlab.yml
+
 - name: Set_fact for fetch omnia config credentials
   hosts: localhost
   connection: local
@@ -22,33 +26,30 @@
     - name: Set dynamic run tags including 'gitlab'
       when: not config_file_status | default(false) | bool
       ansible.builtin.set_fact:
-        omnia_run_tags: "{{ (ansible_run_tags | default([]) + ['gitlab'] + ['provision']) | unique }}"
+        omnia_run_tags: "{{ (ansible_run_tags | default([]) + ['provision']) | unique }}"
         cacheable: true
 
     - name: Set GitLab operation mode
       ansible.builtin.set_fact:
-        gitlab_operation_mode: "{{ gitlab_operation_mode | default('install') }}"
+        gitlab_operation_mode: "cleanup"
         cacheable: true
 
 - name: Include input project directory
   when: not project_dir_status | default(false) | bool
   ansible.builtin.import_playbook: ../../utils/include_input_dir.yml
 
-- name: Load Omnia credential utility
+- name: Import credential utility playbook
   ansible.builtin.import_playbook: ../../utils/credential_utility/get_config_credentials.yml
+  when: not config_file_status | default(false) | bool
 
-- name: Prepare GitLab host credentials from provision secrets
+- name: Prepare GitLab host credentials for cleanup
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Install sshpass on localhost
-      ansible.builtin.package:
-        name: sshpass
-        state: present
-
     - name: Load GitLab configuration inputs
       ansible.builtin.include_vars:
-        file: "{{ input_project_dir }}/gitlab_config.yml"
+        file: "{{ hostvars['localhost']['input_project_dir'] }}/gitlab_config.yml"
+      delegate_to: localhost
       run_once: true
 
     - name: Ensure gitlab_host is provided in gitlab_config.yml
@@ -64,15 +65,7 @@
           - hostvars['localhost']['provision_password'] | default('') | length > 0
         fail_msg: "Provision password not found. Run credential utility to populate provision_password."
 
-    - name: Ensure gitlab root password is available
-      ansible.builtin.assert:
-        that:
-          - hostvars['localhost']['gitlab_root_password'] is defined
-          - hostvars['localhost']['gitlab_root_password'] != ""
-          - hostvars['localhost']['gitlab_root_password'] | length > 0
-        fail_msg: "GitLab root password not found. Run credential utility to populate gitlab_root_password."
-
-    - name: Register GitLab SSH credentials
+    - name: Register GitLab SSH credentials for cleanup
       ansible.builtin.add_host:
         name: "{{ gitlab_host }}"
         groups: gitlab_server
@@ -80,40 +73,61 @@
         ansible_user: "{{ gitlab_ansible_user | default('root') }}"
         ansible_password: "{{ hostvars['localhost']['provision_password'] }}"
         ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+        gitlab_host: "{{ gitlab_host }}"
       no_log: true
 
-- name: Deploy GitLab CE on target host (hosted mode)
+- name: Comprehensive GitLab Cleanup
   hosts: gitlab_server
   become: true
   gather_facts: true
-  vars:
-    gitlab_operation_mode: "{{ hostvars['localhost']['gitlab_operation_mode'] | default('install') }}"
-  tasks:
-    - name: Install sshpass on localhost
-      ansible.builtin.package:
-        name: sshpass
-        state: present
-
+  pre_tasks:
     - name: Load GitLab configuration inputs
       ansible.builtin.include_vars:
         file: "{{ hostvars['localhost']['input_project_dir'] }}/gitlab_config.yml"
-      delegate_to: localhost
-      run_once: true
+  roles:
+    - cleanup_gitlab
 
-    - name: Set gitlab_host from provided configuration
+  post_tasks:
+    - name: Gather installed packages for verification
+      ansible.builtin.package_facts:
+        manager: auto
+      failed_when: false
+
+    - name: Verify GitLab packages are removed
       ansible.builtin.set_fact:
-        gitlab_host: "{{ ansible_host | default(inventory_hostname) }}"
+        gitlab_packages_present: >-
+          {{
+            (
+              ansible_facts.packages | default({})
+            )
+            | dict2items
+            | selectattr('key', 'match', '^(gitlab(-|$)|gitlab-).*$')
+            | list
+            | length
+            > 0
+          }}
 
-    - name: Validate hosted-mode requirements
-      ansible.builtin.assert:
-        that:
-          - gitlab_host is defined and gitlab_host != ''
-        fail_msg: "Set a valid gitlab_host in input/gitlab_config.yml"
+    - name: Verify GitLab directories are removed
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: gitlab_dirs_final_check
+      loop:
+        - "/etc/gitlab"
+        - "/var/opt/gitlab"
+        - "/var/log/gitlab"
+      failed_when: false
 
-    - name: Bootstrap passwordless SSH
-      ansible.builtin.include_role:
-        name: gitlab_passwordless_ssh
+    - name: Verify GitLab processes are stopped
+      ansible.builtin.command: ps aux | grep gitlab | grep -v grep
+      register: gitlab_processes_check
+      failed_when: false
+      changed_when: false
 
-    - name: Run hosted GitLab deployment
-      ansible.builtin.include_role:
-        name: hosted_gitlab
+    - name: Set cleanup validation status
+      ansible.builtin.set_fact:
+        cleanup_validated: >-
+          {{
+            (not (gitlab_packages_present | default(false) | bool))
+            and ((gitlab_dirs_final_check.results | selectattr('stat.exists') | list | length) == 0)
+            and (gitlab_processes_check.stdout == '')
+          }}
