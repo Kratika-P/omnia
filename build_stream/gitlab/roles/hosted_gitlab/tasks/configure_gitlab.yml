@@ -25,14 +25,46 @@
     backup: true
     mode: '0600'
 
-- name: Reconfigure GitLab
-  ansible.builtin.command: "{{ gitlab_ctl_command }} reconfigure"
+- name: Ensure git user exists
+  ansible.builtin.user:
+    name: "{{ gitlab_system_user_name }}"
+    shell: "{{ gitlab_system_user_shell }}"
+    home: "{{ gitlab_system_user_home }}"
+    create_home: "{{ gitlab_system_user_create_home }}"
+    state: present
+
+- name: Ensure GitLab directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ gitlab_directories }}"
+
+- name: Ensure gitlab-runsvdir is enabled and started (required for runit sockets)
+  ansible.builtin.systemd:
+    name: gitlab-runsvdir
+    enabled: true
+    state: started
+    daemon_reload: true
+  failed_when: false
   changed_when: false
 
-- name: Wait for GitLab to initialize
-  ansible.builtin.pause:
-    minutes: "{{ gitlab_startup_wait_minutes }}"
-    prompt: "Waiting for GitLab services to start..."
+- name: Reconfigure GitLab
+  ansible.builtin.command: "{{ gitlab_ctl_command }} reconfigure"
+  async: "{{ gitlab_reconfigure_async }}"
+  poll: "{{ gitlab_reconfigure_poll }}"
+  register: gitlab_reconfigure
+  changed_when: false
+  failed_when: gitlab_reconfigure.rc is defined and gitlab_reconfigure.rc != 0
+
+- name: Wait for GitLab HTTPS port to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ gitlab_https_port | int }}"
+    delay: 5
+    timeout: "{{ (gitlab_startup_wait_minutes | int) * 60 }}"
 
 - name: Health check
   ansible.builtin.command: "{{ gitlab_ctl_command }} status"
@@ -62,7 +94,7 @@
 
 - name: Clean up initial root password file
   ansible.builtin.file:
-    path: "/etc/gitlab/initial_root_password"
+    path: "{{ gitlab_initial_root_password_path }}"
     state: absent
   when:
     - gitlab_root_password is defined

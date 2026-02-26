@@ -13,17 +13,29 @@
 # limitations under the License.
 
 ---
-- name: Check ssh connection
-  ansible.builtin.command: >-
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i {{ ssh_key_path }}
-    root@{{ gitlab_host }} echo ok
-  delegate_to: localhost
-  run_once: true
+
+- name: Remove GitLab packages only (preserve system prerequisites)
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ gitlab_cleanup_packages }}"
+  register: package_removal
+  failed_when: false
+
+- name: Note about preserved packages
+  ansible.builtin.debug:
+    msg: "{{ gitlab_preserved_packages_msg }}"
+
+- name: Clean package cache (safe operation)
+  ansible.builtin.command: "dnf clean all"
   changed_when: false
   failed_when: false
-  register: ssh_connection
 
-- name: SSH connection failed
-  ansible.builtin.fail:
-    msg: "{{ ssh_connection_failure_msg }}"
-  when: ssh_connection is failed
+- name: Remove GitLab GPG keys
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/pki/rpm-gpg/RPM-GPG-KEY-gitlab"
+    - "/etc/apt/trusted.gpg.d/gitlab.gpg"
+  failed_when: false
