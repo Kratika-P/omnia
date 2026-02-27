@@ -39,15 +39,15 @@ class TestLocalRepoPerformance:
         (input_dir_for_job / "test.txt").write_text("test content")
 
         with patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_source_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_source_input_repository_path",
             return_value=input_dir_for_job,
         ), patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_destination_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_destination_input_repository_path",
             return_value=nfs_queue_dir / "dest_input",
         ), patch(
-            "build_stream.infra.repositories.nfs_playbook_queue_request_repository"
+            "infra.repositories.nfs_playbook_queue_request_repository"
             ".NfsPlaybookQueueRequestRepository.is_available",
             return_value=True,
         ):
@@ -76,15 +76,15 @@ class TestLocalRepoPerformance:
         (input_dir_for_job / "test.txt").write_text("test content")
 
         with patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_source_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_source_input_repository_path",
             return_value=input_dir_for_job,
         ), patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_destination_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_destination_input_repository_path",
             return_value=nfs_queue_dir / "dest_input",
         ), patch(
-            "build_stream.infra.repositories.nfs_playbook_queue_request_repository"
+            "infra.repositories.nfs_playbook_queue_request_repository"
             ".NfsPlaybookQueueRequestRepository.is_available",
             return_value=True,
         ):
@@ -151,15 +151,15 @@ class TestLocalRepoPerformance:
         (input_dir_for_job / "test.txt").write_text("test content")
 
         with patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_source_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_source_input_repository_path",
             return_value=input_dir_for_job,
         ), patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_destination_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_destination_input_repository_path",
             return_value=nfs_queue_dir / "dest_input",
         ), patch(
-            "build_stream.infra.repositories.nfs_playbook_queue_request_repository"
+            "infra.repositories.nfs_playbook_queue_request_repository"
             ".NfsPlaybookQueueRequestRepository.is_available",
             return_value=True,
         ):
@@ -190,15 +190,15 @@ class TestLocalRepoPerformance:
         large_correlation_id = "x" * 1000  # Reduced from 10000
 
         with patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_source_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_source_input_repository_path",
             return_value=input_dir_for_job,
         ), patch(
-            "build_stream.infra.repositories.nfs_input_directory_repository"
-            ".NfsInputDirectoryRepository.get_destination_input_repository_path",
+            "infra.repositories.nfs_input_repository"
+            ".NfsInputRepository.get_destination_input_repository_path",
             return_value=nfs_queue_dir / "dest_input",
         ), patch(
-            "build_stream.infra.repositories.nfs_playbook_queue_request_repository"
+            "infra.repositories.nfs_playbook_queue_request_repository"
             ".NfsPlaybookQueueRequestRepository.is_available",
             return_value=True,
         ):

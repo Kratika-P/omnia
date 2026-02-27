@@ -25,4 +25,4 @@ process_catalog:
   rules:
     - changes:
         - catalog_rhel.json
-    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'

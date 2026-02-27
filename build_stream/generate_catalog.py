@@ -28,7 +28,10 @@ from pathlib import Path
 _FUNCTIONAL_BUNDLES = {
     "service_k8s",
     "slurm_custom",
+    "additional_packages",
 }
+
+_MISC_BUNDLE = "additional_packages"
 
 
 _INFRA_BUNDLES = {
@@ -250,6 +253,7 @@ def generate_catalog(input_dir, software_config_path, pxe_mapping_file):
             "DriverPackages": {},
             "FunctionalPackages": {},
             "OSPackages": {},
+            "Miscellaneous": [],
             "InfrastructurePackages": {}
         }
     }
@@ -258,6 +262,7 @@ def generate_catalog(input_dir, software_config_path, pxe_mapping_file):
     os_packages = {}
     functional_packages = {}
     infra_packages = {}
+    misc_package_ids = []
 
     os_pkg_id_counter = 1
     infra_pkg_id_counter = 1
@@ -267,11 +272,12 @@ def generate_catalog(input_dir, software_config_path, pxe_mapping_file):
         bundles = set(pkg_data.get('bundles') or [])
 
         # Determine classification using bundle membership.
-        # - Functional: only service_k8s and slurm_custom
+        # - Functional: service_k8s, slurm_custom, additional_packages
         # - Infrastructure: csi_driver_powerscale (plus name-based fallback)
         # - BaseOS: everything else
         is_functional = bool(bundles & _FUNCTIONAL_BUNDLES)
         is_infra = bool(bundles & _INFRA_BUNDLES) or _is_infra_package_name(pkg_name)
+        is_misc = _MISC_BUNDLE in bundles
 
         if is_infra:
             pkg_id = f"infrastructure_package_id_{infra_pkg_id_counter}"
@@ -284,6 +290,8 @@ def generate_catalog(input_dir, software_config_path, pxe_mapping_file):
             if key in package_id_map:
                 pkg_id = package_id_map[key]
                 functional_packages[pkg_id] = create_package_entry(pkg_data)
+                if is_misc:
+                    misc_package_ids.append(pkg_id)
             continue
 
         pkg_id = f"os_package_id_{os_pkg_id_counter}"
@@ -292,6 +300,7 @@ def generate_catalog(input_dir, software_config_path, pxe_mapping_file):
 
     catalog["Catalog"]["FunctionalPackages"] = functional_packages
     catalog["Catalog"]["OSPackages"] = os_packages
+    catalog["Catalog"]["Miscellaneous"] = sorted(list(set(misc_package_ids)))
     catalog["Catalog"]["InfrastructurePackages"] = infra_packages
 
     # Add BaseOS section

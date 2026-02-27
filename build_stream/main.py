@@ -44,6 +44,8 @@ container.wire(modules=[
     "api.jobs.dependencies",
     "api.local_repo.routes",
     "api.local_repo.dependencies",
+    "api.validate.routes",
+    "api.validate.dependencies",
 ])
 logger.info("Using container: %s", container.__class__.__name__)
 
@@ -58,9 +60,9 @@ async def lifespan(app: FastAPI):
     result_poller = container.result_poller()
     await result_poller.start()
     logger.info("Application startup complete")
-    
+
     yield
-    
+
     # Shutdown: Stop the result poller
     await result_poller.stop()
     logger.info("Application shutdown complete")
