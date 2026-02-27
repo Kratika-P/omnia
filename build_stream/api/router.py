@@ -23,6 +23,7 @@ from api.catalog_roles.routes import router as catalog_roles_router
 from api.generate_input_files.routes import router as generate_input_files_router
 from api.local_repo.routes import router as local_repo_router
 from api.build_image.routes import router as build_image_router
+from api.validate.routes import router as validate_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -33,3 +34,4 @@ api_router.include_router(catalog_roles_router)
 api_router.include_router(generate_input_files_router)
 api_router.include_router(local_repo_router)
 api_router.include_router(build_image_router)
+api_router.include_router(validate_router)

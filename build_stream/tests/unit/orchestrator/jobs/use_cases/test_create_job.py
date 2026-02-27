@@ -154,7 +154,7 @@ class TestCreateJobUseCase:
         response = use_case.execute(command)
         job_id = JobId(response.job_id)
         stages = stage_repo.find_all_by_job(job_id)
-        assert len(stages) == 9
+        assert len(stages) == 10
 
         stage_names = {stage.stage_name.value for stage in stages}
         expected_names = {stage_type.value for stage_type in StageType}
@@ -263,7 +263,7 @@ class TestCreateJobUseCase:
         assert first_response.job_id == second_response.job_id
         assert first_response.version == second_response.version
         stages = stage_repo.find_all_by_job(JobId(first_response.job_id))
-        assert len(stages) == 9
+        assert len(stages) == 10
 
         events = audit_repo.find_by_job(JobId(first_response.job_id))
         assert len(events) == 1

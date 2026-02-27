@@ -12,17 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Backward-compatible alias for the common ResultPoller.
+"""ValidateImageOnTest domain module.
 
-The result poller has been promoted to orchestrator.common.result_poller
-so that all stage APIs (local_repo, build_image, validate_image_on_test)
-share a single poller instance. This module re-exports the class under
-its original name for backward compatibility.
+This module contains domain logic for validate-image-on-test operations.
 """
 
-from orchestrator.common.result_poller import ResultPoller
+from core.validate.entities import ValidateImageOnTestRequest
+from core.validate.exceptions import (
+    ValidateDomainError,
+    EnvironmentUnavailableError,
+    ValidationExecutionError,
+)
 
-# Backward-compatible alias
-LocalRepoResultPoller = ResultPoller
-
-__all__ = ["LocalRepoResultPoller"]
+__all__ = [
+    "ValidateImageOnTestRequest",
+    "ValidateDomainError",
+    "EnvironmentUnavailableError",
+    "ValidationExecutionError",
+]
