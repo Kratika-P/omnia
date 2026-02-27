@@ -401,6 +401,19 @@ BUILD_STREAM_HOST_IP_INVALID_MSG = ("Field 'build_stream_host_ip' must be either
                                     "Provided IP does not match admin IP from network_spec.yml.")
 AARCH64_INVENTORY_HOST_IP_INVALID_SUBNET_MSG = ("Field 'aarch64_inventory_host_ip' must be in the same subnet as OIM admin IP. "
                                                 "Check network_spec.yml for admin network configuration.")
+BUILD_STREAM_HOST_IP_INVALID_FORMAT_MSG = "Invalid IPv4 address format for build_stream_host_ip."
+AARCH64_INVENTORY_HOST_IP_INVALID_FORMAT_MSG = "Invalid IPv4 address format for aarch64_inventory_host_ip."
+AARCH64_INVENTORY_HOST_IP_INVALID_SUBNET_MSG = ("Field 'aarch64_inventory_host_ip' must be in the same subnet as OIM admin IP. "
+                                                "Check network_spec.yml for admin network configuration.")
+BUILD_STREAM_PORT_REQUIRED_MSG = "Field 'port' is required in build_stream section when enable_build_stream is true."
+BUILD_STREAM_PORT_INVALID_RANGE_MSG = "Field 'port' must be an integer between 1 and 65535."
+BUILD_STREAM_HOST_UNREACHABLE_MSG = "Host '{0}' is not reachable from OIM. Please verify the host is accessible and network connectivity is established."
+ 
+def build_stream_port_in_use_msg(port):
+    """Returns error message for port already in use."""
+    return (f"Port {port} is already in use. "
+            f"Please choose a different port or stop the service using this port. "
+            f"To check which process is using this port, run: 'ss -tulpn | grep :{port}'")
 
 # addtional_software
 ADDITIONAL_SOFTWARE_FAIL_MSG = "The additional_software is mandatory in additional_software.json"
