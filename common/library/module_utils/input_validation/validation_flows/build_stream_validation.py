@@ -97,23 +97,52 @@ def validate_build_stream_config(input_file_path, data,
     if not admin_ip or not netmask_bits:
         # Cannot validate without admin network info
         return errors
-   
+
+    # Validate build_stream_host_ip (optional field)
+    build_stream_host_ip = data.get("build_stream_host_ip")
+
+    if build_stream_host_ip and build_stream_host_ip not in ["", None]:
+        # Check if it's a valid IP format (already validated by schema, but double-check)
+        try:
+            ipaddress.IPv4Address(build_stream_host_ip)
+        except ValueError:
+            errors.append(create_error_msg(build_stream_yml, "build_stream_host_ip",
+                                          "Invalid IPv4 address format"))
+            return errors
+
+        # For now, we accept admin IP or any valid public IP
+        # Note: "public IP" validation would require additional context (e.g., list of OIM public IPs)
+        # Currently validating that it matches admin IP as primary check
+        if build_stream_host_ip != admin_ip:
+            # Log warning but don't fail - could be a valid public IP
+            logger.warning(
+                "build_stream_host_ip (%s) does not match admin IP (%s). "
+                "Ensure this is a valid public IP of OIM if different.",
+                build_stream_host_ip, admin_ip
+            )
+    else:
+        # If not provided, admin IP will be used as default (no validation needed)
+        logger.info(
+            "build_stream_host_ip not provided, admin IP (%s) will be used as default",
+            admin_ip
+        )
+
     # Validate aarch64_inventory_host_ip
     aarch64_inventory_host_ip = data.get("aarch64_inventory_host_ip")
-   
+
     if aarch64_inventory_host_ip and aarch64_inventory_host_ip not in ["", None]:
         # Check if it's a valid IP format
         try:
             aarch64_ip = ipaddress.IPv4Address(aarch64_inventory_host_ip)
         except ValueError:
             errors.append(create_error_msg(build_stream_yml, "aarch64_inventory_host_ip",
-                                          msg.AARCH64_INVENTORY_HOST_IP_INVALID_FORMAT_MSG))
+                                          "Invalid IPv4 address format"))
             return errors
-       
+
         # Check if it's in the same subnet as admin IP
         try:
             admin_network = ipaddress.IPv4Network(f"{admin_ip}/{netmask_bits}", strict=False)
-           
+
             if aarch64_ip not in admin_network:
                 errors.append(create_error_msg(
                     build_stream_yml,
@@ -122,30 +151,26 @@ def validate_build_stream_config(input_file_path, data,
                 ))
         except ValueError as e:
             logger.error("Failed to validate subnet for aarch64_inventory_host_ip: %s", str(e))
-   
+
+    # Validate build_stream_port
     build_stream_port = data.get("build_stream_port")
-   
-    if build_stream_port is None:
-        errors.append(create_error_msg(
-            f"{build_stream_yml}.build_stream",
-            "port",
-            msg.BUILD_STREAM_PORT_REQUIRED_MSG
-        ))
-    elif not isinstance(build_stream_port, int) or build_stream_port < 1 or build_stream_port > 65535:
-        errors.append(create_error_msg(
-            f"{build_stream_yml}.build_stream",
-            "port",
-            msg.BUILD_STREAM_PORT_INVALID_RANGE_MSG
-        ))
-    else:
-        # Check if port is available locally
-        is_available, port_error = check_port_available(build_stream_port, logger)
-        if not is_available:
+
+    if build_stream_port is not None:
+        if not isinstance(build_stream_port, int) or build_stream_port < 1 or build_stream_port > 65535:
             errors.append(create_error_msg(
-                f"{build_stream_yml}.build_stream",
-                "port",
-                port_error
+                build_stream_yml,
+                "build_stream_port",
+                "Port must be an integer between 1 and 65535"
             ))
-            logger.error("Port %d is not available: %s", build_stream_port, port_error)
-   
+        else:
+            # Check if port is available locally
+            is_available, port_error = check_port_available(build_stream_port, logger)
+            if not is_available:
+                errors.append(create_error_msg(
+                    build_stream_yml,
+                    "build_stream_port",
+                    port_error
+                ))
+                logger.error("Port %d is not available: %s", build_stream_port, port_error)
+
     return errors
