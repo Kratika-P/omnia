@@ -21,6 +21,7 @@ gitlab_repo_file_path: "/etc/yum.repos.d/gitlab_gitlab-ce.repo"
 # Omnibus package
 gitlab_package_name: "gitlab-ce-18.8.0"
 gitlab_package_state: "present"
+gitlab_repo_script_url: "https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.rpm.sh"
 
 # Timeouts
 gitlab_startup_wait_minutes: 5
@@ -99,6 +100,9 @@ gitlab_runner_online_failure_msg: "No online runner is assigned to project {{ gi
 podman_socket_path: "/run/podman/podman.sock"
 docker_socket_path: "/var/run/docker.sock"
 
+# Network
+gitlab_ssh_port: 22
+
 # GitLab certificate defaults
 gitlab_cert_dir: "/root/gitlab-certs"
 gitlab_ssl_dir: "/etc/gitlab/ssl"
@@ -111,6 +115,7 @@ gitlab_additional_dns_sans: []
 gitlab_additional_ip_sans: []
 
 # GitLab password change messages
+gitlab_password_change_stdout_check: "Password changed successfully"
 gitlab_password_change_fail_msg: "Failed to change GitLab root password. Please check GitLab logs and try again."
 gitlab_password_change_success_msg: "GitLab root password changed successfully!"
 
@@ -118,6 +123,52 @@ gitlab_password_change_success_msg: "GitLab root password changed successfully!"
 gitlab_trigger_description: "Omnia Software Catalog Webhook"
 gitlab_catalog_repo_path: "catalog_rhel.json"
 gitlab_catalog_json_source: "{{ role_path }}/../../../../examples/catalog/catalog_rhel.json"
+
+# Pipeline CI/CD variables
+gitlab_pipeline_var_check_status_codes: [200, 404]
+gitlab_pipeline_var_create_status_codes: [200, 201]
+gitlab_pipeline_var_update_status_codes: [200, 201]
+gitlab_pipeline_bs_variables:
+  - key: "GITLAB_API_TOKEN"
+    value: "{{ gitlab_root_token }}"
+    variable_type: "env_var"
+    masked: true
+  - key: "BSM_API_URL"
+    value: "{{ _gitlab_bsm_api_url | default('') }}"
+    variable_type: "env_var"
+    masked: false
+  - key: "BSM_API_USERNAME"
+    value: "{{ _gitlab_bs_auth_username | default('') }}"
+    variable_type: "env_var"
+    masked: false
+  - key: "BSM_API_PASSWORD"
+    value: "{{ _gitlab_bs_auth_password | default('') }}"
+    variable_type: "env_var"
+    masked: true
+
+gitlab_bs_not_enabled_fail_msg: >
+  enable_build_stream is not set to true in build_stream_config.yml.
+  Set enable_build_stream to true before running the GitLab playbook.
+
+gitlab_bs_auth_username_fail_msg: >
+  Build stream auth username is empty. Run the credential utility to populate
+  build_stream_auth_username before running the GitLab playbook.
+
+gitlab_bs_auth_password_fail_msg: >
+  Build stream auth password is empty. Run the credential utility to populate
+  build_stream_auth_password before running the GitLab playbook.
+
+gitlab_bs_host_ip_fail_msg: >
+  build_stream_host_ip is not set in build_stream_config.yml.
+  Provide the OIM IP address in build_stream_host_ip before running the GitLab playbook.
+
+gitlab_selinux_fail_msg: >
+  SELinux is currently enabled. GitLab installation requires SELinux to be disabled.
+  Disable SELinux and reboot the host before running this playbook.
+
+gitlab_sshpass_install_fail_msg: >
+  Failed to install sshpass. Ensure AppStream and BaseOS repositories
+  are configured and enabled on this host before running this playbook.
 
 # Debug messages
 gitlab_ca_export_path: "{{ gitlab_cert_dir }}/ca.crt"
@@ -144,6 +195,9 @@ gitlab_ca_export_msg:
   - "to avoid 'Not Secure' warnings when accessing GitLab."
   - ""
   - "========================================"
+
+# OIM API Server Configuration
+oim_api_verify_ssl: true
 
 gitlab_deployment_complete_msg:
   - "============================================"
