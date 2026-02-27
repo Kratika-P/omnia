@@ -14,13 +14,13 @@
 
 """FastAPI routes for catalog roles API."""
 
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.dependencies import require_catalog_read, verify_token
 from api.catalog_roles.schemas import ErrorResponse, GetRolesResponse
+from api.logging_utils import log_secure_info
 from api.catalog_roles.service import (
     CatalogRolesService,
     ParseCatalogNotCompletedError,
@@ -28,8 +28,6 @@ from api.catalog_roles.service import (
 )
 from core.jobs.exceptions import JobNotFoundError
 from core.jobs.value_objects import JobId
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Catalog Roles"])
 
@@ -107,12 +105,23 @@ async def get_catalog_roles(
         HTTPException 404: If the job does not exist or parse-catalog has not completed.
         HTTPException 500: If an unexpected error occurs.
     """
-    logger.info("Get catalog roles request for job: %s", job_id)
+    log_secure_info(
+        "info",
+        f"Get catalog roles request: job_id={job_id}",
+        job_id=job_id,
+    )
 
     try:
         validated_job_id = JobId(job_id)
     except ValueError as exc:
-        logger.warning("Invalid job_id format: %s", job_id)
+        log_secure_info(
+            "warning",
+            f"Get catalog roles failed: job_id={job_id}, reason=invalid_job_id,"
+            f" detail={exc}, status=400",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -124,7 +133,18 @@ async def get_catalog_roles(
     service = _get_catalog_roles_service()
 
     try:
+        log_secure_info(
+            "debug",
+            f"Get catalog roles executing: job_id={job_id}",
+            job_id=job_id,
+        )
         result = service.get_roles(validated_job_id)
+        log_secure_info(
+            "info",
+            f"Get catalog roles success: job_id={job_id}, status=200",
+            job_id=job_id,
+            end_section=True,
+        )
         return GetRolesResponse(
             job_id=job_id,
             roles=result["roles"],
@@ -133,8 +153,13 @@ async def get_catalog_roles(
         )
 
     except ParseCatalogNotCompletedError as exc:
-        logger.warning(
-            "Parse-catalog not completed for job %s: %s", job_id, exc
+        log_secure_info(
+            "warning",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=parse_catalog_not_completed, detail={exc}, status=404",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -145,8 +170,13 @@ async def get_catalog_roles(
         ) from exc
 
     except RolesNotFoundError as exc:
-        logger.error(
-            "Roles not found in artifact for job %s: %s", job_id, exc
+        log_secure_info(
+            "error",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=roles_not_found, detail={exc}, status=404",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -157,7 +187,14 @@ async def get_catalog_roles(
         ) from exc
 
     except JobNotFoundError as exc:
-        logger.warning("Job not found: %s", job_id)
+        log_secure_info(
+            "warning",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=job_not_found, detail={exc}, status=404",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -167,7 +204,14 @@ async def get_catalog_roles(
         ) from exc
 
     except Exception as exc:
-        logger.exception("Unexpected error retrieving catalog roles for job: %s", job_id)
+        log_secure_info(
+            "error",
+            f"Get catalog roles failed: job_id={job_id},"
+            f" reason=unexpected_error, status=500",
+            job_id=job_id,
+            exc_info=True,
+            end_section=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
