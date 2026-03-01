@@ -15,8 +15,11 @@
 """
 Validates build stream configuration files for Omnia.
 """
+import fcntl
 import ipaddress
+import os
 import socket
+import struct
 import subprocess
 from ansible.module_utils.input_validation.common_utils import validation_utils
 from ansible.module_utils.input_validation.common_utils import config
@@ -26,6 +29,72 @@ file_names = config.files
 create_error_msg = validation_utils.create_error_msg
 create_file_path = validation_utils.create_file_path
 load_yaml_as_json = validation_utils.load_yaml_as_json
+
+
+def get_ethernet_interface_ips(logger):
+    """
+    Get all IPv4 addresses assigned to physical ethernet interfaces on the OIM.
+
+    Uses /sys/class/net/ to identify physical ethernet interfaces
+    (type=1, has 'device' symlink, not a bridge) and socket ioctl
+    to retrieve their IPv4 addresses. No external tools required.
+
+    Args:
+        logger: Logger instance
+
+    Returns:
+        list: List of IPv4 address strings from ethernet interfaces
+    """
+    ethernet_ips = []
+    net_dir = '/sys/class/net'
+    # SIOCGIFADDR ioctl to get interface address
+    siocgifaddr = 0x8915
+
+    try:
+        if not os.path.isdir(net_dir):
+            logger.warning("/sys/class/net directory not found")
+            return ethernet_ips
+
+        for iface in sorted(os.listdir(net_dir)):
+            iface_path = os.path.join(net_dir, iface)
+
+            # Check interface type: 1 = ARPHRD_ETHER (ethernet)
+            type_file = os.path.join(iface_path, 'type')
+            try:
+                with open(type_file, 'r', encoding='utf-8') as f:
+                    iface_type = int(f.read().strip())
+            except (IOError, ValueError):
+                continue
+            if iface_type != 1:
+                continue
+
+            # Skip bridge interfaces (have a 'bridge' subdirectory)
+            if os.path.isdir(os.path.join(iface_path, 'bridge')):
+                continue
+
+            # Skip virtual interfaces: physical NICs have a 'device' symlink
+            if not os.path.exists(os.path.join(iface_path, 'device')):
+                continue
+
+            # Get IPv4 address via ioctl
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    ip_bytes = fcntl.ioctl(
+                        sock.fileno(),
+                        siocgifaddr,
+                        struct.pack('256s', iface.encode('utf-8')[:15])
+                    )[20:24]
+                    ip_addr = socket.inet_ntoa(ip_bytes)
+                    ethernet_ips.append(ip_addr)
+            except (IOError, OSError):
+                # Interface exists but has no IPv4 address assigned
+                logger.debug("No IPv4 address on interface %s", iface)
+                continue
+
+        logger.debug("Ethernet interface IPs found: %s", ethernet_ips)
+    except OSError as e:
+        logger.warning("Failed to get ethernet interface IPs: %s", str(e))
+    return ethernet_ips
 
 
 def is_port_used_by_build_stream(port, admin_ip, logger):
@@ -159,15 +228,24 @@ def validate_build_stream_config(input_file_path, data,
                                           "Invalid IPv4 address format"))
             return errors
 
-        # For now, we accept admin IP or any valid public IP
-        # Note: "public IP" validation would require additional context (e.g., list of OIM public IPs)
-        # Currently validating that it matches admin IP as primary check
-        if build_stream_host_ip != admin_ip:
-            # Log warning but don't fail - could be a valid public IP
-            logger.warning(
-                "build_stream_host_ip (%s) does not match admin IP (%s). "
-                "Ensure this is a valid public IP of OIM if different.",
-                build_stream_host_ip, admin_ip
+        # Validate that build_stream_host_ip matches an IP on an OIM ethernet interface
+        # (i.e., it must be the OIM admin IP or OIM public IP)
+        ethernet_ips = get_ethernet_interface_ips(logger)
+
+        if not ethernet_ips:
+            errors.append(create_error_msg(build_stream_yml, "build_stream_host_ip",
+                                          msg.BUILD_STREAM_HOST_IP_NO_ETHERNET_IPS_MSG))
+            return errors
+
+        if build_stream_host_ip not in ethernet_ips:
+            errors.append(create_error_msg(
+                build_stream_yml, "build_stream_host_ip",
+                msg.build_stream_host_ip_not_oim_ip_msg(build_stream_host_ip, ethernet_ips)
+            ))
+        else:
+            logger.info(
+                "build_stream_host_ip (%s) validated against OIM ethernet interface IPs",
+                build_stream_host_ip
             )
     else:
         # If not provided, admin IP will be used as default (no validation needed)

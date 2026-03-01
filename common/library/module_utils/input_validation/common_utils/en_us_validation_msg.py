@@ -402,6 +402,20 @@ AARCH64_INVENTORY_HOST_IP_INVALID_SUBNET_MSG = ("Field 'aarch64_inventory_host_i
 AARCH64_INVENTORY_HOST_IP_INVALID_SUBNET_MSG = ("Field 'aarch64_inventory_host_ip' must be in the same subnet as OIM admin IP. "
                                                 "Check network_spec.yml for admin network configuration.")
 
+def build_stream_host_ip_not_oim_ip_msg(ip, allowed_ips):
+    """Returns error message for build_stream_host_ip not matching any OIM ethernet interface IP."""
+    return (f"build_stream_host_ip '{ip}' is not a valid OIM IP address. "
+            f"It must match an IP assigned to an ethernet interface on the OIM "
+            f"(i.e., the OIM admin IP or OIM public IP). "
+            f"Allowed IPs (from ethernet interfaces): {', '.join(allowed_ips)}. "
+            f"Please set build_stream_host_ip to one of these IPs or leave it empty to use the admin IP.")
+
+BUILD_STREAM_HOST_IP_NO_ETHERNET_IPS_MSG = (
+    "Unable to determine OIM ethernet interface IPs. "
+    "Cannot validate build_stream_host_ip. Ensure nmcli and ip commands are available "
+    "and ethernet interfaces are configured on the OIM."
+)
+
 def build_stream_port_in_use_msg(port):
     """Returns error message for port already in use."""
     return (f"Port {port} is already in use. "
