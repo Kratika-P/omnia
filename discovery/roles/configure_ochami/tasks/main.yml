@@ -14,7 +14,7 @@
 ---
 
 - name: Refresh SMD access token before ochami operations
-  ansible.builtin.include_tasks: "{{ playbook_dir }}/../common/tasks/common/openchami_auth.yml"
+  ansible.builtin.include_tasks: "{{ role_path }}/../common/tasks/common/openchami_auth.yml"
   vars:
     oim_node_name: "{{ hostvars['localhost']['oim_node_name'] }}"
 
