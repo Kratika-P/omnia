@@ -354,6 +354,24 @@ IB_NETMASK_BITS_MISMATCH_MSG = (
 IB_SUBNET_IN_ADMIN_RANGE_MSG = (
     "ib_network subnet must be outside the admin network range derived from primary_oim_admin_ip/netmask_bits in network_spec.yml."
 )
+ADMIN_NIC_NOT_FOUND_MSG = (
+    "admin_network oim_nic_name '{0}' does not exist on this system. "
+    "Verify the interface name with: ip link show"
+)
+ADMIN_NIC_NO_CARRIER_MSG = (
+    "admin_network oim_nic_name '{0}' has no physical link detected (carrier=0). "
+    "The cable may be unplugged or the physical connection is broken. "
+    "Verify with: cat /sys/class/net/{0}/carrier"
+)
+ADMIN_NIC_ADMIN_DOWN_MSG = (
+    "admin_network oim_nic_name '{0}' is administratively down. "
+    "Bring the interface UP before running prepare_oim. "
+)
+ADMIN_NIC_DOWN_MSG = (
+    "admin_network oim_nic_name '{0}' is not in UP state. "
+    "Please ensure the admin NIC is connected and operationally UP before running prepare_oim. "
+    "Verify with: cat /sys/class/net/{0}/operstate"
+)
 
 # telemetry
 MANDATORY_FIELD_FAIL_MSG = "must not be empty"

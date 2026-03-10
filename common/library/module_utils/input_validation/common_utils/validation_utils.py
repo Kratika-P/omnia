@@ -603,6 +603,57 @@ def get_interface_ips_and_netmasks(interface):
     except Exception:
         return []
 
+def get_interface_link_state(interface):
+    """
+    Returns the operational and physical link state of a network interface.
+
+    Checks both operstate and carrier from sysfs to distinguish between:
+      - "up"         : interface admin UP and physical link present (cable connected)
+      - "no_carrier" : interface admin UP but physical link lost (cable unplugged/broken)
+      - "admin_down" : interface administratively down (carrier unreadable by driver)
+      - "not_found"  : interface does not exist on the system
+
+    Args:
+        interface (str): Interface name (e.g., "eno3").
+
+    Returns:
+        tuple: (is_up (bool), reason (str))
+               is_up is True only when operstate is "up" (carrier implicitly confirmed).
+    """
+    base_path = f"/sys/class/net/{interface}"
+
+    if not os.path.exists(base_path):
+        return False, "not_found"
+
+    try:
+        with open(f"{base_path}/operstate", "r", encoding="utf-8") as f:
+            operstate = f.read().strip().lower()
+    except Exception:
+        operstate = "unknown"
+
+    # operstate="up" is the definitive UP signal from the kernel.
+    # operstate="unknown" means the driver does not implement precise operstate
+    # reporting (e.g. dummy, loopback, bonding slaves) — carrier must be checked
+    # directly in this case to determine actual link state.
+    if operstate == "up":
+        return True, "up"
+
+    try:
+        with open(f"{base_path}/carrier", "r", encoding="utf-8") as f:
+            carrier = f.read().strip()
+        if carrier == "1":
+            # carrier=1 with non-"up" operstate (e.g. "unknown") means the
+            # interface is functionally UP — driver just doesn't report operstate.
+            return True, "up"
+        return False, "no_carrier"
+    except OSError:
+        # carrier file raises EINVAL when interface is administratively down;
+        # the driver refuses to report carrier state in this case.
+        return False, "admin_down"
+    except Exception:
+        return False, "down"
+
+
 def check_port_overlap(port_ranges) -> bool:
     """
     Check if any of the port ranges in the given string overlap.

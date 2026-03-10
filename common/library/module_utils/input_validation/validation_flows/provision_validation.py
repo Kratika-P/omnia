@@ -991,7 +991,26 @@ def _validate_admin_network(network):
     # Neither should be in the dynamic_range
     errors.extend(validate_admin_bmc_ip_not_in_dynamic_range(primary_oim_admin_ip, primary_oim_bmc_ip, dynamic_range))
 
-    # Ensure primary_oim_admin_ip matches actual NIC IP and netmask
+    # Validate admin NIC operational state and physical link
+    if oim_nic_name:
+        nic_up, nic_reason = validation_utils.get_interface_link_state(oim_nic_name)
+        if not nic_up:
+            _nic_msg_map = {
+                "not_found":  en_us_validation_msg.ADMIN_NIC_NOT_FOUND_MSG,
+                "no_carrier": en_us_validation_msg.ADMIN_NIC_NO_CARRIER_MSG,
+                "admin_down": en_us_validation_msg.ADMIN_NIC_ADMIN_DOWN_MSG,
+            }
+            nic_msg_template = _nic_msg_map.get(
+                nic_reason, en_us_validation_msg.ADMIN_NIC_DOWN_MSG
+            )
+            errors.append(
+                create_error_msg(
+                    "admin_network.oim_nic_name",
+                    oim_nic_name,
+                    nic_msg_template.format(oim_nic_name),
+                )
+            )
+
     # Ensure primary_oim_admin_ip matches actual NIC IP and netmask
     if oim_nic_name and primary_oim_admin_ip and netmask_bits:
         nic_ips = validation_utils.get_interface_ips_and_netmasks(oim_nic_name)  # returns list of (ip, netmask_bits)
