@@ -107,6 +107,7 @@ class StageMapper:
             ended_at=stage.ended_at,
             error_code=stage.error_code,
             error_summary=stage.error_summary,
+            log_file_path=stage.log_file_path,
             version=stage.version,
         )
 
@@ -129,6 +130,7 @@ class StageMapper:
             ended_at=model.ended_at,
             error_code=model.error_code,
             error_summary=model.error_summary,
+            log_file_path=model.log_file_path,
             version=model.version,
         )
 

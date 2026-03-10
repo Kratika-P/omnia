@@ -108,6 +108,9 @@ class StageModel(Base):
     error_code = Column(String(50), nullable=True)
     error_summary = Column(Text, nullable=True)
 
+    # Log file path
+    log_file_path = Column(String(512), nullable=True)
+
     # Optimistic locking
     version = Column(Integer, nullable=False, default=1)
 

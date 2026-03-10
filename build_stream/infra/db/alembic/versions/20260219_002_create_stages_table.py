@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_code", sa.String(50), nullable=True),
         sa.Column("error_summary", sa.Text, nullable=True),
+        sa.Column("log_file_path", sa.String(512), nullable=True),
         sa.Column("version", sa.Integer, nullable=False, server_default="1"),
         sa.PrimaryKeyConstraint("job_id", "stage_name"),
         sa.ForeignKeyConstraint(

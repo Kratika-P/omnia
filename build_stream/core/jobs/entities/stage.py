@@ -38,6 +38,7 @@ class Stage:
         ended_at: Stage end timestamp.
         error_code: Error code if failed.
         error_summary: Error description if failed.
+        log_file_path: Ansible log file path on OIM host (NFS share).
         version: Optimistic locking version.
     """
 
@@ -49,6 +50,7 @@ class Stage:
     ended_at: Optional[datetime] = None
     error_code: Optional[str] = None
     error_summary: Optional[str] = None
+    log_file_path: Optional[str] = None
     version: int = 1
 
     def _initialize_timestamps(self) -> None:

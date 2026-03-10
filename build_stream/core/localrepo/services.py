@@ -105,6 +105,10 @@ class InputFileService:
                 shutil.copytree(str(config_dir), str(dest_config_dir), dirs_exist_ok=True)
                 logger.info("Copied config directory for job %s", job_id)
 
+            # Reset software.csv files for both architectures
+            # (temporary fix to ensure new packages are downloaded when catalog changes)
+            self._reset_software_csv_files()
+
             log_secure_info(
                 "info",
                 f"Input files prepared for job {job_id}",
@@ -124,6 +128,55 @@ class InputFileService:
                 reason=str(exc),
                 correlation_id=correlation_id,
             ) from exc
+
+    def _reset_software_csv_files(self) -> None:
+        """Reset software.csv files for both architectures.
+
+        This is a temporary fix to ensure new packages are downloaded when the
+        catalog changes. Eventually, the playbook should be modified to handle
+        package-level status instead of relying on software.csv.
+
+        Removes software.csv files at:
+        - /opt/omnia/log/local_repo/x86_64/software.csv
+        - /opt/omnia/log/local_repo/aarch64/software.csv
+
+        Only attempts removal if parent directories exist.
+        """
+        architectures = ["x86_64", "aarch64"]
+        base_path = Path("/opt/omnia/log/local_repo")
+
+        for arch in architectures:
+            software_csv_path = base_path / arch / "software.csv"
+
+            # Check if parent directory exists before attempting removal
+            if not software_csv_path.parent.exists():
+                logger.debug(
+                    "Parent directory does not exist for %s, skipping removal",
+                    software_csv_path,
+                )
+                continue
+
+            # Remove file if it exists
+            if software_csv_path.exists():
+                try:
+                    software_csv_path.unlink()
+                    logger.info(
+                        "Reset software.csv for architecture %s at %s",
+                        arch,
+                        software_csv_path,
+                    )
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to remove software.csv for architecture %s: %s",
+                        arch,
+                        str(exc),
+                    )
+            else:
+                logger.debug(
+                    "software.csv does not exist for architecture %s at %s",
+                    arch,
+                    software_csv_path,
+                )
 
 
 class PlaybookQueueRequestService:

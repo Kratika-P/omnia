@@ -65,8 +65,8 @@ class CreateJobRequest(BaseModel):
         return v.strip()
 
 
-class StageResponse(BaseModel):
-    """Response model for a stage entry."""
+class CreateStageResponse(BaseModel):
+    """Response model for a stage entry in create job response."""
     stage_name: str = Field(..., description="Stage identifier")
     stage_state: str = Field(..., description="Stage state")
     started_at: Optional[str] = Field(default=None, description="Start timestamp (ISO 8601)")
@@ -75,13 +75,24 @@ class StageResponse(BaseModel):
     error_summary: Optional[str] = Field(default=None, description="Error summary if failed")
 
 
+class GetStageResponse(BaseModel):
+    """Response model for a stage entry in get job response."""
+    stage_name: str = Field(..., description="Stage identifier")
+    stage_state: str = Field(..., description="Stage state")
+    started_at: Optional[str] = Field(default=None, description="Start timestamp (ISO 8601)")
+    ended_at: Optional[str] = Field(default=None, description="End timestamp (ISO 8601)")
+    error_code: Optional[str] = Field(default=None, description="Error code if failed")
+    error_summary: Optional[str] = Field(default=None, description="Error summary if failed")
+    log_file_path: Optional[str] = Field(default=None, description="Ansible log file path on OIM host (NFS share)")
+
+
 class CreateJobResponse(BaseModel):
     """Response model for job creation."""
     job_id: str = Field(..., description="Job identifier")
     correlation_id: str = Field(..., description="Correlation identifier")
     job_state: str = Field(..., description="Job state")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
-    stages: List[StageResponse] = Field(..., description="Job stages")
+    stages: List[CreateStageResponse] = Field(..., description="Job stages")
 
 
 class GetJobResponse(BaseModel):
@@ -94,7 +105,7 @@ class GetJobResponse(BaseModel):
         default=None, description="Update timestamp (ISO 8601)"
     )
     tombstone: Optional[bool] = Field(default=None, description="Tombstone flag")
-    stages: List[StageResponse] = Field(..., description="Job stages (step breakdown)")
+    stages: List[GetStageResponse] = Field(..., description="Job stages (step breakdown)")
     
     # Additional fields for state change timestamps
     state_timestamps: Optional[Dict[str, str]] = Field(

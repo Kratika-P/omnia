@@ -168,6 +168,15 @@ class ResultPoller:
                     error_code,
                 )
 
+            # Update log file path if available
+            if result.log_file_path:
+                stage.log_file_path = result.log_file_path
+                logger.info(
+                    "Updated stage log path: job_id=%s, stage=%s",
+                    result.job_id,
+                    result.stage_name,
+                )
+
             # Save updated stage
             self._stage_repo.save(stage)
 

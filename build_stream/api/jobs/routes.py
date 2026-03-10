@@ -49,9 +49,10 @@ from api.jobs.dependencies import (
 from api.jobs.schemas import (
     CreateJobRequest,
     CreateJobResponse,
+    CreateStageResponse,
     ErrorResponse,
     GetJobResponse,
-    StageResponse,
+    GetStageResponse,
 )
 from api.catalog_roles.dependencies import get_catalog_roles_service
 from api.catalog_roles.service import CatalogRolesService
@@ -176,7 +177,7 @@ async def create_job(
 
         stages_entities = stage_repo.find_all_by_job(JobId(result.job_id))  # pylint: disable=no-member
         stages = [
-            StageResponse(
+            CreateStageResponse(
                 stage_name=str(s.stage_name),
                 stage_state=s.stage_state.value,
                 started_at=s.started_at.isoformat() + "Z" if s.started_at else None,
@@ -369,13 +370,14 @@ async def get_job(
                 filtered_stages.append(s)
         
         stages = [
-            StageResponse(
+            GetStageResponse(
                 stage_name=str(s.stage_name),
                 stage_state=s.stage_state.value,
                 started_at=s.started_at.isoformat() + "Z" if s.started_at else None,
                 ended_at=s.ended_at.isoformat() + "Z" if s.ended_at else None,
                 error_code=s.error_code,
                 error_summary=s.error_summary,
+                log_file_path=s.log_file_path,
             )
             for s in filtered_stages
         ]

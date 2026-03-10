@@ -92,6 +92,7 @@ class PlaybookResult:
         error_code: Error classification code (if failed).
         error_summary: Human-readable error description (if failed).
         timestamp: Result creation timestamp.
+        log_file_path: Ansible log file path on OIM host (NFS share).
     """
 
     job_id: str
@@ -107,6 +108,7 @@ class PlaybookResult:
     error_code: Optional[str] = None
     error_summary: Optional[str] = None
     timestamp: str = ""
+    log_file_path: Optional[str] = None
 
     @property
     def is_success(self) -> bool:
@@ -146,6 +148,7 @@ class PlaybookResult:
             error_code=data.get("error_code"),
             error_summary=data.get("error_summary"),
             timestamp=data.get("timestamp", ""),
+            log_file_path=data.get("log_file_path"),
         )
 
 

@@ -22,8 +22,9 @@ from pydantic import ValidationError
 from api.jobs.schemas import (
     CreateJobRequest,
     CreateJobResponse,
+    CreateStageResponse,
     GetJobResponse,
-    StageResponse,
+    GetStageResponse,
     ErrorResponse,
 )
 
@@ -149,10 +150,10 @@ class TestCreateJobResponse:
             CreateJobResponse(**data)
 
 
-class TestStageResponse:
-    """Test class."""
+class TestCreateStageResponse:
+    """Test class for CreateStageResponse."""
 
-    def test_valid_stage_response(self):
+    def test_valid_create_stage_response(self):
         """Test method."""
         data = {
             "stage_name": "parse-catalog",
@@ -163,14 +164,14 @@ class TestStageResponse:
             "error_summary": None,
         }
 
-        stage = StageResponse(**data)
+        stage = CreateStageResponse(**data)
 
         assert stage.stage_name == "parse-catalog"
         assert stage.stage_state == "PENDING"
         assert stage.started_at is None
         assert stage.ended_at is None
 
-    def test_stage_with_timestamps(self):
+    def test_create_stage_with_timestamps(self):
         """Test method."""
         data = {
             "stage_name": "parse-catalog",
@@ -181,12 +182,12 @@ class TestStageResponse:
             "error_summary": None,
         }
 
-        stage = StageResponse(**data)
+        stage = CreateStageResponse(**data)
 
         assert stage.started_at == "2026-01-25T15:00:00Z"
         assert stage.ended_at is None
 
-    def test_stage_with_error(self):
+    def test_create_stage_with_error(self):
         """Test method."""
         data = {
             "stage_name": "parse-catalog",
@@ -197,10 +198,65 @@ class TestStageResponse:
             "error_summary": "Invalid JSON format",
         }
 
-        stage = StageResponse(**data)
+        stage = CreateStageResponse(**data)
 
         assert stage.error_code == "CATALOG_PARSE_ERROR"
         assert stage.error_summary == "Invalid JSON format"
+
+
+class TestGetStageResponse:
+    """Test class for GetStageResponse."""
+
+    def test_valid_get_stage_response(self):
+        """Test method."""
+        data = {
+            "stage_name": "parse-catalog",
+            "stage_state": "PENDING",
+            "started_at": None,
+            "ended_at": None,
+            "error_code": None,
+            "error_summary": None,
+            "log_file_path": None,
+        }
+
+        stage = GetStageResponse(**data)
+
+        assert stage.stage_name == "parse-catalog"
+        assert stage.stage_state == "PENDING"
+        assert stage.log_file_path is None
+
+    def test_get_stage_with_log_file_path(self):
+        """Test method."""
+        data = {
+            "stage_name": "local-repo",
+            "stage_state": "COMPLETED",
+            "started_at": "2026-01-25T15:00:00Z",
+            "ended_at": "2026-01-25T15:10:00Z",
+            "error_code": None,
+            "error_summary": None,
+            "log_file_path": "/opt/omnia/log/build_stream/job-123/local_repo_20260125_150000.log",
+        }
+
+        stage = GetStageResponse(**data)
+
+        assert stage.log_file_path == "/opt/omnia/log/build_stream/job-123/local_repo_20260125_150000.log"
+
+    def test_get_stage_with_error_and_log_path(self):
+        """Test method."""
+        data = {
+            "stage_name": "build-image-x86_64",
+            "stage_state": "FAILED",
+            "started_at": "2026-01-25T15:00:00Z",
+            "ended_at": "2026-01-25T15:05:00Z",
+            "error_code": "BUILD_FAILED",
+            "error_summary": "Build process failed",
+            "log_file_path": "/opt/omnia/log/build_stream/job-123/build_image_x86_64_20260125_150000.log",
+        }
+
+        stage = GetStageResponse(**data)
+
+        assert stage.error_code == "BUILD_FAILED"
+        assert stage.log_file_path == "/opt/omnia/log/build_stream/job-123/build_image_x86_64_20260125_150000.log"
 
 
 class TestGetJobResponse:
