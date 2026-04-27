@@ -76,6 +76,52 @@
     'kafka' in (telemetry_config.telemetry_sources.idrac.collection_targets | default([])) or
     'kafka' in (telemetry_config.telemetry_sources.ldms.collection_targets | default([]))
 
+# =============================================================================
+# VECTOR BRIDGE LOGIC - Determine sink requirements based on Vector bridges
+# =============================================================================
+# Vector-LDMS bridge: If enabled, requires Kafka + VictoriaMetrics
+# Vector-OME bridge: If metrics enabled, requires Kafka + VictoriaMetrics
+#                    If logs enabled, requires Kafka + VictoriaLogs
+# =============================================================================
+
+- name: Enable Kafka if Vector-LDMS bridge is enabled (requires LDMS source)
+  ansible.builtin.set_fact:
+    kafka_support: true
+  when:
+    - telemetry_config.telemetry_bridges.vector_ldms.metrics_enabled | default(false) | bool
+    - ldms_support | default(false) | bool
+
+- name: Enable VictoriaMetrics if Vector-LDMS bridge is enabled (requires LDMS source)
+  ansible.builtin.set_fact:
+    victoria_metrics_support: true
+  when:
+    - telemetry_config.telemetry_bridges.vector_ldms.metrics_enabled | default(false) | bool
+    - ldms_support | default(false) | bool
+
+- name: Enable Kafka if Vector-OME metrics bridge is enabled
+  ansible.builtin.set_fact:
+    kafka_support: true
+  when:
+    - telemetry_config.telemetry_bridges.vector_ome.metrics_enabled | default(false) | bool
+
+- name: Enable VictoriaMetrics if Vector-OME metrics bridge is enabled
+  ansible.builtin.set_fact:
+    victoria_metrics_support: true
+  when:
+    - telemetry_config.telemetry_bridges.vector_ome.metrics_enabled | default(false) | bool
+
+- name: Enable Kafka if Vector-OME logs bridge is enabled
+  ansible.builtin.set_fact:
+    kafka_support: true
+  when:
+    - telemetry_config.telemetry_bridges.vector_ome.logs_enabled | default(false) | bool
+
+- name: Enable VictoriaLogs if Vector-OME logs bridge is enabled
+  ansible.builtin.set_fact:
+    victoria_logs_support: true
+  when:
+    - telemetry_config.telemetry_bridges.vector_ome.logs_enabled | default(false) | bool
+
 - name: Log derived sink support flags
   ansible.builtin.debug:
     msg: >

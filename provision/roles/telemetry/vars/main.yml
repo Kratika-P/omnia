@@ -148,7 +148,7 @@ victoria_cluster:
         cpu: "1000m"
 
   vmagent:
-    replicas: 1
+    replicas: 2
     image: "{{ telemetry_images['victoriametrics/vmagent'] | default('victoriametrics/vmagent:v1.128.0') }}"
     resources:
       requests:
@@ -206,7 +206,7 @@ victoria_logs_cluster:
 
   # VLAgent: Platform-managed log forwarding agent (Deployment managed by operator via VLAgent CR)
   vlagent:
-    replicas: 1
+    replicas: 2
     image: "{{ telemetry_images['victoriametrics/vlagent'] | default('docker.io/victoriametrics/vlagent:v1.49.0') }}"
     pvc_size: "5Gi"   # Buffer storage for retry during vlinsert unavailability
     resources:
@@ -502,12 +502,13 @@ vector:
   ldms:
     app_name: "vector-ldms"
     service_name: "vector-ldms"
+    container_name: "vector-ldms"
     kafka_topic: "ldms"
     consumer_group: "vector-ldms-group"
     kafka_user: "kafkapump"  # Shared with LDMS store_avro_kafka
     health_port: 8687
     metrics_port: 9599
-    replicas: 1
+    replicas: 2
     resources:
       requests:
         cpu: "100m"
@@ -520,6 +521,7 @@ vector:
   ome:
     app_name: "vector-ome"
     service_name: "vector-ome"
+    container_name: "vector-ome"
     # Dynamic pattern based on ome_identifier from telemetry_config.yml
     # Example: if ome_identifier="ome", pattern="^ome\\..*$" (matches ome.events, ome.alerts, etc.)
     # Example: if ome_identifier="dell_ome", pattern="^dell_ome\\..*$" (matches dell_ome.events, etc.)
@@ -545,7 +547,7 @@ vector:
     port: 8429  # prometheus_remote_write receiver
     metrics_port: 8429  # vmagent self-metrics
     image: "{{ telemetry_images['victoriametrics/vmagent'] | default('docker.io/victoriametrics/vmagent:v1.128.0') }}"
-    replicas: 1
+    replicas: 2
     pvc_size: "5Gi"  # Disk WAL buffer
     remote_write_url: "http://vminsert-victoria-cluster.{{ telemetry_namespace }}.svc.cluster.local:8480/insert/0/prometheus/api/v1/write"
     tmp_data_path: "/vmagent-buffer"
@@ -565,7 +567,7 @@ vector:
     port: 9427  # JSON Lines receiver
     metrics_port: 9427  # vlagent self-metrics
     image: "{{ telemetry_images['victoriametrics/vlagent'] | default('docker.io/victoriametrics/vlagent:v1.49.0') }}"
-    replicas: 1
+    replicas: 2
     pvc_size: "5Gi"  # Disk buffer
     remote_write_url: "http://vlinsert-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local:9428/insert/jsonline"
     tmp_data_path: "/vlagent-buffer"

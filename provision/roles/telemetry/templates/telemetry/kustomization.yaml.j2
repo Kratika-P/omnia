@@ -54,3 +54,16 @@ resources:
   - telemetry_cleaner_rbac.yaml
   - telemetry_pod_cleanup.yaml
 {% endif %}
+{% if telemetry_config.telemetry_bridges.vector_ldms.metrics_enabled | default(false) and ldms_support | default(false) and kafka_support | default(false) and victoria_metrics_support | default(false) %}
+# Vector-LDMS Bridge Resources (Kafka-to-VictoriaMetrics pipeline)
+  - vector/vmagent-vector-deployment.yaml
+  - vector/vmagent-vector-service.yaml
+  - vector/vector-ldms-configmap.yaml
+  - vector/vector-ldms-deployment.yaml
+  - vector/vector-ldms-service.yaml
+{% endif %}
+{% if telemetry_config.telemetry_bridges.vector_ome.logs_enabled | default(false) and victoria_logs_support | default(false) %}
+# vlagent-vector: Log write-buffer for Vector-OME (Kafka-to-VictoriaLogs pipeline)
+  - vector/vlagent-vector-deployment.yaml
+  - vector/vlagent-vector-service.yaml
+{% endif %}

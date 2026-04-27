@@ -57,6 +57,15 @@
     - name: Generate telemetry deployments
       ansible.builtin.include_tasks: generate_telemetry_deployments.yml
 
+- name: Deploy Vector-LDMS bridge (Kafka-to-VictoriaMetrics pipeline)
+  ansible.builtin.include_tasks: deploy_vector_ldms.yml
+  when:
+    - telemetry_config.telemetry_bridges.vector_ldms.metrics_enabled | default(false) | bool
+    - victoria_metrics_support | default(false) | bool
+  tags:
+    - telemetry_deployment
+    - vector_ldms
+
 - name: Configure of k8s telemetry service
   when:
     - telemetry_config.telemetry_sources.idrac.metrics_enabled | default(false) | bool
