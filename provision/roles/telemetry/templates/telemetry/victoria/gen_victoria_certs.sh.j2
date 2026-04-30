@@ -91,13 +91,17 @@ DNS.39 = vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.l
 DNS.40 = vlstorage-victoria-logs-cluster-0.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local
 DNS.41 = vlstorage-victoria-logs-cluster-1.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local
 DNS.42 = vlstorage-victoria-logs-cluster-2.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local
+# vlstorage StatefulSet pod short names (without .svc.cluster.local)
+DNS.43 = vlstorage-victoria-logs-cluster-0.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}
+DNS.44 = vlstorage-victoria-logs-cluster-1.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}
+DNS.45 = vlstorage-victoria-logs-cluster-2.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}
 # VLAgent service (operator-managed)
-DNS.43 = vlagent-vlagent
-DNS.44 = vlagent-vlagent.{{ telemetry_namespace }}
-DNS.45 = vlagent-vlagent.{{ telemetry_namespace }}.svc
-DNS.46 = vlagent-vlagent.{{ telemetry_namespace }}.svc.cluster.local
+DNS.46 = vlagent-vlagent
+DNS.47 = vlagent-vlagent.{{ telemetry_namespace }}
+DNS.48 = vlagent-vlagent.{{ telemetry_namespace }}.svc
+DNS.49 = vlagent-vlagent.{{ telemetry_namespace }}.svc.cluster.local
 # VLAgent StatefulSet pod FQDN (operator-managed, 1 replica)
-DNS.47 = vlagent-vlagent-0.vlagent-vlagent.{{ telemetry_namespace }}.svc.cluster.local
+DNS.50 = vlagent-vlagent-0.vlagent-vlagent.{{ telemetry_namespace }}.svc.cluster.local
 IP.1 = 127.0.0.1
 EOF
 
@@ -109,13 +113,15 @@ if [ -f "$CERT_FILE" ]; then
   REQUIRED_VMAGENT_SAN="vmagent-vmagent.{{ telemetry_namespace }}.svc.cluster.local"
   REQUIRED_VL_SAN="vlinsert-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local"
   REQUIRED_VLAGENT_SAN="vlagent-vlagent.{{ telemetry_namespace }}.svc.cluster.local"
+  REQUIRED_VLSTORAGE_POD_SAN="vlstorage-victoria-logs-cluster-0.vlstorage-victoria-logs-cluster.{{ telemetry_namespace }}"
   if ! openssl x509 -in "$CERT_FILE" -text -noout 2>/dev/null | grep -q "$REQUIRED_VM_SAN" || \
      ! openssl x509 -in "$CERT_FILE" -text -noout 2>/dev/null | grep -q "$REQUIRED_VMAGENT_SAN" || \
      ! openssl x509 -in "$CERT_FILE" -text -noout 2>/dev/null | grep -q "$REQUIRED_VL_SAN" || \
-     ! openssl x509 -in "$CERT_FILE" -text -noout 2>/dev/null | grep -q "$REQUIRED_VLAGENT_SAN"; then
-    echo "Existing certificate missing required SANs (VictoriaMetrics/VMAgent/VictoriaLogs/VLAgent)"
-    echo "Removing stale server cert/key/csr to force regeneration..."
-    rm -f "$CERT_KEY" "$CSR_FILE" "$CERT_FILE"
+     ! openssl x509 -in "$CERT_FILE" -text -noout 2>/dev/null | grep -q "$REQUIRED_VLAGENT_SAN" || \
+     ! openssl x509 -in "$CERT_FILE" -text -noout 2>/dev/null | grep -q "$REQUIRED_VLSTORAGE_POD_SAN"; then
+    echo "Existing certificate missing required SANs (VictoriaMetrics/VMAgent/VictoriaLogs/VLAgent/VLStorage pods)"
+    echo "Removing stale server cert/key/csr/serial file to force regeneration..."
+    rm -f "$CERT_KEY" "$CSR_FILE" "$CERT_FILE" "$CERT_DIR/ca.srl"
   fi
 fi
 

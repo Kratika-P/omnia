@@ -86,10 +86,10 @@ data:
       # vlinsert endpoint (in-cluster FQDN)
       # Operator creates service as vlinsert-victoria-logs-cluster
       # Port 9481: ingestion endpoint (HTTPS when tls_enabled, HTTP otherwise)
-      # Path: /insert/jsonline — primary VictoriaLogs ingestion format
+      # Path: /internal/insert — primary VictoriaLogs ingestion format
       # Query params:
       #   _stream_fields=hostname,app_name — stream identification for sharding
-      url: "{{ 'https' if victoria_logs_cluster.tls_enabled else 'http' }}://vlinsert-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local:9481/insert/jsonline?_stream_fields=hostname,app_name"
+      url: "{{ 'https' if victoria_logs_cluster.tls_enabled else 'http' }}://vlinsert-victoria-logs-cluster.{{ telemetry_namespace }}.svc.cluster.local:9481/internal/insert?_stream_fields=hostname,app_name"
 
 {% if victoria_logs_cluster.tls_enabled %}
       # TLS configuration for remoteWrite client
@@ -146,7 +146,7 @@ data:
     #   3. Additional remoteWrite destinations
     #      Example: Dual-write to secondary vlinsert
     #      remoteWrite:
-    #        - url: "https://secondary-vlinsert:9480/insert/jsonline"
+    #        - url: "https://secondary-vlinsert:9480/internal/insert"
     #
     #   4. Parsing and enrichment rules
     #      Example: Extract fields from syslog message

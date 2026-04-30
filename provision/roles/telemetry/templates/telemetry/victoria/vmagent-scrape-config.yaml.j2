@@ -60,7 +60,7 @@ data:
           # Add Pod IP label
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: pod_ip
-{% if hostvars['localhost']['powerscale_configurations']['powerscale_telemetry_support'] | default(false) | bool %}
+{% if hostvars['localhost']['telemetry_config']['telemetry_sources']['powerscale']['metrics_enabled'] | default(false) | bool %}
 
       # PowerScale OTEL Collector scrape targets (per cluster)
 {% for cluster in ps_clusters %}

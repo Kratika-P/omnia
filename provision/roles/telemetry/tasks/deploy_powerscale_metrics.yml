@@ -22,7 +22,6 @@
 - name: Set PowerScale configuration facts
   ansible.builtin.set_fact:
     ps_csi_secret_path: "{{ hostvars['localhost']['service_cluster_info'].csi_powerscale_driver_secret_file_path | default('') }}"
-    powerscale_configurations: "{{ telemetry_config.powerscale_configurations }}"
     ps_helm_values_file: "{{ telemetry_config.powerscale_configurations.csm_observability_values_file_path }}"
     csm_observability_namespace: "{{ csm_namespace }}"
 

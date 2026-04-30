@@ -30,6 +30,7 @@ spec:
   # ========================
   vlstorage:
     replicaCount: {{ victoria_logs_cluster.vlstorage.replicas }}
+    replicationFactor: 2  # Data redundancy: each log written to 2 of 3 nodes
     image:
       repository: {{ victoria_logs_cluster.vlstorage.image.split(':')[0] }}
       tag: {{ victoria_logs_cluster.vlstorage.image.split(':')[1] }}
@@ -96,6 +97,8 @@ spec:
               path: server.crt
             - key: tls.key
               path: server.key
+            - key: ca.crt
+              path: ca.crt
     volumeMounts:
       - name: victoria-tls-certs
         mountPath: /etc/victoria/certs

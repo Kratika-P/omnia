@@ -46,6 +46,8 @@
 - name: Map telemetry_sources to legacy feature flags
   ansible.builtin.set_fact:
     idrac_telemetry_support: "{{ telemetry_config.telemetry_sources.idrac.metrics_enabled | default(false) | bool }}"
+    powerscale_metrics_enabled: "{{ telemetry_config.telemetry_sources.powerscale.metrics_enabled | default(false) | bool }}"
+    powerscale_log_enabled: "{{ telemetry_config.telemetry_sources.powerscale.logs_enabled | default(false) | bool }}"
     dcgm_support: "{{ telemetry_config.telemetry_sources.dcgm.metrics_enabled | default(true) | bool }}"
     cacheable: true
 
@@ -54,6 +56,7 @@
     powerscale_configurations:
       powerscale_telemetry_support: "{{ telemetry_config.telemetry_sources.powerscale.metrics_enabled | default(true) | bool }}"
       powerscale_log_enabled: "{{ telemetry_config.telemetry_sources.powerscale.logs_enabled | default(false) | bool }}"
+      syslog_source_ips: "{{ telemetry_config.powerscale_configurations.syslog_source_ips | default([]) }}"
       otel_collector_storage_size: "{{ telemetry_config.powerscale_configurations.otel_collector_storage_size | default('5Gi') }}"
       csm_observability_values_file_path: "{{ telemetry_config.powerscale_configurations.csm_observability_values_file_path | default('') }}"
       additional_remote_write_endpoints: "{{ telemetry_config.powerscale_configurations.additional_remote_write_endpoints | default([]) }}"
@@ -72,7 +75,8 @@
     victoria_logs_support: true
     cacheable: true
   when: >-
-    'victoria_logs' in (telemetry_config.telemetry_sources.powerscale.collection_targets | default([]))
+    'victoria_logs' in (telemetry_config.telemetry_sources.powerscale.collection_targets | default([])) or
+    'victoria_logs' in (telemetry_config.telemetry_sources.idrac.collection_targets | default([]))
 
 - name: Check if any source targets Kafka
   ansible.builtin.set_fact:
