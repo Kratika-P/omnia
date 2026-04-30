@@ -1,0 +1,58 @@
+---
+# Copyright 2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Deploy Telemetry Manifests
+# Purpose: Apply generated Kubernetes manifests to deploy telemetry stack
+# This task replicates the functionality of telemetry.sh when running provision.yml directly
+
+- name: Create telemetry deployment script
+  ansible.builtin.template:
+    src: "{{ role_path }}/../configure_ochami/templates/telemetry/telemetry.sh.j2"
+    dest: "{{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/telemetry.sh"
+    mode: "{{ hostvars['localhost']['file_permissions_755'] }}"
+  vars:
+    k8s_client_mount_path: "{{ hostvars['localhost']['k8s_client_share_path'] }}"
+
+- name: Display telemetry deployment script location
+  ansible.builtin.debug:
+    msg: "✓ Telemetry deployment script created at {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/telemetry.sh"
+
+- name: Execute telemetry deployment script
+  ansible.builtin.shell: |
+    cd {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry
+    ./telemetry.sh
+  register: telemetry_deploy_result
+  when:
+    - auto_deploy_telemetry | default(false) | bool
+
+- name: Display deployment result
+  ansible.builtin.debug:
+    msg: |
+      Telemetry deployment script executed.
+      To manually deploy telemetry stack, run:
+      {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/telemetry.sh
+  when:
+    - auto_deploy_telemetry | default(false) | bool
+    - telemetry_deploy_result is defined
+
+- name: Instructions for manual deployment
+  ansible.builtin.debug:
+    msg: |
+      Telemetry manifests generated successfully.
+      To deploy the telemetry stack, run one of:
+      1. {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/telemetry.sh
+      2. kubectl apply -k {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/
+  when:
+    - not (auto_deploy_telemetry | default(false) | bool)

@@ -31,68 +31,98 @@ key_file = "/etc/vector/kafka-certs/user.key"
 verify_certificate = true
 verify_hostname = true
 
-# Decoding: LDMS store_avro_kafka produces JSON messages
+# Decoding: LDMS store_avro_kafka produces flat JSON messages
+# Message format: {"hostname":"node01","instance":"node01/loadavg","component_id":0,"load1min":0.5,...}
+# Each message has metadata fields + multiple numeric metric fields (one per sampler metric)
 [sources.kafka_ldms.decoding]
 codec = "json"
 
 # ============================================================================
-# TRANSFORM: LDMS Schema Normalizer
+# TRANSFORM: LDMS Metric Fan-Out (Lua)
 # ============================================================================
-# Purpose: Convert LDMS fields to Prometheus label format
-# Input: LDMS JSON message from store_avro_kafka plugin
-# Output: Normalized log event with Prometheus-compatible field names
-# Spec Reference: §4.1.3.2 LDMS Data Transformation Chain
-[transforms.ldms_schema_normalizer]
-type = "remap"
+# Purpose: Fan out flat LDMS messages into individual metric events
+#
+# LDMS store_avro_kafka produces one Kafka message per sampler per interval.
+# Each message is a FLAT JSON with metadata + multiple numeric metric fields:
+#   {"hostname":"node01","instance":"node01/loadavg","component_id":0,
+#    "load1min":0.5,"load5min":0.3,"load15min":0.2,...}
+#
+# Vector's remap transform outputs exactly ONE event per input.
+# Lua's emit() enables the required one-to-many fan-out:
+#   1 input message → N output events (one per numeric metric field)
+#
+# Output events: {MetricName, MetricValue, instance, job, plugin_name, component_id}
+# These feed into log_to_metric for conversion to Prometheus gauges.
+[transforms.ldms_fan_out]
+type = "lua"
+version = "2"
 inputs = ["kafka_ldms"]
+hooks.process = "process"
 source = '''
-# Extract metric name and plugin using string coalescing (not ?? which is for errors)
-metric_name = to_string(.metric_name) ?? "unknown_metric"
-plugin = to_string(.plugin) ?? "unknown_plugin"
+-- Numeric metadata fields to exclude from metric fan-out.
+-- String fields (hostname, instance, source_type, topic, etc.) are excluded
+-- automatically by the type(v) == "number" check.
+local skip = {
+  timestamp = true,
+  component_id = true,
+  job_id = true,
+  app_id = true,
+  offset = true,
+  partition = true,
+}
 
-# Extract numeric value
-metric_value = to_float(.value) ?? 0.0
+function process(event, emit)
+  local log = event.log
+  local hostname = log.hostname or "unknown"
 
-# Build Prometheus metric name: {plugin}_{metric_name}
-.metric_name_full = plugin + "_" + metric_name
+  -- Extract schema from instance: "host.test/loadavg" → "loadavg"
+  local inst = tostring(log.instance or "")
+  local schema = inst:match("/([^/]+)$") or "unknown"
 
-# Map LDMS fields to Prometheus labels
-.instance = to_string(.host) ?? "unknown_host"
-.job = "ldms"
-.plugin_name = plugin
-.component_name = to_string(.component) ?? "unknown_component"
-.source_subsystem = "ldms"
-.topic_name = "{{ vector.ldms.kafka_topic }}"
+  local comp = tostring(log.component_id or "")
 
-# Set metric value as float
-.gauge_value = metric_value
-
-# Clean up original fields
-del(.metric_name)
-del(.host)
-del(.plugin)
-del(.component)
-del(.value)
+  -- Fan out: emit one metric event per numeric field
+  for k, v in pairs(log) do
+    if not skip[k] and type(v) == "number" then
+      emit({
+        log = {
+          MetricName = "ldms_" .. schema .. "_" .. k,
+          MetricValue = v,
+          instance = hostname,
+          job = "ldms",
+          plugin_name = schema,
+          component_id = comp,
+        }
+      })
+    end
+  end
+end
 '''
 
 # ============================================================================
-# TRANSFORM: Log to Metric Conversion
+# TRANSFORM: Log-to-Metric Conversion (MANDATORY for prometheus_remote_write)
 # ============================================================================
-# Purpose: Convert log events to Prometheus gauge metrics
-# Required because prometheus_remote_write sink only accepts metric events
-[transforms.log_to_metric]
+# Purpose: Convert fan-out log events to Prometheus gauge metrics
+# The prometheus_remote_write sink ONLY accepts metric-type events.
+# Without this transform, all events are silently dropped by the sink.
+[transforms.ldms_to_metrics]
 type = "log_to_metric"
-inputs = ["ldms_schema_normalizer"]
+inputs = ["ldms_fan_out"]
 
-  [[transforms.log_to_metric.metrics]]
+{% raw %}
+  [[transforms.ldms_to_metrics.metrics]]
   type = "gauge"
-  field = "gauge_value"
-  name = "{% raw %}{{metric_name_full}}{% endraw %}"
-  tags.instance = "{% raw %}{{instance}}{% endraw %}"
-  tags.job = "{% raw %}{{job}}{% endraw %}"
-  tags.plugin = "{% raw %}{{plugin_name}}{% endraw %}"
-  tags.component = "{% raw %}{{component_name}}{% endraw %}"
-  tags.source_subsystem = "{% raw %}{{source_subsystem}}{% endraw %}"
+  field = "MetricValue"
+  name = "{{ MetricName }}"
+
+    [transforms.ldms_to_metrics.metrics.tags]
+    instance = "{{ instance }}"
+    job = "{{ job }}"
+    plugin = "{{ plugin_name }}"
+    component = "{{ component_id }}"
+{% endraw %}
+    source_subsystem = "ldms"
+    topic_name = "{{ vector.ldms.kafka_topic }}"
 
 # ============================================================================
 # SINK: Prometheus Remote Write to vmagent-vector
@@ -103,13 +133,15 @@ inputs = ["ldms_schema_normalizer"]
 # Spec Reference: §4.1.3.3 Internal Interfaces
 [sinks.victoria_metrics]
 type = "prometheus_remote_write"
-inputs = ["log_to_metric"]
+inputs = ["ldms_to_metrics"]
 endpoint = "http://{{ vector.vmagent_vector.service_name }}.{{ telemetry_namespace }}.svc.cluster.local:{{ vector.vmagent_vector.port }}/api/v1/write"
-healthcheck.enabled = true
+# Healthcheck disabled: vmagent returns 204 No Content which Vector
+# treats as an error (expects 200). This is benign — vmagent is healthy.
+healthcheck.enabled = false
 
 # Batch settings for efficient writes
 [sinks.victoria_metrics.batch]
-max_bytes = 1048576
+max_bytes = 1048576  # 1 MB
 timeout_secs = 5
 
 # Buffer settings (in-memory before write)
@@ -122,6 +154,9 @@ max_events = 10000
 retry_attempts = 5
 retry_max_duration_secs = 300
 timeout_secs = 60
+
+# Encoding: prometheus_remote_write uses protobuf by default (correct for VictoriaMetrics)
+# No explicit encoding needed
 
 # ============================================================================
 # INTERNAL TELEMETRY: Vector Self-Monitoring

@@ -496,7 +496,7 @@ ps_dependency_fail_msg: >-
 # Vector image (shared by all Vector pods: vector-ldms, vector-ome)
 # Registered in service_k8s.json
 vector:
-  image: "{{ telemetry_images['timberio/vector'] | default('docker.io/timberio/vector:0.54.0-alpine') }}"
+  image: "{{ telemetry_images['timberio/vector'] | default('docker.io/timberio/vector:0.54.0-debian') }}"
 
   # Vector-LDMS configuration
   ldms:

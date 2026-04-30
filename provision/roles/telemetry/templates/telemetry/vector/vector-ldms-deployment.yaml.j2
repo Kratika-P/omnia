@@ -27,8 +27,8 @@ spec:
         component: telemetry-bridge
         subsystem: ldms
       annotations:
-        # Force pod restart on config change (updated by Ansible on config modification)
-        omnia.dell.com/config-version: "{{ ansible_date_time.iso8601 }}"
+        # Force pod restart on config change (Ansible deployment timestamp)
+        deployment.omnia/timestamp: "{{ ansible_date_time.iso8601 }}"
     spec:
       # Security context for non-root execution
       securityContext:
@@ -45,7 +45,7 @@ spec:
         
         # Command: Vector with TOML config validation
         command:
-          - "/usr/local/bin/vector"
+          - "/usr/bin/vector"
         args:
           - "--config"
           - "/etc/vector/vector.toml"
@@ -59,14 +59,17 @@ spec:
             memory: {{ vector.ldms.resources.limits.memory }}
             cpu: {{ vector.ldms.resources.limits.cpu }}
         
-        # Ports: metrics and health (Vector serves both on same port)
+        # Ports: health check and metrics
         ports:
+        - name: health
+          containerPort: {{ vector.ldms.health_port }}
+          protocol: TCP
         - name: metrics
           containerPort: {{ vector.ldms.metrics_port }}
           protocol: TCP
         
-        # Liveness probe: Vector health endpoint (served on metrics port)
-        # Spec Reference: §4.1.3.3 Provided Interfaces
+        # Liveness probe: Vector health endpoint
+        # Vector serves /health and /metrics on the same API port (metrics_port)
         livenessProbe:
           httpGet:
             path: /health
@@ -76,7 +79,7 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
         
-        # Readiness probe: Vector health endpoint (served on metrics port)
+        # Readiness probe: Vector health endpoint
         readinessProbe:
           httpGet:
             path: /health

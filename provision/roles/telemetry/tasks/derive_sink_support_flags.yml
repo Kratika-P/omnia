@@ -36,15 +36,18 @@
     victoria_metrics_support: false
     victoria_logs_support: false
     kafka_support: false
+    cacheable: true
 
 - name: Set ldms_support based on telemetry_config.yml
   ansible.builtin.set_fact:
     ldms_support: "{{ telemetry_config.telemetry_sources.ldms.metrics_enabled | default(false) | bool }}"
+    cacheable: true
 
 - name: Map telemetry_sources to legacy feature flags
   ansible.builtin.set_fact:
     idrac_telemetry_support: "{{ telemetry_config.telemetry_sources.idrac.metrics_enabled | default(false) | bool }}"
     dcgm_support: "{{ telemetry_config.telemetry_sources.dcgm.metrics_enabled | default(true) | bool }}"
+    cacheable: true
 
 - name: Map powerscale source + configurations to legacy powerscale_configurations
   ansible.builtin.set_fact:
@@ -59,6 +62,7 @@
 - name: Check if any source targets victoria_metrics
   ansible.builtin.set_fact:
     victoria_metrics_support: true
+    cacheable: true
   when: >-
     'victoria_metrics' in (telemetry_config.telemetry_sources.idrac.collection_targets | default([])) or
     'victoria_metrics' in (telemetry_config.telemetry_sources.powerscale.collection_targets | default([]))
@@ -66,12 +70,14 @@
 - name: Check if any source targets victoria_logs
   ansible.builtin.set_fact:
     victoria_logs_support: true
+    cacheable: true
   when: >-
     'victoria_logs' in (telemetry_config.telemetry_sources.powerscale.collection_targets | default([]))
 
 - name: Check if any source targets Kafka
   ansible.builtin.set_fact:
     kafka_support: true
+    cacheable: true
   when: >-
     'kafka' in (telemetry_config.telemetry_sources.idrac.collection_targets | default([])) or
     'kafka' in (telemetry_config.telemetry_sources.ldms.collection_targets | default([]))
@@ -87,6 +93,7 @@
 - name: Enable Kafka if Vector-LDMS bridge is enabled (requires LDMS source)
   ansible.builtin.set_fact:
     kafka_support: true
+    cacheable: true
   when:
     - telemetry_config.telemetry_bridges.vector_ldms.metrics_enabled | default(false) | bool
     - ldms_support | default(false) | bool
@@ -94,6 +101,7 @@
 - name: Enable VictoriaMetrics if Vector-LDMS bridge is enabled (requires LDMS source)
   ansible.builtin.set_fact:
     victoria_metrics_support: true
+    cacheable: true
   when:
     - telemetry_config.telemetry_bridges.vector_ldms.metrics_enabled | default(false) | bool
     - ldms_support | default(false) | bool
@@ -101,24 +109,28 @@
 - name: Enable Kafka if Vector-OME metrics bridge is enabled
   ansible.builtin.set_fact:
     kafka_support: true
+    cacheable: true
   when:
     - telemetry_config.telemetry_bridges.vector_ome.metrics_enabled | default(false) | bool
 
 - name: Enable VictoriaMetrics if Vector-OME metrics bridge is enabled
   ansible.builtin.set_fact:
     victoria_metrics_support: true
+    cacheable: true
   when:
     - telemetry_config.telemetry_bridges.vector_ome.metrics_enabled | default(false) | bool
 
 - name: Enable Kafka if Vector-OME logs bridge is enabled
   ansible.builtin.set_fact:
     kafka_support: true
+    cacheable: true
   when:
     - telemetry_config.telemetry_bridges.vector_ome.logs_enabled | default(false) | bool
 
 - name: Enable VictoriaLogs if Vector-OME logs bridge is enabled
   ansible.builtin.set_fact:
     victoria_logs_support: true
+    cacheable: true
   when:
     - telemetry_config.telemetry_bridges.vector_ome.logs_enabled | default(false) | bool
 
