@@ -144,7 +144,7 @@
         src: telemetry/victoria/victoria-tls-secret.yaml.j2
         dest: "{{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/victoria-tls-secret.yaml"
         mode: "{{ hostvars['localhost']['file_permissions_644'] }}"
-        
+
 # Create Vector deployment subdirectory
 # - name: Create Vector deployment subdirectory
 #   ansible.builtin.file:
