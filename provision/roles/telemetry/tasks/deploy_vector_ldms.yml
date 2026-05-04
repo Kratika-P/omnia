@@ -31,10 +31,6 @@
     mode: "{{ hostvars['localhost']['file_permissions_644'] }}"
   register: vector_ldms_configmap_rendered
 
-- name: Display ConfigMap render result
-  ansible.builtin.debug:
-    msg: "✓ Vector-LDMS ConfigMap rendered to {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/vector/vector-ldms-configmap.yaml"
-
 # ============================================================================
 # Render Vector-LDMS Deployment
 # ============================================================================
@@ -45,10 +41,6 @@
     mode: "{{ hostvars['localhost']['file_permissions_644'] }}"
   register: vector_ldms_deployment_rendered
 
-- name: Display Deployment render result
-  ansible.builtin.debug:
-    msg: "✓ Vector-LDMS Deployment rendered to {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/vector/vector-ldms-deployment.yaml"
-
 # ============================================================================
 # Render Vector-LDMS Service
 # ============================================================================
@@ -58,7 +50,3 @@
     dest: "{{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/vector/vector-ldms-service.yaml"
     mode: "{{ hostvars['localhost']['file_permissions_644'] }}"
   register: vector_ldms_service_rendered
-
-- name: Display Service render result
-  ansible.builtin.debug:
-    msg: "✓ Vector-LDMS Service rendered to {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/vector/vector-ldms-service.yaml"

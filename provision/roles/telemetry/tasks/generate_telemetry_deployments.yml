@@ -88,7 +88,6 @@
         - ldms_support
         - "kafka.topics.ldms.name in kafka_topic_partitions"
 
-
     - name: Generate Kafka topic files dynamically
       ansible.builtin.template:
         src: 'telemetry/kafka/kafka.topic.yaml.j2'
