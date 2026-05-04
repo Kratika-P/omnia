@@ -16,7 +16,7 @@
 # Generate Telemetry Deployment Script
 # Purpose: Create telemetry.sh script in shared directory for cloud-init execution
 # This replaces the inline script generation in cloud-init templates
-# 
+#
 # The script is created at: {{ k8s_client_share_path }}/telemetry/telemetry.sh
 # Cloud-init will execute this script during node provisioning to deploy telemetry stack
 
