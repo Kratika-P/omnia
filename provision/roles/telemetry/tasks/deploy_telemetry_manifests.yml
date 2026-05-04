@@ -34,6 +34,7 @@
     cd {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry
     ./telemetry.sh
   register: telemetry_deploy_result
+  changed_when: false
   when:
     - auto_deploy_telemetry | default(false) | bool
 
