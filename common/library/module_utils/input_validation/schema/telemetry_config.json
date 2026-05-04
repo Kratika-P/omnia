@@ -62,7 +62,7 @@
             "metrics_enabled": {
               "type": "boolean",
               "default": true,
-              "description": "Enable or disable DCGM metrics collection on GPU compute nodes."
+              "description": "Enable or disable NVIDIA DCGM (Data Center GPU Manager) on GPU compute nodes. When true, nvidia-dcgm.service is started during cloud-init provisioning. Default: true"
             }
           },
           "required": ["metrics_enabled"]

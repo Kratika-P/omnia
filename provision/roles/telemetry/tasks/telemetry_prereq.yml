@@ -62,8 +62,6 @@
       ansible.builtin.fail:
         msg: "{{ idrac_telemetry_scripting_copy_fail_msg.splitlines() | join(' ') }}"
 
-# kafka_support is now derived in derive_sink_support_flags.yml - no need to set here
-
 - name: Configure TLS certificate and secrets for kafka
   when: kafka_support
   block:
