@@ -27,10 +27,10 @@
 #   SOURCES (Collectors) → BRIDGES (Vector) → SINKS (Storage)
 #
 # SECTIONS:
-#   1. Telemetry Sources    : Data collectors (iDRAC, LDMS)
+#   1. Telemetry Sources    : Data collectors (iDRAC, LDMS, DCGM, PowerScale)
 #   2. Telemetry Bridges    : Data routers (Vector pipelines)
 #   3. Telemetry Sinks      : Storage backends (victoria_metrics, victoria_logs, Kafka)
-#   4. Source Configurations: Detailed settings per source
+#   4. Source Configurations: Detailed settings per source (PowerScale, LDMS)
 #
 # ============================================================================
 # STORAGE REQUIREMENTS SUMMARY
@@ -141,7 +141,7 @@ telemetry_sources:
     # Default: true
     logs_enabled: true
 
-    # PowerScale uses dedicated vmagent(shared) (no Kafka, no Vector)
+    # PowerScale uses vmagent(shared) (no Kafka, no Vector)
     collection_targets:
       - "victoria_metrics"
       - "victoria_logs"
@@ -325,7 +325,7 @@ powerscale_configurations:
 
   # Path to the CSM Observability (Karavi Observability) values.yaml file
   # Required when powerscale_configurations.powerscale_telemetry_support: true
-  # Reference: https://github.com/dell/helm-charts/blob/main/charts/karavi-observability/values.yaml
+  # Reference: https://raw.githubusercontent.com/dell/helm-charts/refs/heads/release-v1.16.3/charts/karavi-observability/values.yaml
   csm_observability_values_file_path: ""
 
   # Additional victoria_metrics remote_write endpoints (optional)

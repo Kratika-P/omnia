@@ -62,8 +62,6 @@
       ansible.builtin.fail:
         msg: "{{ idrac_telemetry_scripting_copy_fail_msg.splitlines() | join(' ') }}"
 
-# kafka_support is now derived in derive_sink_support_flags.yml - no need to set here
-
 - name: Configure TLS certificate and secrets for kafka
   when: kafka_support
   block:
@@ -144,18 +142,3 @@
         src: telemetry/victoria/victoria-tls-secret.yaml.j2
         dest: "{{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/victoria-tls-secret.yaml"
         mode: "{{ hostvars['localhost']['file_permissions_644'] }}"
-
-    # NOTE: Certificate application and pod restart tasks removed.
-    # These should be run manually only when certificates are regenerated due to:
-    # - SAN changes (e.g., adding new hostnames)
-    # - Certificate expiration
-    # - TLS errors requiring certificate updates
-    # Manual steps:
-    # 1. kubectl apply -f {{ hostvars['localhost']['k8s_client_share_path'] }}/telemetry/deployments/victoria-tls-secret.yaml
-    # 2. kubectl rollout restart statefulset/vlstorage-victoria-logs-cluster -n {{ telemetry_namespace }}
-    # 3. kubectl rollout restart deployment/vlselect-victoria-logs-cluster -n {{ telemetry_namespace }}
-    # 4. kubectl rollout restart deployment/vlinsert-victoria-logs-cluster -n {{ telemetry_namespace }}
-    # 5. kubectl rollout restart statefulset/vmstorage-victoria-cluster -n {{ telemetry_namespace }}
-    # 6. kubectl rollout restart deployment/vmselect-victoria-cluster -n {{ telemetry_namespace }}
-    # 7. kubectl rollout restart deployment/vminsert-victoria-cluster -n {{ telemetry_namespace }}
-    # 8. kubectl delete pod vlagent-vlagent-0 -n {{ telemetry_namespace }}
