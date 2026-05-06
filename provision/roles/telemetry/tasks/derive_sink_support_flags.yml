@@ -101,7 +101,3 @@
     victoria_logs_support or
     ldms_support or
     kafka_support
-
-- name: debug telemetry_enabled
-  ansible.builtin.debug:
-    msg: "telemetry_enabled={{ telemetry_enabled }}"

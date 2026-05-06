@@ -52,10 +52,6 @@
 - name: Update hosts file
   ansible.builtin.include_tasks: update_hosts.yml
 
-- name: debug 
-  debug:
-    var: service_k8s_support
-
 - name: Validate telemetry config
   ansible.builtin.include_tasks: validate_telemetry_config.yml
   when:
