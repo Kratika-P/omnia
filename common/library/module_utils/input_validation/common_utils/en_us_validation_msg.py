@@ -702,11 +702,6 @@ BUILD_STREAM_CONFIG_EMPTY_MSG = (
     "build_stream_config.yml file is empty or has syntax errors. "
     "It must contain valid YAML with 'enable_build_stream' field."
 )
-AARCH64_INVENTORY_HOST_IP_INVALID_SUBNET_MSG = (
-    "Field 'aarch64_inventory_host_ip' must be in the same subnet as OIM admin IP. "
-    "Check network_spec.yml for admin network configuration."
-)
-
 AARCH64_INVENTORY_HOST_IP_REQUIRED_MSG = (
     "Field 'aarch64_inventory_host_ip' is required when PXE mapping file "
     "contains aarch64 functional groups. Provide the admin IP of the "
@@ -893,8 +888,9 @@ VECTOR_LDMS_SOURCE_DISABLED_MSG = (
 
 # DNS hostname validation messages
 DNS_ENABLED_NON_NID_HOSTNAME_MSG = (
-    "When dns_enabled is true in provision_config.yml, all hostnames in the PXE mapping file "
-    "must follow the NID format (e.g., nid001, nid00001). "
+    "Invalid hostname when dns_enabled is true in provision_config.yml. "
+    "Hostname must follow the OpenCHAMI NID format: nid001 through nid999. "
+    "Prefix must be exactly 'nid' (lowercase) with a 3-digit numeric suffix (001-999). "
     "Custom hostnames are not supported with DNS enabled. "
     "Either set dns_enabled to false to use custom hostnames with /etc/hosts, "
     "or update the hostnames to use the NID format."
