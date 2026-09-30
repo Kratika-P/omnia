@@ -755,6 +755,17 @@
   changed_when: false
   failed_when: false
 
+- name: Kafka | Remove local topic manifest files for disabled sources
+  ansible.builtin.file:
+    path: "{{ telemetry_deployments_dir }}/kafka.{{ item }}.topic.yaml"
+    state: absent
+  loop:
+    - idrac
+    - ldms
+  loop_control:
+    label: "{{ item }}"
+  failed_when: false
+
 - name: Kafka | Cleanup complete
   ansible.builtin.debug:
     msg: >-

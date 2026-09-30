@@ -21,26 +21,46 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 KAFKA_TASKS = REPO_ROOT / "src/telemetry/roles/deploy_kafka/tasks"
+CLEANUP_TASKS = REPO_ROOT / "src/telemetry/roles/cleanup/tasks"
 
 
 def _tasks(name):
     return yaml.safe_load((KAFKA_TASKS / name).read_text(encoding="utf-8"))
 
 
+def _cleanup_tasks(name):
+    return yaml.safe_load((CLEANUP_TASKS / name).read_text(encoding="utf-8"))
+
+
 def _task_by_name(tasks, name):
     return next(task for task in tasks if task.get("name") == name)
 
 
-def test_disabled_sources_remove_only_stale_topic_manifests():
-    """Disabling a source removes its local YAML without deleting Kafka data."""
+def test_disabled_sources_remove_stale_topic_manifests_at_deploy_time():
+    """Deploy-time hygiene removes stale manifests for disabled sources."""
     prepare = _tasks("prepare.yml")
     remove = _task_by_name(
-        prepare, "Remove Kafka topic manifests for disabled sources"
+        prepare, "Remove stale Kafka topic manifests for disabled sources"
     )
 
     assert remove["ansible.builtin.file"]["state"] == "absent"
     assert remove["loop"] == ["idrac", "ldms"]
     assert "metrics_enabled" in remove["when"]
+    assert "kubectl" not in str(remove).lower()
+    assert "kafkatopic" not in str(remove).lower()
+    assert "pvc" not in str(remove).lower()
+
+
+def test_kafka_cleanup_removes_local_topic_manifest_files():
+    """Full Kafka cleanup also removes local topic manifests."""
+    kafka_cleanup = _cleanup_tasks("kafka.yml")
+    remove = _task_by_name(
+        kafka_cleanup,
+        "Kafka | Remove local topic manifest files for disabled sources",
+    )
+
+    assert remove["ansible.builtin.file"]["state"] == "absent"
+    assert remove["loop"] == ["idrac", "ldms"]
     assert "kubectl" not in str(remove).lower()
     assert "kafkatopic" not in str(remove).lower()
     assert "pvc" not in str(remove).lower()

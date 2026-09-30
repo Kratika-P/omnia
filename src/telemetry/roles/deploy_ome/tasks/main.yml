@@ -25,9 +25,6 @@
     tasks_from: load_telemetry_config
   when: telemetry_config is not defined
 
-- name: Validate OME source-to-bridge dependencies
-  ansible.builtin.include_tasks: validate_dependencies.yml
-
 - name: Determine effective OME channel states from config
   ansible.builtin.set_fact:
     ome_metrics_enabled: >-

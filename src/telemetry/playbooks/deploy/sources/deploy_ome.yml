@@ -14,14 +14,16 @@
 ---
 
 # Enable OME Telemetry (Vector-OME Bridge)
-# Usage: Called from telemetry.yml or standalone with kube_vip
-#   ansible-playbook deploy/sources/deploy_ome.yml -e kube_vip=<VIP_IP>
+# Usage: Called from telemetry.yml (not intended for standalone invocation).
 #
 # Deploys shared infrastructure (Kafka, VictoriaMetrics) if not present,
 # then generates Vector-OME bridge manifests (KafkaUser, ConfigMap,
 # Deployment, Service) for Kafka-to-Victoria ingestion pipeline.
 # OME Kafka topics are pre-existing — NOT created by Omnia.
 # All K8s tasks execute on the kube_vip host.
+#
+# Note: OME source-to-bridge dependency validation is handled by L2 input
+# validation (telemetry_validation.py) which runs in Step 1 of telemetry.yml.
 
 - name: Deploy OME Telemetry
   hosts: kube_vip_group
@@ -35,14 +37,6 @@
         name: common
         tasks_from: load_telemetry_config
       when: telemetry_config is not defined
-
-    # Keep this ahead of every role that can mutate the cluster.  The full
-    # telemetry flow validates globally, but this playbook also supports a
-    # standalone invocation.
-    - name: Validate OME source-to-bridge dependencies
-      ansible.builtin.include_role:
-        name: deploy_ome
-        tasks_from: validate_dependencies
 
     - name: Derive sink support flags (only if not already derived)
       ansible.builtin.include_role:

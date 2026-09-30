@@ -29,9 +29,7 @@
     label: "deployment/{{ item.name }}"
   register: _ome_enabled_workload_state
   changed_when: false
-  failed_when: >-
-    _ome_enabled_workload_state.rc != 0
-    or (_ome_enabled_workload_state.stdout | trim | length) == 0
+  failed_when: false
 
 - name: Restore enabled OME workloads to configured replicas
   ansible.builtin.command: >-
@@ -42,13 +40,19 @@
     label: "deployment/{{ item.item.name }}"
   register: _ome_restore_results
   changed_when: "'scaled' in _ome_restore_results.stdout"
-  when: (item.stdout | trim | int) != (item.item.replicas | int)
+  when:
+    - item.rc == 0
+    - item.stdout | trim | length > 0
+    - (item.stdout | trim | int) != (item.item.replicas | int)
 
 - name: Wait for enabled OME workload rollouts
   ansible.builtin.command: >-
-    kubectl rollout status deployment/{{ item.name }}
+    kubectl rollout status deployment/{{ item.item.name }}
     -n {{ telemetry_namespace }} --timeout=300s
-  loop: "{{ _ome_enabled_workloads }}"
+  loop: "{{ _ome_enabled_workload_state.results }}"
   loop_control:
-    label: "deployment/{{ item.name }}"
+    label: "deployment/{{ item.item.name }}"
   changed_when: false
+  when:
+    - item.rc == 0
+    - item.stdout | trim | length > 0

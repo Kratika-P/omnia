@@ -18,12 +18,6 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OME_ROLE = REPO_ROOT / "src/telemetry/roles/deploy_ome"
 DEPLOY_PLAYBOOK = REPO_ROOT / "src/telemetry/playbooks/deploy/deploy.yml"
-TELEMETRY_PREREQ = (
-    REPO_ROOT / "src/telemetry/playbooks/deploy/telemetry_prereq.yml"
-)
-OME_PLAYBOOK = (
-    REPO_ROOT / "src/telemetry/playbooks/deploy/sources/deploy_ome.yml"
-)
 
 
 def _read(path):
@@ -79,33 +73,6 @@ def test_full_deploy_always_invokes_ome_reconciliation():
 
     assert ome["ansible.builtin.import_playbook"].endswith("deploy_ome.yml")
     assert "when" not in ome
-
-
-def test_ome_dependency_validation_precedes_cluster_changes():
-    """Full and standalone deploys validate source/bridge pairs before sinks."""
-    prereq = yaml.safe_load(_read(TELEMETRY_PREREQ))[0]
-    prereq_names = [task["name"] for task in prereq["tasks"]]
-
-    validation_index = prereq_names.index(
-        "Validate OME source-to-bridge dependencies"
-    )
-    assert validation_index < prereq_names.index("Derive sink support flags")
-
-    play = yaml.safe_load(_read(OME_PLAYBOOK))[0]
-    ordered_tasks = play["pre_tasks"] + play["tasks"]
-    names = [task["name"] for task in ordered_tasks]
-
-    validation_index = names.index("Validate OME source-to-bridge dependencies")
-    assert validation_index < names.index(
-        "Deploy Kafka (handles both cluster deployment and topic management)"
-    )
-    assert validation_index < names.index(
-        "Deploy VictoriaMetrics/VictoriaLogs (standalone run only)"
-    )
-
-    validation = _read(OME_ROLE / "tasks/validate_dependencies.yml")
-    assert "telemetry_sources.ome.metrics_enabled is false" in validation
-    assert "telemetry_sources.ome.logs_enabled is false" in validation
 
 
 @pytest.mark.parametrize(
