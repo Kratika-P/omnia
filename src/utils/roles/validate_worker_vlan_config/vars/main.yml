@@ -1,0 +1,92 @@
+# Copyright 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+# Error and status messages for worker VLAN config validation
+
+config_file_missing_msg: >-
+  worker_vlan_config.yml not found at '{{ _vlan_config_path }}'.
+  Please create the configuration file in the input directory.
+
+vlan_id_missing_msg: >-
+  'vlan_id' is required in worker_vlan_config.yml.
+  Provide the VLAN ID trunked on the ToR switch for BMC traffic (1-4094).
+
+vlan_id_invalid_msg: >-
+  'vlan_id' must be an integer between 1 and 4094.
+  Current value: '{{ worker_vlan_config.vlan_id }}'.
+
+vlan_netmask_missing_msg: >-
+  'vlan_netmask' is required in worker_vlan_config.yml.
+  Provide the BMC VLAN subnet prefix length (1-30).
+
+vlan_netmask_invalid_msg: >-
+  'vlan_netmask' must be an integer between 1 and 30.
+  Current value: '{{ worker_vlan_config.vlan_netmask }}'.
+
+vlan_gateway_missing_msg: >-
+  'vlan_gateway' is required in worker_vlan_config.yml.
+  Provide the BMC VLAN gateway IPv4 address (e.g., 10.44.0.1).
+
+vlan_gateway_invalid_msg: >-
+  'vlan_gateway' must be a valid IPv4 address.
+  Current value: '{{ worker_vlan_config.vlan_gateway }}'.
+
+worker_assignments_empty_msg: >-
+  'worker_vlan_assignments' must contain at least one entry.
+  Each entry requires 'worker_host' (admin IP) and 'vlan_ip' (VLAN IP).
+
+worker_assignment_missing_fields_msg: >-
+  Each worker_vlan_assignments entry must have both 'worker_host' and 'vlan_ip'.
+  Invalid entry at index {{ _assignment_idx }}: {{ _assignment_entry }}.
+
+worker_host_invalid_msg: >-
+  Invalid 'worker_host' IP in worker_vlan_assignments at index {{ _assignment_idx }}:
+  '{{ _assignment_entry.worker_host }}'.
+  Must be a valid IPv4 address matching a worker in the cluster inventory.
+
+vlan_ip_invalid_msg: >-
+  Invalid 'vlan_ip' in worker_vlan_assignments at index {{ _assignment_idx }}:
+  '{{ _assignment_entry.vlan_ip }}'.
+  Must be a valid IPv4 address.
+
+duplicate_vlan_ip_msg: >-
+  Duplicate 'vlan_ip' found in worker_vlan_assignments: '{{ _duplicate_vlan_ip }}'.
+  Each worker must have a unique VLAN IP address.
+
+bmc_subnet_invalid_msg: >-
+  Invalid CIDR in 'bmc_subnets': '{{ _invalid_subnet }}'.
+  Each entry must be a valid IPv4 CIDR (e.g., 10.44.0.0/24).
+
+route_metric_invalid_msg: >-
+  'route_metric' must be a positive integer.
+  Current value: '{{ worker_vlan_config.route_metric }}'.
+
+cluster_inventory_missing_msg: >-
+  Cluster inventory file not found at '{{ _cluster_inventory_path }}'.
+  Provide a valid path in worker_vlan_config.yml or run orchestrator.yml first.
+
+bmc_group_data_missing_msg: >-
+  BMC group data file not found at '{{ _bmc_group_data_path }}'.
+  Provide a valid path in worker_vlan_config.yml or run orchestrator.yml first.
+  This file is required when 'bmc_subnets' is empty (auto-discovery mode).
+
+config_validated_msg: >-
+  worker_vlan_config.yml validated successfully.
+  VLAN ID: {{ worker_vlan_config.vlan_id }},
+  Workers: {{ worker_vlan_config.worker_vlan_assignments | length }},
+  BMC subnets: {{ _resolved_bmc_subnets | default(worker_vlan_config.bmc_subnets) | length }}.
+
+ipv4_regex: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'
+cidr_regex: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'

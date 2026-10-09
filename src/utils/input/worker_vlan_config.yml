@@ -1,0 +1,129 @@
+# Copyright 2026 Dell Inc. or its subsidiaries. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+
+# ***********************************************************************
+# DO NOT REMOVE OR COMMENT OUT ANY LINES IN THIS FILE.
+# SIMPLY APPEND THE REQUIRED VALUES AGAINST THE PARAMETER OF YOUR CHOICE.
+# ***********************************************************************
+
+# =============================================================================
+# WORKER NODE VLAN CONFIGURATION
+# =============================================================================
+# Configures VLAN-tagged interfaces and static routes on Kubernetes worker
+# nodes so that iDRAC Telemetry pods can reach BMC endpoints that reside in
+# different subnets.
+#
+# When is this required?
+#   - iDRAC Telemetry is enabled
+#   - Control plane and worker nodes reside in different subnets
+#   - One or more BMC networks are not directly reachable from the worker-node
+#     admin/PXE network
+#   - VLAN tagging and static routes are needed to reach BMC endpoints
+#
+# See: HowTo/Telemetry/worker_node_vlan_configuration in the Omnia docs
+# =============================================================================
+
+# ----------------------------------------------------------------------------
+# CLUSTER INVENTORY
+# ----------------------------------------------------------------------------
+# Path to the Ansible inventory file that contains worker node definitions.
+# The utility reads service_kube_node_x86_64.hosts to identify target workers.
+#
+# Default (when empty):
+#   $OMNIA_DATA_PATH/orchestrator/output/$OMNIA_PROJECT_NAME/orchestrator_inventory.yml
+# Example: "/opt/omnia/orchestrator/output/project_default/orchestrator_inventory.yml"
+cluster_inventory: ""
+
+# ----------------------------------------------------------------------------
+# BMC GROUP DATA
+# ----------------------------------------------------------------------------
+# Path to the Orchestrator-generated BMC inventory CSV.
+# Used to auto-discover BMC subnets that workers must reach.
+#
+# Default (when empty):
+#   $OMNIA_DATA_PATH/orchestrator/output/$OMNIA_PROJECT_NAME/bmc_group_data.csv
+# Example: "/opt/omnia/orchestrator/output/project_default/bmc_group_data.csv"
+bmc_group_data_path: ""
+
+# ----------------------------------------------------------------------------
+# VLAN PARAMETERS
+# ----------------------------------------------------------------------------
+
+# VLAN ID trunked on the Top-of-Rack switch port that carries BMC traffic.
+# Obtain this value from the site network team.
+# Required. Must be an integer between 1 and 4094.
+# Example: 702
+vlan_id:
+
+# Prefix length (netmask) for the BMC VLAN subnet.
+# Obtain this value from the site network team.
+# Required. Must be an integer between 1 and 30.
+# Example: 24
+vlan_netmask:
+
+# Gateway address that routes to the BMC subnets.
+# Obtain this value from the site network team.
+# Required. Must be a valid IPv4 address.
+# Example: "10.44.0.1"
+vlan_gateway: ""
+
+# Static route metric. Choose a value that does not conflict with existing
+# routes on the worker nodes. Verify with `ip route show` on each worker.
+# Default: 50
+route_metric: 50
+
+# ----------------------------------------------------------------------------
+# WORKER VLAN IP ASSIGNMENTS
+# ----------------------------------------------------------------------------
+# Each worker node needs a unique IP address in the BMC VLAN subnet.
+# Map each worker's admin/PXE IP (ansible_host from cluster inventory) to
+# its dedicated VLAN IP.
+#
+# Required. At least one entry must be provided.
+#
+# Example:
+#   worker_vlan_assignments:
+#     - worker_host: "10.10.1.20"
+#       vlan_ip: "10.44.0.113"
+#     - worker_host: "10.10.1.21"
+#       vlan_ip: "10.44.0.114"
+worker_vlan_assignments: []
+
+# ----------------------------------------------------------------------------
+# BMC SUBNETS
+# ----------------------------------------------------------------------------
+# List of BMC network CIDRs that the workers must reach.
+# When empty, subnets are auto-discovered from the BMC_IP column of
+# bmc_group_data.csv using the vlan_netmask prefix length.
+#
+# WARNING: Auto-discovery infers CIDR from each BMC IP and the vlan_netmask.
+# If the site uses non-standard subnetting, specify subnets explicitly.
+#
+# Example:
+#   bmc_subnets:
+#     - "10.44.0.0/24"
+#     - "10.45.0.0/24"
+bmc_subnets: []
+
+# ----------------------------------------------------------------------------
+# PARENT INTERFACE OVERRIDE
+# ----------------------------------------------------------------------------
+# NIC on the worker node used as the VLAN parent (e.g., eno16895np0).
+# When empty, auto-detected from the default route (`ip route show default`)
+# on each worker node.
+#
+# Leave empty unless all workers share the same interface name.
+# Example: "eno16895np0"
+parent_interface: ""
