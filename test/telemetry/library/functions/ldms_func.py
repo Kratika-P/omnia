@@ -196,11 +196,12 @@ def get_cluster_inventory_path(host) -> str:
 def get_ldms_hostnames_from_inventory(host) -> Dict[str, Any]:
     """Get LDMS node hostnames from orchestrator inventory.
 
-    LDMS runs on the following functional groups (with architecture suffixes):
-      - slurm_control_node_x86_64
-      - slurm_node_x86_64, slurm_node_aarch64
-      - login_node_x86_64, login_node_aarch64
-      - login_compiler_node_x86_64, login_compiler_node_aarch64
+    LDMS runs on the following functional groups, matched by prefix so any
+    suffix (e.g. _x86_64, _aarch64, _rhel_10_0) is accepted:
+      - slurm_control_node
+      - slurm_node
+      - login_node
+      - login_compiler_node
 
     Uses the omnia_auto.get_inventory_hosts() function to parse the
     Ansible inventory file.
@@ -220,11 +221,8 @@ def get_ldms_hostnames_from_inventory(host) -> Dict[str, Any]:
             "error": "cluster_inventory path not found in telemetry_config.yml",
         }
 
-    # Use omnia_auto.get_inventory_hosts() with exact matching
-    # since LDMS_FUNCTIONAL_GROUPS already has full architecture suffixes
-    return get_inventory_hosts(
-        host, inventory_path, LDMS_FUNCTIONAL_GROUPS, prefix_match=False
-    )
+    # Prefix matching mirrors the playbook's '^<group>(?:_|$)' selection
+    return get_inventory_hosts(host, inventory_path, LDMS_FUNCTIONAL_GROUPS)
 
 
 def get_ldms_nodes_with_ips(host) -> Dict[str, Any]:

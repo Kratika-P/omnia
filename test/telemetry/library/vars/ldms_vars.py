@@ -38,16 +38,14 @@ LDMS_KAFKA_TOPIC = "ldms"
 # LDMS FUNCTIONAL GROUPS
 # =============================================================================
 
-# Functional groups in orchestrator inventory that run LDMS samplers
-# These are the exact group names with architecture suffixes
+# Functional groups in orchestrator inventory that run LDMS samplers.
+# Base names matched by prefix (exact or "<name>_<suffix>", e.g.
+# slurm_node_x86_64, slurm_node_rhel_10_0), as the telemetry playbook does.
 LDMS_FUNCTIONAL_GROUPS = [
-    "slurm_control_node_x86_64",
-    "slurm_node_x86_64",
-    "slurm_node_aarch64",
-    "login_node_x86_64",
-    "login_node_aarch64",
-    "login_compiler_node_x86_64",
-    "login_compiler_node_aarch64",
+    "slurm_control_node",
+    "slurm_node",
+    "login_node",
+    "login_compiler_node",
 ]
 
 # =============================================================================

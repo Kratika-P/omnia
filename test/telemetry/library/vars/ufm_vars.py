@@ -30,6 +30,13 @@ UFM_EXPECTED_METRICS = [
     "LinkDownedCounterExtended",
 ]
 
+# UFM enable renders this manifest under the telemetry deployments directory
+# (<k8s_cluster_mount>/telemetry/deployments, k8s_cluster_mount from
+# telemetry_packages.yml). Disable keeps it and cleanup removes it.
+CFG_KEY_K8S_CLUSTER_MOUNT = "k8s_cluster_mount"
+UFM_DEPLOYMENTS_SUBDIR = "telemetry/deployments"
+UFM_SECRET_MANIFEST_FILE = "ufm-telemetry-secret.yaml"  # noqa: S105
+
 CFG_KEY_UFM_METRICS_ENABLED = "telemetry_sources.ufm.metrics_enabled"
 CFG_KEY_UFM_ENDPOINT = "ufm_configuration.ufm_endpoint"
 CFG_KEY_UFM_PORT = "ufm_configuration.ufm_metrics_port"

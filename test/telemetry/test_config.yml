@@ -144,7 +144,7 @@ cleanup_sinks_enabled: []
 # tests. Leave empty to skip OME connectivity tests.
 # The OME REST API at /api/DataForwardingService/Forwarders is used to verify
 # the Kafka forwarding pipeline is connected.
-ome_ip: ""
+ome_ip: "100.10.0.27"
 
 # When true, the OME test suite will:
 #   1. Run the external_kafka_connect playbook to extract TLS certs
@@ -164,7 +164,7 @@ ome_identifier: "ome"
 # Force re-run of external_kafka playbook even if certs already exist.
 # When true, always runs the playbook to regenerate certificates.
 # When false (default), skips playbook if certs already exist.
-force_external_kafka_playbook: false
+force_external_kafka_playbook: true
 
 # Force re-run of the external_victoria playbook and rotate the SFM certificate
 # import even if the exported connection details and target are already healthy.
@@ -191,12 +191,12 @@ sfm_ssh_port: 22
 # Can be:
 #   - An absolute path: /opt/omnia/reports
 # No spaces allowed in the path.
-report_path: /opt/omnia/reports
+report_path: /opt/omnia_version_update/reports
 
 # Base name for report files (without extension).
 # Generates: telemetry_test_report.json, telemetry_test_report.html
 # No spaces allowed. Only letters, numbers, underscores, hyphens.
-report_name: telemetry_test_report
+report_name: telemetry_test_report_version_update
 
 # Custom run ID (optional).
 # When set, reports use this ID instead of a timestamp (YYYYMMDD_HHMMSS).

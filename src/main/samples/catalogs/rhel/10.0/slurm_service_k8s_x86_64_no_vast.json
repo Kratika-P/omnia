@@ -740,7 +740,7 @@
             "registry": "quay.io"
           }
         ],
-        "tag": "1.1.0-kafka-4.3.0"
+        "tag": "1.2.0-kafka-4.3.1"
       },
       "geopm": {
         "name": "geopm",
@@ -1024,7 +1024,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.50.0"
+        "tag": "v1.53.0"
       },
       "python3_pymysql": {
         "name": "python3-PyMySQL",
@@ -1053,7 +1053,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "config-reloader-v0.68.3"
+        "tag": "config-reloader-v0.75.0"
       },
       "docker.io/dellhpcomniaaisolution/ubuntu-ldms": {
         "name": "docker.io/dellhpcomniaaisolution/ubuntu-ldms",
@@ -1125,7 +1125,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v0.68.3"
+        "tag": "v0.75.0"
       },
       "iproute": {
         "name": "iproute",
@@ -1343,7 +1343,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.149.0"
+        "tag": "v1.153.0"
       },
       "nvhpc": {
         "name": "nvhpc",
@@ -1513,7 +1513,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.149.0-cluster"
+        "tag": "v1.153.0-cluster"
       },
       "clustershell": {
         "name": "clustershell",
@@ -2040,7 +2040,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "6.3.0"
+        "tag": "6.3.2"
       },
       "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector": {
         "name": "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector",
@@ -2268,10 +2268,10 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "0.54.0-debian"
+        "tag": "0.59.0-debian"
       },
       "strimzi_kafka_operator_helm_3_chart": {
-        "name": "strimzi-kafka-operator-helm-3-chart-1.1.0",
+        "name": "strimzi-kafka-operator-helm-3-chart-1.2.0",
         "packagetype": "tarball",
         "sources": [
           {
@@ -2280,7 +2280,7 @@
             "version": [
               "10.0"
             ],
-            "url": "https://github.com/strimzi/strimzi-kafka-operator/releases/download/1.1.0/strimzi-kafka-operator-helm-3-chart-1.1.0.tgz"
+            "url": "https://github.com/strimzi/strimzi-kafka-operator/releases/download/1.2.0/strimzi-kafka-operator-helm-3-chart-1.2.0.tgz"
           }
         ]
       },
@@ -2736,7 +2736,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.50.0"
+        "tag": "v1.53.0"
       },
       "quay.io/dell/container-storage-modules/csm-metrics-powerscale": {
         "name": "quay.io/dell/container-storage-modules/csm-metrics-powerscale",
@@ -2895,12 +2895,12 @@
         ]
       },
       "strimzi_kafka_operator_helm_3_chart_1_1_0": {
-        "name": "strimzi-kafka-operator-helm-3-chart-1.1.0",
+        "name": "strimzi-kafka-operator-helm-3-chart-1.2.0",
         "packagetype": "tarball",
         "sources": [
           {
             "architecture": "x86_64",
-            "url": "https://github.com/strimzi/strimzi-kafka-operator/releases/download/1.1.0/strimzi-kafka-operator-helm-3-chart-1.1.0.tgz",
+            "url": "https://github.com/strimzi/strimzi-kafka-operator/releases/download/1.2.0/strimzi-kafka-operator-helm-3-chart-1.2.0.tgz",
             "name": "rhel",
             "version": [
               "10.0"
@@ -3248,7 +3248,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.149.0-cluster"
+        "tag": "v1.153.0-cluster"
       },
       "man_db": {
         "name": "man-db",
@@ -3292,7 +3292,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.149.0-cluster"
+        "tag": "v1.153.0-cluster"
       },
       "PyMySQL==1_1_2": {
         "name": "PyMySQL==1.1.2",
@@ -3521,7 +3521,7 @@
             "registry": "docker.io"
           }
         ],
-        "tag": "v1.149.0"
+        "tag": "v1.153.0"
       },
       "helm_charts_2_17_0": {
         "name": "helm-charts-2.17.0",
@@ -3685,7 +3685,7 @@
       "docker.io/curlimages/curl": {
         "name": "docker.io/curlimages/curl",
         "packagetype": "image",
-        "tag": "8.17.0",
+        "tag": "8.22.0",
         "sources": [
           {
             "architecture": "x86_64",
