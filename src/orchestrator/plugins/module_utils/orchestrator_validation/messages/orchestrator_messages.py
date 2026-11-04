@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=too-many-lines
 """User-facing messages for Orchestrator input validation."""
 
 from typing import Any
@@ -187,6 +188,31 @@ def pxe_mapping_not_found_msg(path: str) -> str:
     return f"orchestrator_config: pxe_mapping_file_path '{path}' does not exist."
 
 
+def pxe_mapping_not_csv_msg(path: str) -> str:
+    """Return the non-CSV PXE mapping file error message."""
+    return (
+        f"orchestrator_config: pxe_mapping_file_path '{path}' must resolve "
+        "to a .csv file."
+    )
+
+
+def pxe_mapping_insecure_permissions_msg(path: str, mode: int) -> str:
+    """Return the insecure PXE mapping file permissions error message."""
+    return (
+        f"orchestrator_config: PXE mapping file '{path}' has insecure mode "
+        f"{mode:04o}. It must not be group-writable or accessible by "
+        f"others; run 'chmod 640 {path}'."
+    )
+
+
+def pxe_mapping_untrusted_owner_msg(path: str, uid: int) -> str:
+    """Return the untrusted PXE mapping file owner error message."""
+    return (
+        f"orchestrator_config: PXE mapping file '{path}' is owned by uid "
+        f"{uid}; it must be owned by root or the invoking user."
+    )
+
+
 def pxe_mapping_read_failed_msg(path: str, detail: str) -> str:
     """Return the PXE mapping read error message."""
     return f"orchestrator_config: Failed to read mapping file '{path}': {detail}"
@@ -221,12 +247,14 @@ def pxe_mapping_noncanonical_headers_msg(
 def pxe_mapping_header_contract_msg(
     path: str, actual: list[str], expected: list[str]
 ) -> str:
-    """Return an exact PXE mapping header-contract error message."""
+    """Return a PXE mapping header-contract error without echoing file content."""
+    missing = [column for column in expected if column not in actual]
     return (
-        f"orchestrator_config: Mapping file '{path}' has header {actual}; "
-        f"expected {expected} (or legacy 11-column format with IB_IP). "
-        "Preserve all columns in this order, "
-        "including IB_NIC_NAME and IB_IPV4."
+        f"orchestrator_config: Mapping file '{path}' has {len(actual)} "
+        f"column(s) and does not match the required header; missing "
+        f"columns: {missing or 'none (check order or extra columns)'}. "
+        f"Expected exactly {expected}, in this order, including "
+        "IB_NIC_NAME and IB_IP."
     )
 
 
@@ -336,6 +364,14 @@ def pxe_mapping_ib_pair_msg(row: int) -> str:
     return (
         f"orchestrator_config: Mapping row {row} must set both IB_NIC_NAME "
         "and IB_IPV4, or leave both empty."
+    )
+
+
+def pxe_mapping_ib_ipv6_pair_msg(row: int) -> str:
+    """Return an incomplete InfiniBand IPv6 mapping pair error message."""
+    return (
+        f"orchestrator_config: Mapping row {row} must set both IB_NIC_NAME "
+        "and IB_IPV6 when ib_addr_mode is ipv6-only, or leave both empty."
     )
 
 
@@ -531,6 +567,22 @@ def ib_ipv6_subnet_required_msg(label: str) -> str:
     return (
         f"network_spec: {label}.ipv6_subnet is required when "
         "ipv6_netmask_bits is set."
+    )
+
+
+def ib_ipv6_required_for_mode_msg(label: str, mode: str) -> str:
+    """Return an error when IPv6 fields are missing for the active mode."""
+    return (
+        f"network_spec: {label}.ipv6_subnet and ipv6_netmask_bits are "
+        f"required when ib_addr_mode is '{mode}'."
+    )
+
+
+def ib_ipv4_required_for_mode_msg(label: str, mode: str) -> str:
+    """Return an error when IPv4 fields are missing for the active mode."""
+    return (
+        f"network_spec: {label}.ipv4_subnet and ipv4_netmask_bits are "
+        f"required when ib_addr_mode is '{mode}'."
     )
 
 

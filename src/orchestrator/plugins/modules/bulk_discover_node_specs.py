@@ -32,8 +32,6 @@ Designed for HPC clusters with 500-2000 nodes where serial Ansible
 URI loops are prohibitively slow (50-80 min at 1000 nodes serial
 vs ~4 min at 20 parallel threads).
 
-GPU fallback detection via PCIe device enumeration is included.
-
 Usage in playbook (heterogeneous):
   bulk_discover_node_specs:
     nodes: "{{ cmpt_list }}"
@@ -43,7 +41,7 @@ Usage in playbook (heterogeneous):
     max_parallel: 20
     connect_timeout: 60
     defaults:
-      real_memory: 864
+      real_memory: 884736
       corespersocket: 72
       threadspercore: 1
   register: bulk_discovery
@@ -57,7 +55,7 @@ Usage in playbook (homogeneous group):
     max_parallel: 20
     connect_timeout: 60
     defaults:
-      real_memory: 864
+      real_memory: 884736
       corespersocket: 72
       threadspercore: 1
       sockets: 2
@@ -122,6 +120,7 @@ options:
     description:
       - Hardware values used when a Redfish property is unavailable.
       - Supported keys are C(real_memory), C(corespersocket), C(threadspercore), and C(sockets).
+      - C(real_memory) must be specified in megabytes (MB) for Slurm compatibility.
     type: dict
     default: {}
 author:
@@ -138,7 +137,7 @@ EXAMPLES = r'''
     max_parallel: 20
     connect_timeout: 60
     defaults:
-      real_memory: 864
+      real_memory: 884736
       corespersocket: 72
       threadspercore: 1
   register: node_discovery
@@ -150,7 +149,7 @@ EXAMPLES = r'''
     bmc_username: "{{ bmc_username }}"
     bmc_password: "{{ bmc_password }}"
     defaults:
-      real_memory: 864
+      real_memory: 884736
       corespersocket: 72
       threadspercore: 1
       sockets: 2
@@ -169,11 +168,6 @@ node_params:
       CoresPerSocket: 32
       ThreadsPerCore: 2
       RealMemory: 524288
-      Gres: gpu:4
-gpu_params:
-  description: Mapping of hostnames to Redfish GPU records for hosts with detected GPUs.
-  type: dict
-  returned: always
 failed_nodes:
   description: Hostnames that could not be discovered in heterogeneous mode.
   type: list
@@ -201,6 +195,74 @@ group_sample_nodes:
   type: dict
   returned: when O(groups) is supplied
 '''
+
+
+# ─── Input validation helpers ────────────────────────────────────────────────
+
+def _validate_int_value(value, attr_name, min_val, max_val, default_val, hostname, validation_failures):
+    """Validate an integer hardware attribute against min/max bounds.
+
+    Args:
+        value: The value to validate (can be int, float, or string)
+        attr_name: Name of the attribute for logging
+        min_val: Minimum allowed value
+        max_val: Maximum allowed value
+        default_val: Default value to use if validation fails
+        hostname: Node hostname for logging
+        validation_failures: List to record validation failures
+
+    Returns:
+        Validated integer value or default_val if validation fails
+    """
+    try:
+        # Type check: must be convertible to int
+        int_value = int(value)
+    except (ValueError, TypeError):
+        msg = f"{hostname}: {attr_name} - Invalid type '{value}' (expected integer). Using default value: {default_val}"
+        print(f"[VALIDATION WARNING] {msg}")
+        validation_failures.append(msg)
+        return default_val
+
+    # Range check
+    if int_value < min_val:
+        msg = f"{hostname}: {attr_name} - Value {int_value} is below minimum {min_val}. Using default value: {default_val}"
+        print(f"[VALIDATION WARNING] {msg}")
+        validation_failures.append(msg)
+        return default_val
+    if int_value > max_val:
+        msg = f"{hostname}: {attr_name} - Value {int_value} exceeds maximum {max_val}. Using default value: {default_val}"
+        print(f"[VALIDATION WARNING] {msg}")
+        validation_failures.append(msg)
+        return default_val
+
+    return int_value
+
+
+def _validate_hostname(hostname):
+    """Validate NodeName contains only safe characters.
+
+    Rejects newlines, equals signs, and shell metacharacters.
+    """
+    if not hostname or not isinstance(hostname, str):
+        return False
+    # Allow alphanumeric, hyphens, dots only
+    if not re.match(r'^[A-Za-z0-9._-]+$', hostname):
+        return False
+    # Reject newlines, equals, and shell metacharacters
+    forbidden = ['\n', '\r', '=', ';', '&', '|', '$', '`', '(', ')', '<', '>']
+    if any(char in hostname for char in forbidden):
+        return False
+    return True
+
+
+# Validation bounds (based on vendor research)
+VALIDATION_BOUNDS = {
+    "sockets": {"min": 1, "max": 16},
+    "cores_per_socket": {"min": 1, "max": 160},
+    "threads_per_core": {"min": 1, "max": 2},
+    "real_memory_mb": {"min": 8192, "max": 8000000000},  # 8GB to 8TB in MB
+    "gpu_count": {"min": 0, "max": 16},
+}
 
 
 # ─── Redfish API helpers ───────────────────────────────────────────────────
@@ -248,74 +310,43 @@ def _redfish_get(bmc_ip, path, username, password, timeout):
         return (False, str(exc))
 
 
-# ─── GPU detection ─────────────────────────────────────────────────────────
-
-def _detect_gpus_from_processors(proc_members):
-    """Extract NVIDIA GPUs from Processor members (primary detection)."""
-    gpus = []
-    for member in proc_members:
-        if member.get("ProcessorType") != "GPU":
-            continue
-        manufacturer = member.get("Manufacturer", "")
-        if re.search(r"nvidia", manufacturer, re.IGNORECASE):
-            gpus.append(member)
-    return gpus
-
-
-def _detect_gpus_from_pcie(bmc_ip, username, password, timeout):
-    """Fallback GPU detection via PCIe device enumeration.
-
-    Queries PCIeDevices collection, then individual devices for ClassCode
-    and manufacturer matching.
-    """
-    gpus = []
-
-    # Get PCIe device list
-    ok, data = _redfish_get(
-        bmc_ip,
-        "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices",
-        username, password, timeout,
-    )
-    if not ok or "Members" not in data:
-        return gpus
-
-    device_urls = [
-        m.get("@odata.id", "") for m in data.get("Members", [])
-        if m.get("@odata.id")
-    ]
-
-    # Query each PCIe device for GPU identification
-    for dev_url in device_urls:
-        ok, dev_data = _redfish_get(bmc_ip, dev_url, username, password, timeout)
-        if not ok:
-            continue
-
-        class_code = dev_data.get("ClassCode", "")
-        vendor_id = dev_data.get("VendorId", "")
-        manufacturer = dev_data.get("Manufacturer", "")
-        name = dev_data.get("Name", "")
-
-        # ClassCode 0x0300 = VGA controller, 0x0302 = 3D controller
-        if class_code in ("0x0300", "0x0302") and vendor_id:
-            gpus.append(dev_data)
-        elif (re.search(r"nvidia", manufacturer, re.IGNORECASE)
-              and re.search(r"GPU|RTX|TESLA|A100|H100|L40|GB", name, re.IGNORECASE)):
-            gpus.append(dev_data)
-
-    return gpus
-
 
 # ─── Per-node discovery ────────────────────────────────────────────────────
 
 def _discover_single_node(hostname, bmc_ip, username, password,
-                          timeout, defaults):
+                          timeout, defaults, validation_failures):
     """Discover hardware specs for a single node via iDRAC Redfish.
 
-    Returns (hostname, node_params_dict, gpu_list, error_string_or_None).
+    Returns (hostname, node_params_dict, error_string_or_None).
     """
-    default_memory = defaults.get("real_memory", 864)
-    default_cores = defaults.get("corespersocket", 72)
-    default_threads = defaults.get("threadspercore", 1)
+    # Get user-provided defaults with hardcoded fallbacks (values in MB)
+    user_default_memory = defaults.get("real_memory", 884736)
+    user_default_cores = defaults.get("corespersocket", 72)
+    user_default_threads = defaults.get("threadspercore", 1)
+    user_default_sockets = defaults.get("sockets", 2)
+
+    # Validate user-provided defaults (soft failure - use hardcoded fallback if invalid)
+    bounds = VALIDATION_BOUNDS
+    default_memory = _validate_int_value(
+        user_default_memory, "User default RealMemory",
+        bounds["real_memory_mb"]["min"], bounds["real_memory_mb"]["max"],
+        884736, hostname, validation_failures
+    )
+    default_cores = _validate_int_value(
+        user_default_cores, "User default CoresPerSocket",
+        bounds["cores_per_socket"]["min"], bounds["cores_per_socket"]["max"],
+        72, hostname, validation_failures
+    )
+    default_threads = _validate_int_value(
+        user_default_threads, "User default ThreadsPerCore",
+        bounds["threads_per_core"]["min"], bounds["threads_per_core"]["max"],
+        1, hostname, validation_failures
+    )
+    default_sockets = _validate_int_value(
+        user_default_sockets, "User default Sockets",
+        bounds["sockets"]["min"], bounds["sockets"]["max"],
+        2, hostname, validation_failures
+    )
 
     # ── Step 1: Read Processors ──
     ok, proc_data = _redfish_get(
@@ -324,33 +355,42 @@ def _discover_single_node(hostname, bmc_ip, username, password,
         username, password, timeout,
     )
 
+    proc_ok = ok
     if ok:
         members = proc_data.get("Members", [])
         cpus = [m for m in members if m.get("ProcessorType") == "CPU"]
-        gpus = _detect_gpus_from_processors(members)
     else:
         cpus = []
-        gpus = []
 
-    # ── Step 2: GPU fallback via PCIe devices ──
-    if not gpus:
-        gpus = _detect_gpus_from_pcie(bmc_ip, username, password, timeout)
-
-    # ── Step 3: Read System info for memory ──
+    # ── Step 2: Read System info for memory ──
     ok, sys_data = _redfish_get(
         bmc_ip,
         "/redfish/v1/Systems/System.Embedded.1",
         username, password, timeout,
     )
 
+    sys_ok = ok
     if ok:
         total_gib = (sys_data
                      .get("MemorySummary", {})
                      .get("TotalSystemMemoryGiB", default_memory))
+        # Convert GiB to MB for Slurm compatibility (1 GiB = 1024 MB)
         total_mb = int(total_gib * 1024)
         real_memory = int(total_mb * 0.90)
     else:
         real_memory = default_memory
+
+    # If both processor and system calls failed, iDRAC is unreachable - use defaults and return error for tracking
+    if not proc_ok and not sys_ok:
+        # Build node_params with defaults
+        node_params = {
+            "NodeName": hostname,
+            "Sockets": default_sockets,
+            "CoresPerSocket": default_cores,
+            "ThreadsPerCore": default_threads,
+            "RealMemory": default_memory,
+        }
+        return (hostname, node_params, [], f"iDRAC unreachable at {bmc_ip}")
 
     # ── Step 4: Build node_params ──
     sockets = max(len(cpus), 1)
@@ -363,16 +403,55 @@ def _discover_single_node(hostname, bmc_ip, username, password,
         cores_per_socket = default_cores
         threads_per_core = default_threads
 
+    # ── Step 5: Validate hostname ──
+    if not _validate_hostname(hostname):
+        print(f"[VALIDATION WARNING] {hostname}: Invalid hostname '{hostname}' (contains unsafe characters). Skipping node.")
+        return (hostname, {}, [], f"Invalid hostname: {hostname}")
+
+    # ── Step 6: Validate hardware attributes (use validated defaults as fallback)
+    bounds = VALIDATION_BOUNDS
+
+    validated_sockets = _validate_int_value(
+        sockets, "Sockets",
+        bounds["sockets"]["min"], bounds["sockets"]["max"],
+        default_sockets, hostname, validation_failures
+    )
+
+    validated_cores = _validate_int_value(
+        cores_per_socket, "CoresPerSocket",
+        bounds["cores_per_socket"]["min"], bounds["cores_per_socket"]["max"],
+        default_cores, hostname, validation_failures
+    )
+
+    validated_threads = _validate_int_value(
+        threads_per_core, "ThreadsPerCore",
+        bounds["threads_per_core"]["min"], bounds["threads_per_core"]["max"],
+        default_threads, hostname, validation_failures
+    )
+
+    validated_memory = _validate_int_value(
+        real_memory, "RealMemory",
+        bounds["real_memory_mb"]["min"], bounds["real_memory_mb"]["max"],
+        default_memory, hostname, validation_failures
+    )
+
+    gpu_count = len(gpus) if gpus else 0
+    validated_gpu_count = _validate_int_value(
+        gpu_count, "GPU count",
+        bounds["gpu_count"]["min"], bounds["gpu_count"]["max"],
+        0, hostname, validation_failures
+    )
+
     node_params = {
         "NodeName": hostname,
-        "Sockets": sockets,
-        "CoresPerSocket": cores_per_socket,
-        "ThreadsPerCore": threads_per_core,
-        "RealMemory": real_memory,
+        "Sockets": validated_sockets,
+        "CoresPerSocket": validated_cores,
+        "ThreadsPerCore": validated_threads,
+        "RealMemory": validated_memory,
     }
 
-    if gpus:
-        node_params["Gres"] = f"gpu:{len(gpus)}"
+    if validated_gpu_count > 0:
+        node_params["Gres"] = f"gpu:{validated_gpu_count}"
 
     return (hostname, node_params, gpus, None)
 
@@ -380,16 +459,16 @@ def _discover_single_node(hostname, bmc_ip, username, password,
 # ─── Per-group discovery (homogeneous) ────────────────────────────────────
 
 def _discover_group(group_name, group_nodes, bmc_ip_map, username,
-                    password, timeout, defaults):
+                    password, timeout, defaults, validation_failures):
     """Discover hardware specs for a homogeneous group via iDRAC Redfish.
 
     Tries each node in the group sequentially until one iDRAC responds,
     then replicates the discovered specs to all nodes in the group.
 
-    Returns (group_name, node_params_list, gpu_dict, sample_node_or_None,
+    Returns (group_name, node_params_list, sample_node_or_None,
              failed_bool).
     """
-    default_memory = defaults.get("real_memory", 864)
+    default_memory = defaults.get("real_memory", 884736)
     default_cores = defaults.get("corespersocket", 72)
     default_threads = defaults.get("threadspercore", 1)
     default_sockets = defaults.get("sockets", 2)
@@ -398,44 +477,75 @@ def _discover_group(group_name, group_nodes, bmc_ip_map, username,
     sample_hostname = None
     sample_params = None
     sample_gpus = []
+    attempted_any = False
+    all_failed = True
 
     for hostname in group_nodes:
         bmc_ip = bmc_ip_map.get(hostname)
         if not bmc_ip:
             continue
+        attempted_any = True
         _, params, gpus, error = _discover_single_node(
             hostname, bmc_ip, username, password, timeout, defaults,
+            validation_failures,
         )
         if error is None:
             sample_hostname = hostname
             sample_params = params
             sample_gpus = gpus
+            all_failed = False
             break
 
     # Replicate discovered (or default) specs to all nodes in group
     node_params_list = []
-    gpu_dict = {}
 
     if sample_params:
         for hostname in group_nodes:
             entry = dict(sample_params)
             entry["NodeName"] = hostname
             node_params_list.append(entry)
-            if sample_gpus:
-                gpu_dict[hostname] = sample_gpus
     else:
-        # All iDRACs in group failed — use defaults
+        # All iDRACs in group failed — use defaults with validation
+        bounds = VALIDATION_BOUNDS
         for hostname in group_nodes:
+            if not _validate_hostname(hostname):
+                print(f"[VALIDATION WARNING] {hostname}: Invalid hostname '{hostname}' (contains unsafe characters). Skipping node.")
+                continue
+
+            validated_sockets = _validate_int_value(
+                default_sockets, "Sockets",
+                bounds["sockets"]["min"], bounds["sockets"]["max"],
+                default_sockets, hostname, validation_failures
+            )
+
+            validated_cores = _validate_int_value(
+                default_cores, "CoresPerSocket",
+                bounds["cores_per_socket"]["min"], bounds["cores_per_socket"]["max"],
+                default_cores, hostname, validation_failures
+            )
+
+            validated_threads = _validate_int_value(
+                default_threads, "ThreadsPerCore",
+                bounds["threads_per_core"]["min"], bounds["threads_per_core"]["max"],
+                default_threads, hostname, validation_failures
+            )
+
+            validated_memory = _validate_int_value(
+                default_memory, "RealMemory",
+                bounds["real_memory_mb"]["min"], bounds["real_memory_mb"]["max"],
+                default_memory, hostname, validation_failures
+            )
+
             node_params_list.append({
                 "NodeName": hostname,
-                "Sockets": default_sockets,
-                "CoresPerSocket": default_cores,
-                "ThreadsPerCore": default_threads,
-                "RealMemory": default_memory,
+                "Sockets": validated_sockets,
+                "CoresPerSocket": validated_cores,
+                "ThreadsPerCore": validated_threads,
+                "RealMemory": validated_memory,
             })
 
     return (group_name, node_params_list, gpu_dict, sample_hostname,
-            sample_params is None)
+            all_failed)
 
 
 # ─── Main module ────────────────────────────────────────────────────────────
@@ -500,7 +610,6 @@ def _run_node_discovery(module, nodes, bmc_ip_map, bmc_username,
     result = {
         "changed": False,
         "node_params": [],
-        "gpu_params": {},
         "failed_nodes": [],
         "total_nodes": len(nodes),
         "discovered_count": 0,
@@ -519,6 +628,7 @@ def _run_node_discovery(module, nodes, bmc_ip_map, bmc_username,
         )
 
     # Parallel iDRAC discovery
+    validation_failures = []
     workers = min(max_parallel, len(nodes))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {}
@@ -530,23 +640,23 @@ def _run_node_discovery(module, nodes, bmc_ip_map, bmc_username,
             future = pool.submit(
                 _discover_single_node,
                 hostname, bmc_ip, bmc_username, bmc_password,
-                connect_timeout, defaults,
+                connect_timeout, defaults, validation_failures,
             )
             futures[future] = hostname
 
         for future in as_completed(futures):
             hostname = futures[future]
             try:
-                _, node_params, gpus, error = future.result()
+                _, node_params, error = future.result()
                 if error:
                     result["failed_nodes"].append(hostname)
+                    result["node_params"].append(node_params)
                     module.warn(
-                        f"iDRAC discovery failed for {hostname}: {error}"
+                        f"iDRAC discovery failed for {hostname}: {error} "
+                        f"— falling back to default values"
                     )
                 else:
                     result["node_params"].append(node_params)
-                    if gpus:
-                        result["gpu_params"][hostname] = gpus
                     result["discovered_count"] += 1
             except Exception as exc:  # pylint: disable=broad-except
                 result["failed_nodes"].append(hostname)
@@ -560,6 +670,10 @@ def _run_node_discovery(module, nodes, bmc_ip_map, bmc_username,
             f"{len(nodes)} node(s)"
         )
 
+    # Add validation failures to result
+    result["validation_failures"] = validation_failures
+    result["validation_failed"] = len(validation_failures) > 0
+
     module.exit_json(**result)
 
 
@@ -571,7 +685,6 @@ def _run_group_discovery(module, groups, bmc_ip_map, bmc_username,
     result = {
         "changed": False,
         "node_params": [],
-        "gpu_params": {},
         "failed_nodes": [],
         "failed_groups": [],
         "total_nodes": len(all_nodes),
@@ -584,6 +697,7 @@ def _run_group_discovery(module, groups, bmc_ip_map, bmc_username,
         module.exit_json(**result)
 
     # Parallel group discovery — one thread per group
+    validation_failures = []
     workers = min(max_parallel, len(groups))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {}
@@ -592,16 +706,16 @@ def _run_group_discovery(module, groups, bmc_ip_map, bmc_username,
                 _discover_group,
                 group_name, group_nodes, bmc_ip_map,
                 bmc_username, bmc_password, connect_timeout, defaults,
+                validation_failures,
             )
             futures[future] = group_name
 
         for future in as_completed(futures):
             group_name = futures[future]
             try:
-                (_, node_params_list, gpu_dict, sample_node,
+                (_, node_params_list, sample_node,
                  failed) = future.result()
                 result["node_params"].extend(node_params_list)
-                result["gpu_params"].update(gpu_dict)
                 if sample_node:
                     result["group_sample_nodes"][group_name] = sample_node
                 if failed:
@@ -628,6 +742,10 @@ def _run_group_discovery(module, groups, bmc_ip_map, bmc_username,
             f"{len(result['failed_groups'])} of "
             f"{len(groups)} group(s)"
         )
+
+    # Add validation failures to result
+    result["validation_failures"] = validation_failures
+    result["validation_failed"] = len(validation_failures) > 0
 
     module.exit_json(**result)
 

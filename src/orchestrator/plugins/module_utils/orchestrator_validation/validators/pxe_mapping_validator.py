@@ -20,6 +20,7 @@ import ipaddress
 import json
 import os
 import re
+import stat
 from collections import Counter
 from logging import Logger
 from typing import Any
@@ -68,6 +69,8 @@ REQUIRED_VALUE_FIELDS = (
     "ADMIN_MAC",
     "ADMIN_IP",
 )
+
+INSECURE_MODE_BITS = stat.S_IWGRP | stat.S_IRWXO
 
 MAC_PATTERN = re.compile(
     r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
@@ -341,12 +344,34 @@ def _validate_ib_pair(
     row: dict[str, str],
     errors: list[str],
     logger: Logger | None,
+    ib_addr_mode: str = "",
 ) -> None:
-    """Require the optional InfiniBand NIC name and IP as a pair."""
-    if bool(row.get("IB_NIC_NAME", "")) != bool(row.get("IB_IPV4", "")):
-        record_error(errors, logger, msg.pxe_mapping_ib_pair_msg(row_number))
+    """Require the optional InfiniBand NIC name and IP as a pair.
 
-    if row.get("IB_IPV6", "") and not row.get("IB_NIC_NAME", ""):
+    Validation rules depend on ib_addr_mode from network_spec:
+    - ipv6-only: IB_NIC_NAME and IB_IPV6 must both be set or both empty;
+      IB_IPV4 may be empty.
+    - ipv4-only or dual-stack (default): IB_NIC_NAME and IB_IPV4 must both
+      be set or both empty.
+    """
+    has_nic = bool(row.get("IB_NIC_NAME", ""))
+    has_ipv4 = bool(row.get("IB_IPV4", ""))
+    has_ipv6 = bool(row.get("IB_IPV6", ""))
+
+    if ib_addr_mode == "ipv6-only":
+        if has_nic != has_ipv6:
+            record_error(
+                errors, logger,
+                msg.pxe_mapping_ib_ipv6_pair_msg(row_number),
+            )
+    else:
+        if has_nic != has_ipv4:
+            record_error(
+                errors, logger,
+                msg.pxe_mapping_ib_pair_msg(row_number),
+            )
+
+    if has_ipv6 and not has_nic:
         record_error(
             errors, logger,
             msg.pxe_mapping_ib_ipv6_without_nic_msg(row_number),
@@ -577,6 +602,29 @@ def _validate_catalog_functional_groups(
             )
 
 
+def _load_ib_addr_mode(input_project_dir: str) -> str:
+    """Load ib_addr_mode from network_spec.yml, defaulting to empty string."""
+    network_spec_path = os.path.realpath(
+        os.path.join(input_project_dir, "network_spec.yml")
+    )
+    if not os.path.isfile(network_spec_path):
+        return ""
+    try:
+        with open(network_spec_path, "r", encoding="utf-8") as network_file:
+            network_data = yaml.safe_load(network_file)
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return ""
+    if not isinstance(network_data, dict):
+        return ""
+    for entry in network_data.get("Networks", []):
+        if not isinstance(entry, dict):
+            continue
+        ib_config = entry.get("ib_network")
+        if isinstance(ib_config, dict):
+            return ib_config.get("ib_addr_mode", "")
+    return ""
+
+
 def _load_admin_networks(
     input_project_dir: str,
 ) -> list[ipaddress.IPv4Network]:
@@ -644,6 +692,25 @@ def _validate_admin_subnet_membership(
             )
 
 
+def _mapping_file_error(path: str) -> str | None:
+    """Return an error if the file is missing, not a CSV, or not safely owned/moded."""
+    if not os.path.isfile(path):
+        return msg.pxe_mapping_not_found_msg(path)
+    if not path.lower().endswith(".csv"):
+        return msg.pxe_mapping_not_csv_msg(path)
+    try:
+        file_stat = os.stat(path)
+    except OSError as exc:
+        return msg.pxe_mapping_read_failed_msg(path, str(exc))
+    if file_stat.st_uid not in (0, os.geteuid()):
+        return msg.pxe_mapping_untrusted_owner_msg(path, file_stat.st_uid)
+    if file_stat.st_mode & INSECURE_MODE_BITS:
+        return msg.pxe_mapping_insecure_permissions_msg(
+            path, stat.S_IMODE(file_stat.st_mode)
+        )
+    return None
+
+
 def validate(
     config_data: dict[str, Any],
     input_project_dir: str,
@@ -652,8 +719,9 @@ def validate(
     """Validate the resolved PXE mapping file and its cross-file contracts."""
     errors: list[str] = []
     path = resolve_mapping_path(config_data, input_project_dir)
-    if not os.path.isfile(path):
-        record_error(errors, logger, msg.pxe_mapping_not_found_msg(path))
+    path_error = _mapping_file_error(path)
+    if path_error:
+        record_error(errors, logger, path_error)
         return errors
 
     try:
@@ -691,6 +759,7 @@ def validate(
         record_error(errors, logger, msg.pxe_mapping_empty_msg(path))
         return errors
 
+    ib_addr_mode = _load_ib_addr_mode(input_project_dir)
     rows = _mapping_rows(header, raw_rows, path, errors, logger)
     for row_number, row in rows:
         _validate_required_values(row_number, row, errors, logger)
@@ -703,7 +772,7 @@ def validate(
             errors,
             logger,
         )
-        _validate_ib_pair(row_number, row, errors, logger)
+        _validate_ib_pair(row_number, row, errors, logger, ib_addr_mode)
         _validate_ib_nic_name(row_number, row, errors, logger)
 
     _validate_unique_values(rows, errors, logger)
